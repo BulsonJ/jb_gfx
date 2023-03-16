@@ -2,14 +2,19 @@ use std::collections::HashMap;
 use std::mem::size_of;
 
 use ash::vk;
-use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
+use ash::vk::{
+    AccessFlags2, DeviceSize, ImageAspectFlags, ImageLayout, IndexType, PipelineStageFlags2,
+};
+use bytemuck::offset_of;
 use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation3, SquareMatrix, Vector3, Zero};
 use log::error;
+use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::device::{Device, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
+use crate::{Mesh, Vertex};
 
 const BINDLESS_BINDING_INDEX: u32 = 1u32;
 
@@ -29,6 +34,8 @@ pub struct Renderer {
     bindless_indexes: HashMap<ImageHandle, usize>,
     pub clear_colour: Colour,
     pipeline_manager: PipelineManager,
+    meshes: SlotMap<MeshHandle, RenderMesh>,
+    display_mesh: Option<MeshHandle>,
 }
 
 impl Renderer {
@@ -257,6 +264,8 @@ impl Renderer {
             bindless_indexes,
             clear_colour: Colour::BLACK,
             pipeline_manager,
+            meshes: SlotMap::default(),
+            display_mesh: None,
         }
     }
 
@@ -416,7 +425,7 @@ impl Renderer {
         let frame_number_float = self.device.frame_number() as f32;
 
         let model_matrix = from_transforms(
-            Vector3::new(0.0f32, frame_number_float.sin() * 0.001f32, 0.0f32),
+            Vector3::new(0.0f32, 0.0f32, 0.0f32),
             Quaternion::from_axis_angle(
                 Vector3::new(0.0f32, 1.0f32, 0.0f32),
                 Rad(frame_number_float * 0.001f32),
@@ -452,13 +461,42 @@ impl Renderer {
                 0u32,
                 bytemuck::cast_slice(&[push_constants]),
             );
-            self.device.vk_device.cmd_draw(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                3u32,
-                1u32,
-                0u32,
-                0u32,
-            );
+        };
+
+        if let Some(display_mesh_handle) = self.display_mesh {
+            if let Some(display_mesh) = self.meshes.get(display_mesh_handle) {
+
+                let vertex_buffer = self
+                    .device
+                    .resource_manager
+                    .get_buffer(&display_mesh.vertex_buffer)
+                    .unwrap()
+                    .buffer;
+                let index_buffer = self
+                    .device
+                    .resource_manager
+                    .get_buffer(&display_mesh.index_buffer.unwrap())
+                    .unwrap()
+                    .buffer;
+
+                unsafe {
+                    self.device.vk_device.cmd_bind_vertex_buffers(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        0u32,
+                        &[vertex_buffer],
+                        &[0u64],
+                    );
+                    self.device.vk_device.cmd_bind_index_buffer(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        index_buffer,
+                        DeviceSize::zero(),
+                        IndexType::UINT32,
+                    );
+                    self.device
+                        .vk_device
+                        .cmd_draw_indexed(self.device.graphics_command_buffer[self.device.buffered_resource_number()], display_mesh.vertex_count, 1u32, 0u32, 0i32, 0u32);
+                }
+            }
         }
 
         unsafe {
@@ -685,6 +723,169 @@ impl Renderer {
 
         Ok(texture)
     }
+
+    pub fn load_mesh(&mut self, mesh: &Mesh) -> Result<MeshHandle, String> {
+        let vertex_buffer = {
+            let staging_buffer_create_info = vk::BufferCreateInfo {
+                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
+                usage: vk::BufferUsageFlags::TRANSFER_SRC,
+                ..Default::default()
+            };
+
+            let staging_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
+                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
+                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
+                usage: vk_mem_alloc::MemoryUsage::AUTO,
+                ..Default::default()
+            };
+
+            let staging_buffer = self.device.resource_manager.create_buffer(
+                &staging_buffer_create_info,
+                &staging_buffer_allocation_create_info,
+            );
+
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    mesh.vertices.as_ptr(),
+                    self.device
+                        .resource_manager
+                        .get_buffer(&staging_buffer)
+                        .unwrap()
+                        .allocation_info
+                        .mapped_data
+                        .cast(),
+                    mesh.vertices.len(),
+                )
+            };
+
+            let vertex_buffer_create_info = vk::BufferCreateInfo {
+                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
+                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+                ..Default::default()
+            };
+
+            let vertex_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
+                usage: vk_mem_alloc::MemoryUsage::AUTO,
+                ..Default::default()
+            };
+
+            let buffer = self.device.resource_manager.create_buffer(
+                &vertex_buffer_create_info,
+                &vertex_buffer_allocation_create_info,
+            );
+
+            self.device.upload_context.immediate_submit(
+                &mut self.device.vk_device,
+                &mut self.device.resource_manager,
+                |vk_device, resource_manager, cmd| {
+                    let buffer_copy_info = vk::BufferCopy::builder()
+                        .size((std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64);
+                    unsafe {
+                        vk_device.cmd_copy_buffer(
+                            *cmd,
+                            resource_manager.get_buffer(&staging_buffer).unwrap().buffer,
+                            resource_manager.get_buffer(&buffer).unwrap().buffer,
+                            &[*buffer_copy_info],
+                        )
+                    }
+                },
+            );
+
+            buffer
+        };
+        match &mesh.indices {
+            None => {
+                let render_mesh = RenderMesh {
+                    vertex_buffer,
+                    index_buffer: None,
+                    vertex_count: mesh.vertices.len() as u32,
+                };
+                Ok(self.meshes.insert(render_mesh))
+            }
+            Some(indices) => {
+                let index_buffer = {
+                    let buffer_size = (std::mem::size_of::<u32>() * indices.len()) as u64;
+                    let staging_buffer_create_info = vk::BufferCreateInfo {
+                        size: buffer_size,
+                        usage: vk::BufferUsageFlags::TRANSFER_SRC,
+                        ..Default::default()
+                    };
+
+                    let staging_buffer_allocation_create_info =
+                        vk_mem_alloc::AllocationCreateInfo {
+                            flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
+                                | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
+                            usage: vk_mem_alloc::MemoryUsage::AUTO,
+                            ..Default::default()
+                        };
+
+                    let staging_buffer = self.device.resource_manager.create_buffer(
+                        &staging_buffer_create_info,
+                        &staging_buffer_allocation_create_info,
+                    );
+
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            indices.as_ptr(),
+                            self.device
+                                .resource_manager
+                                .get_buffer(&staging_buffer)
+                                .unwrap()
+                                .allocation_info
+                                .mapped_data
+                                .cast(),
+                            indices.len(),
+                        )
+                    };
+
+                    let index_buffer_create_info = vk::BufferCreateInfo {
+                        size: buffer_size,
+                        usage: vk::BufferUsageFlags::TRANSFER_DST
+                            | vk::BufferUsageFlags::INDEX_BUFFER,
+                        ..Default::default()
+                    };
+
+                    let index_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
+                        usage: vk_mem_alloc::MemoryUsage::AUTO,
+                        ..Default::default()
+                    };
+
+                    let buffer = self.device.resource_manager.create_buffer(
+                        &index_buffer_create_info,
+                        &index_buffer_allocation_create_info,
+                    );
+
+                    self.device.upload_context.immediate_submit(
+                        &mut self.device.vk_device,
+                        &mut self.device.resource_manager,
+                        |vk_device, resource_manager, cmd| {
+                            let buffer_copy_info = vk::BufferCopy::builder().size(buffer_size);
+                            unsafe {
+                                vk_device.cmd_copy_buffer(
+                                    *cmd,
+                                    resource_manager.get_buffer(&staging_buffer).unwrap().buffer,
+                                    resource_manager.get_buffer(&buffer).unwrap().buffer,
+                                    &[*buffer_copy_info],
+                                )
+                            }
+                        },
+                    );
+
+                    buffer
+                };
+                let render_mesh = RenderMesh {
+                    vertex_buffer,
+                    index_buffer: Some(index_buffer),
+                    vertex_count: indices.len() as u32,
+                };
+                Ok(self.meshes.insert(render_mesh))
+            }
+        }
+    }
+
+    pub fn set_display_mesh(&mut self, handle: MeshHandle) {
+        self.display_mesh = Some(handle);
+    }
 }
 
 impl Drop for Renderer {
@@ -705,12 +906,6 @@ impl Drop for Renderer {
     }
 }
 
-/// A vertex.
-/// The different attributes are used to draw a mesh on the GPU.
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {}
-
 struct VertexInputDescription {
     bindings: Vec<vk::VertexInputBindingDescription>,
     attributes: Vec<vk::VertexInputAttributeDescription>,
@@ -718,56 +913,50 @@ struct VertexInputDescription {
 
 impl Vertex {
     fn get_vertex_input_desc() -> VertexInputDescription {
+        let main_binding = vk::VertexInputBindingDescription::builder()
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .binding(0u32)
+            .stride(size_of::<Vertex>() as u32);
+
         VertexInputDescription {
-            bindings: vec![],
-            attributes: vec![],
+            bindings: vec![*main_binding],
+            attributes: vec![
+                vk::VertexInputAttributeDescription {
+                    location: 0,
+                    binding: 0,
+                    format: vk::Format::R32G32B32_SFLOAT,
+                    offset: offset_of!(Vertex, position) as u32,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 1,
+                    binding: 0,
+                    format: vk::Format::R32G32_SFLOAT,
+                    offset: offset_of!(Vertex, tex_coords) as u32,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 2,
+                    binding: 0,
+                    format: vk::Format::R8G8B8_UNORM,
+                    offset: offset_of!(Vertex, normal) as u32,
+                },
+                vk::VertexInputAttributeDescription {
+                    location: 3,
+                    binding: 0,
+                    format: vk::Format::R32G32B32_SFLOAT,
+                    offset: offset_of!(Vertex, color) as u32,
+                },
+            ],
         }
     }
 }
 
-/// Transform Matrix that is given to the GPU
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct QuadDrawData {
-    transform: [[f32; 4]; 4],
-    colour: [f32; 3],
-    bindless_index: u32,
-    text_index: u32,
-    padding: [u32; 3],
-}
+new_key_type! {pub struct MeshHandle;}
 
-impl QuadDrawData {
-    pub fn new(
-        transform: Matrix4<f32>,
-        bindless_index: u32,
-        colour: Vector3<f32>,
-        text_index: u32,
-    ) -> Self {
-        Self {
-            transform: transform.into(),
-            colour: colour.into(),
-            bindless_index,
-            text_index,
-            padding: [0, 0, 0],
-        }
-    }
-}
-
-/// Data for drawing text
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct TextDrawData {
-    vertices: [[f32; 2]; 4],
-    tex_coords: [[f32; 2]; 4],
-}
-
-impl TextDrawData {
-    pub fn new(vertices: [[f32; 2]; 4], tex_coords: [[f32; 2]; 4]) -> Self {
-        Self {
-            vertices,
-            tex_coords,
-        }
-    }
+// Mesh data stored on the GPU
+struct RenderMesh {
+    vertex_buffer: BufferHandle,
+    index_buffer: Option<BufferHandle>,
+    vertex_count: u32,
 }
 
 /// The Camera Matrix that is given to the GPU.
@@ -845,11 +1034,12 @@ fn from_transforms(
     size: Vector3<f32>,
 ) -> Matrix4<f32> {
     let translation = Matrix4::from_translation(position);
+    // TODO : Fix rotation when position is zero
     let rotation = Matrix4::from({
         if position.is_zero() {
             // this is needed so an object at (0, 0, 0) won't get scaled to zero
             // as Quaternions can effect scale if they're not created correctly
-            Quaternion::from_axis_angle(Vector3::unit_z(), cgmath::Deg(0.0))
+            Quaternion::from_axis_angle(Vector3::unit_z(), Deg(0.0))
         } else {
             rotation
         }
