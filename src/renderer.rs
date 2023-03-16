@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
-use cgmath::{Deg, Matrix4, Point3, Rad, SquareMatrix, Vector2, Vector3};
+use cgmath::{Array, Deg, Matrix4, Point3, Quaternion, Rad, Rotation3, SquareMatrix, Vector2, Vector3, Zero};
 use log::error;
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -413,9 +413,12 @@ impl Renderer {
 
         let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
-        let model_matrix = Matrix4::from_axis_angle(
-            Vector3::new(0f32, 1f32, 0f32),
-            Rad(self.device.frame_number() as f32 * 0.001f32),
+        let frame_number_float = self.device.frame_number() as f32;
+
+        let model_matrix = from_transforms(
+            Vector3::new(0.0f32, frame_number_float.sin() * 0.001f32, 0.0f32),
+            Quaternion::from_axis_angle(Vector3::new(0.0f32,1.0f32,0.0f32), Rad(frame_number_float * 0.001f32)),
+            Vector3::from_value(1f32),
         );
 
         unsafe {
@@ -833,16 +836,22 @@ struct PushConstants {
     model: [[f32; 4]; 4],
 }
 
-fn from_transforms(position: Vector2<f32>, rotation: f32, size: Vector2<f32>) -> Matrix4<f32> {
-    let translation = Matrix4::from_translation(Vector3::new(position.x, position.y, 0.0f32));
-    let rotation = Matrix4::from_angle_z(cgmath::Deg(rotation));
-    let scale = Matrix4::from_nonuniform_scale(size.x, size.y, 1.0f32);
+fn from_transforms(position: Vector3<f32>, rotation: Quaternion<f32>, size: Vector3<f32>) -> Matrix4<f32> {
+    let translation = Matrix4::from_translation(position);
+    let rotation = Matrix4::from({
+        if position.is_zero() {
+            // this is needed so an object at (0, 0, 0) won't get scaled to zero
+            // as Quaternions can effect scale if they're not created correctly
+            Quaternion::from_axis_angle(Vector3::unit_z(), cgmath::Deg(0.0))
+        } else {
+            rotation
+        }
+    });
+    let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     let mut model = translation;
     model = model * rotation;
-    model = model * Matrix4::from_translation(Vector3::new(0.5f32, 0.5f32, 0.0f32));
     model = model * scale;
-    model = model * Matrix4::from_translation(Vector3::new(-0.5f32, -0.5f32, 0.0f32));
     model
 }
 
