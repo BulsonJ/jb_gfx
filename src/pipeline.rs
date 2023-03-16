@@ -102,7 +102,7 @@ impl PipelineManager {
     }
 
     pub fn reload_shaders(&mut self, device: &mut ash::Device) {
-        for (handle, pipeline) in self.pipelines.iter_mut() {
+        for (_, pipeline) in self.pipelines.iter_mut() {
             pipeline.pso = PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,
                 device,
@@ -112,7 +112,7 @@ impl PipelineManager {
     }
 
     pub fn deinit(&mut self, device: &mut ash::Device) {
-        for (handle, pipeline) in self.pipelines.iter_mut() {
+        for (_, pipeline) in self.pipelines.iter_mut() {
             unsafe { device.destroy_pipeline(pipeline.pso, None) };
         }
     }

@@ -3,18 +3,15 @@ use std::mem::size_of;
 
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3, Zero};
+use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
 use log::error;
-use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::device::{Device, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 
-const MAX_QUADS: u64 = 400000;
-const MAX_CHARS: u64 = 20000;
-const BINDLESS_BINDING_INDEX: u32 = 0u32;
+const BINDLESS_BINDING_INDEX: u32 = 1u32;
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -209,8 +206,10 @@ impl Renderer {
                     .size,
             );
 
-        let mut bindless_textures = Vec::new();
-        let mut bindless_indexes = HashMap::new();
+        // TODO: Make camera 3d and write to descriptor
+
+        let bindless_textures = Vec::new();
+        let bindless_indexes = HashMap::new();
 
         Self {
             device,
@@ -812,17 +811,6 @@ impl Sprite {
     }
 }
 
-new_key_type! {
-    /// A handle to a RenderProxy
-    pub struct RenderProxyHandle;
-}
-
-struct Text {
-    text: String,
-    position: (f32, f32),
-    pub colour: Colour,
-}
-
 fn from_transforms(position: Vector2<f32>, rotation: f32, size: Vector2<f32>) -> Matrix4<f32> {
     let translation = Matrix4::from_translation(Vector3::new(position.x, position.y, 0.0f32));
     let rotation = Matrix4::from_angle_z(cgmath::Deg(rotation));
@@ -857,21 +845,5 @@ impl Texture {
 impl From<Texture> for ImageHandle {
     fn from(tex: Texture) -> ImageHandle {
         tex.image_handle
-    }
-}
-
-struct RenderProxy {
-    texture: Option<Texture>,
-    colour: Option<Colour>,
-    cached_transform: Matrix4<f32>,
-}
-
-impl RenderProxy {
-    fn new(texture: Option<Texture>, colour: Option<Colour>) -> Self {
-        Self {
-            texture,
-            colour,
-            cached_transform: Matrix4::zero(),
-        }
     }
 }

@@ -1,8 +1,8 @@
+use jb_gfx::renderer::{Colour, Renderer};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
-use jb_gfx::renderer::{Colour, Renderer};
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -13,7 +13,7 @@ fn main() {
         .unwrap();
 
     let mut renderer = Renderer::new(&window);
-    renderer.clear_colour = Colour::CUSTOM(0.0,0.1,0.3);
+    renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
