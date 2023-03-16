@@ -11,10 +11,10 @@ use log::error;
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
+use crate::{Mesh, Vertex};
 use crate::device::{Device, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
-use crate::{Mesh, Vertex};
 
 const BINDLESS_BINDING_INDEX: u32 = 1u32;
 
@@ -465,7 +465,6 @@ impl Renderer {
 
         if let Some(display_mesh_handle) = self.display_mesh {
             if let Some(display_mesh) = self.meshes.get(display_mesh_handle) {
-
                 let vertex_buffer = self
                     .device
                     .resource_manager
@@ -492,9 +491,14 @@ impl Renderer {
                         DeviceSize::zero(),
                         IndexType::UINT32,
                     );
-                    self.device
-                        .vk_device
-                        .cmd_draw_indexed(self.device.graphics_command_buffer[self.device.buffered_resource_number()], display_mesh.vertex_count, 1u32, 0u32, 0i32, 0u32);
+                    self.device.vk_device.cmd_draw_indexed(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        display_mesh.vertex_count,
+                        1u32,
+                        0u32,
+                        0i32,
+                        0u32,
+                    );
                 }
             }
         }

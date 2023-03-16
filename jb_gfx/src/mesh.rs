@@ -1,5 +1,6 @@
-use obj::Obj;
 use std::path::Path;
+
+use obj::Obj;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]

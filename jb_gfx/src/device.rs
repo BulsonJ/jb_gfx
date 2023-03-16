@@ -1,11 +1,11 @@
-use std::mem::size_of;
 use std::{borrow::Cow, ffi::CStr};
+use std::mem::size_of;
 
-use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
     ext::DebugUtils,
     khr::{DynamicRendering, Swapchain},
 };
+use ash::extensions::khr::Synchronization2;
 use ash::vk::{self, PipelineStageFlags2, SwapchainKHR};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
