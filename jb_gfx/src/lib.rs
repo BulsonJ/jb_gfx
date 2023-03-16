@@ -1,10 +1,15 @@
-use jb_gfx::renderer::{Colour, Renderer};
+pub mod device;
+pub mod pipeline;
+pub mod renderer;
+pub mod resource;
+
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+use crate::renderer::{Colour, Renderer};
 
-fn main() {
+pub fn run() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_inner_size(LogicalSize::new(1920, 1080))
@@ -24,11 +29,11 @@ fn main() {
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {
                     input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    },
                     ..
                 } => *control_flow = ControlFlow::Exit,
                 _ => {}

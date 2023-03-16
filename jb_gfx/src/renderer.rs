@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
-use cgmath::{Array, Deg, Matrix4, Point3, Quaternion, Rad, Rotation3, SquareMatrix, Vector2, Vector3, Zero};
+use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation3, SquareMatrix, Vector3, Zero};
 use log::error;
 use winit::{dpi::PhysicalSize, window::Window};
 
