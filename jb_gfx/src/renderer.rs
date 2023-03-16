@@ -303,9 +303,9 @@ impl Renderer {
 
         let viewport = vk::Viewport::builder()
             .x(0.0f32)
-            .y(0.0f32)
+            .y(self.device.size.height as f32)
             .width(self.device.size.width as f32)
-            .height(self.device.size.height as f32)
+            .height(-(self.device.size.height as f32))
             .min_depth(0.0f32)
             .max_depth(1.0f32);
 
