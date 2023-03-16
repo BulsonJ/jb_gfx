@@ -417,7 +417,10 @@ impl Renderer {
 
         let model_matrix = from_transforms(
             Vector3::new(0.0f32, frame_number_float.sin() * 0.001f32, 0.0f32),
-            Quaternion::from_axis_angle(Vector3::new(0.0f32,1.0f32,0.0f32), Rad(frame_number_float * 0.001f32)),
+            Quaternion::from_axis_angle(
+                Vector3::new(0.0f32, 1.0f32, 0.0f32),
+                Rad(frame_number_float * 0.001f32),
+            ),
             Vector3::from_value(1f32),
         );
 
@@ -836,7 +839,11 @@ struct PushConstants {
     model: [[f32; 4]; 4],
 }
 
-fn from_transforms(position: Vector3<f32>, rotation: Quaternion<f32>, size: Vector3<f32>) -> Matrix4<f32> {
+fn from_transforms(
+    position: Vector3<f32>,
+    rotation: Quaternion<f32>,
+    size: Vector3<f32>,
+) -> Matrix4<f32> {
     let translation = Matrix4::from_translation(position);
     let rotation = Matrix4::from({
         if position.is_zero() {
