@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
-use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
+use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector2, Vector3};
 use log::error;
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -19,8 +19,9 @@ pub struct Renderer {
     device: Device,
     pso_layout: vk::PipelineLayout,
     pso: PipelineHandle,
-    camera_buffer: BufferHandle,
-    camera_uniform: Camera2DUniform,
+    camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    camera_uniform: CameraUniform,
+    camera: Camera,
     descriptor_pool: vk::DescriptorPool,
     descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
@@ -129,15 +130,22 @@ impl Renderer {
         let mut pipeline_manager = PipelineManager::new();
         let pso = pipeline_manager.create_pipeline(&mut device.vk_device, &pso_build_info);
 
-        let mut camera_uniform = Camera2DUniform::new();
-        camera_uniform.update_proj(Vector2::new(
-            device.size.width as f32,
-            device.size.height as f32,
-        ));
+        let camera = Camera {
+            eye: (0.0, 3.0, 6.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: Vector3::unit_y(),
+            aspect: device.size.width as f32 / device.size.height as f32,
+            fovy: 90.0,
+            znear: 0.1,
+            zfar: 1000.0,
+        };
+
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_proj(&camera);
 
         let camera_buffer = {
             let buffer_create_info = vk::BufferCreateInfo {
-                size: size_of::<Camera2DUniform>() as u64,
+                size: size_of::<CameraUniform>() as u64,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
                 ..Default::default()
             };
@@ -149,23 +157,14 @@ impl Renderer {
                 ..Default::default()
             };
 
-            device
-                .resource_manager
-                .create_buffer(&buffer_create_info, &buffer_allocation_create_info)
-        };
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                &[camera_uniform],
+            [
                 device
                     .resource_manager
-                    .get_buffer(&camera_buffer)
-                    .unwrap()
-                    .allocation_info
-                    .mapped_data
-                    .cast(),
-                size_of::<Camera2DUniform>(),
-            )
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+            ]
         };
 
         let descriptor_set = {
@@ -189,24 +188,46 @@ impl Renderer {
             [first, second]
         };
 
-        let camera_buffer_write = vk::DescriptorBufferInfo::builder()
-            .buffer(
-                device
-                    .resource_manager
-                    .get_buffer(&camera_buffer)
-                    .unwrap()
-                    .buffer,
-            )
-            .range(
-                device
-                    .resource_manager
-                    .get_buffer(&camera_buffer)
-                    .unwrap()
-                    .allocation_info
-                    .size,
-            );
+        for (i, set) in descriptor_set.iter().enumerate() {
+            let camera_buffer = camera_buffer.get(i).unwrap();
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    &camera_uniform,
+                    device
+                        .resource_manager
+                        .get_buffer(camera_buffer)
+                        .unwrap()
+                        .allocation_info
+                        .mapped_data.cast(),
+                    size_of::<CameraUniform>(),
+                );
+            };
 
-        // TODO: Make camera 3d and write to descriptor
+            let camera_buffer_write = vk::DescriptorBufferInfo::builder()
+                .buffer(
+                    device
+                        .resource_manager
+                        .get_buffer(camera_buffer)
+                        .unwrap()
+                        .buffer,
+                )
+                .range(
+                    device
+                        .resource_manager
+                        .get_buffer(camera_buffer)
+                        .unwrap()
+                        .allocation_info
+                        .size,
+                );
+
+            let desc_set_writes = [*vk::WriteDescriptorSet::builder()
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .dst_binding(0)
+                .dst_set(*set)
+                .buffer_info(&[*camera_buffer_write])];
+
+            unsafe { device.vk_device.update_descriptor_sets(&desc_set_writes, &[]) };
+        }
 
         let bindless_textures = Vec::new();
         let bindless_indexes = HashMap::new();
@@ -217,6 +238,7 @@ impl Renderer {
             pso,
             camera_buffer,
             camera_uniform,
+            camera,
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
@@ -401,6 +423,7 @@ impl Renderer {
                 &[self.descriptor_set[self.device.buffered_resource_number()]],
                 &[],
             );
+            self.device.vk_device.cmd_draw(self.device.graphics_command_buffer[self.device.buffered_resource_number()], 3u32, 1u32, 0u32,0u32);
         }
 
         unsafe {
@@ -715,35 +738,42 @@ impl TextDrawData {
 /// The Camera Matrix that is given to the GPU.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct Camera2DUniform {
+struct CameraUniform {
     proj: [[f32; 4]; 4],
+    view: [[f32; 4]; 4],
 }
 
-impl Camera2DUniform {
+impl CameraUniform {
     fn new() -> Self {
         Self {
             proj: Matrix4::identity().into(),
+            view: Matrix4::identity().into(),
         }
     }
 
-    fn update_proj(&mut self, window_size: Vector2<f32>) {
-        self.proj = {
-            let proj = cgmath::ortho(
-                0.0f32,
-                window_size.x,
-                window_size.y,
-                0.0f32,
-                -1.0f32,
-                1.0f32,
-            );
+    fn update_proj(&mut self, camera: &Camera) {
+        self.proj = camera.build_projection_matrix().into();
+        self.view = camera.build_view_matrix().into();
+    }
+}
 
-            let mut proj = proj;
-            proj[1][1] *= -1f32;
+pub struct Camera {
+    pub eye: Point3<f32>,
+    pub target: Point3<f32>,
+    pub up: Vector3<f32>,
+    pub aspect: f32,
+    pub fovy: f32,
+    pub znear: f32,
+    pub zfar: f32,
+}
 
-            proj = proj * Matrix4::from_translation(Vector3::new(0f32, -window_size.y, 0f32));
+impl Camera {
+    pub fn build_view_matrix(&self) -> Matrix4<f32> {
+        Matrix4::look_at_rh(self.eye, self.target, self.up)
+    }
 
-            proj.into()
-        }
+    pub fn build_projection_matrix(&self) -> Matrix4<f32> {
+        cgmath::perspective(Deg(self.fovy), self.aspect, self.znear, self.zfar)
     }
 }
 
