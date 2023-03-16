@@ -2,12 +2,17 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier: enable
 
+layout (location = 0) out vec3 outColor;
+
 layout(std140,set = 0, binding = 0) uniform  CameraBuffer{
-	mat4 view_proj;
+	mat4 proj;
+	mat4 view;
 } cameraData;
 
-//output variable to the fragment shader
-layout (location = 0) out vec3 outColor;
+layout( push_constant ) uniform constants
+{
+	mat4 model;
+} pushConstants;
 
 void main()
 {
@@ -25,6 +30,6 @@ void main()
 		vec3(00.f, 0.0f, 1.0f)  //blue
 	);
 	//output the position of each vertex
-	gl_Position = vec4(positions[gl_VertexIndex], 1.0f);
+	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(positions[gl_VertexIndex], 1.0f);
 	outColor = colors[gl_VertexIndex];
 }

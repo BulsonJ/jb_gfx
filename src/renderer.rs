@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
-use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector2, Vector3};
+use cgmath::{Deg, Matrix4, Point3, Rad, SquareMatrix, Vector2, Vector3};
 use log::error;
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -106,8 +106,16 @@ impl Renderer {
         }
         .unwrap();
 
+        let push_constant_range = *vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+            .size(size_of::<PushConstants>() as u32)
+            .offset(0u32);
+
         let layouts = [descriptor_set_layout];
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(&layouts);
+        let push_constant_ranges = [push_constant_range];
+        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&layouts)
+            .push_constant_ranges(&push_constant_ranges);
 
         let pso_layout = unsafe {
             device
@@ -131,9 +139,7 @@ impl Renderer {
         let pso = pipeline_manager.create_pipeline(&mut device.vk_device, &pso_build_info);
 
         let camera = Camera {
-            eye: (0.0, 3.0, 6.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
-            up: Vector3::unit_y(),
+            position: (0.0, 0.0, -2.0).into(),
             aspect: device.size.width as f32 / device.size.height as f32,
             fovy: 90.0,
             znear: 0.1,
@@ -198,8 +204,9 @@ impl Renderer {
                         .get_buffer(camera_buffer)
                         .unwrap()
                         .allocation_info
-                        .mapped_data.cast(),
-                    size_of::<CameraUniform>(),
+                        .mapped_data
+                        .cast(),
+                    1,
                 );
             };
 
@@ -226,7 +233,11 @@ impl Renderer {
                 .dst_set(*set)
                 .buffer_info(&[*camera_buffer_write])];
 
-            unsafe { device.vk_device.update_descriptor_sets(&desc_set_writes, &[]) };
+            unsafe {
+                device
+                    .vk_device
+                    .update_descriptor_sets(&desc_set_writes, &[])
+            };
         }
 
         let bindless_textures = Vec::new();
@@ -251,26 +262,6 @@ impl Renderer {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.device.resize(new_size);
-
-        // TODO : Decided how to update camera when size changes
-        //self.camera_uniform.update_proj(Vector2::new(
-        //    self.device.size.width as f32,
-        //    self.device.size.height as f32,
-        //));
-        //
-        //unsafe {
-        //    std::ptr::copy_nonoverlapping(
-        //        &[self.camera_uniform],
-        //        self.device
-        //            .resource_manager
-        //            .get_buffer(&self.camera_buffer)
-        //            .unwrap()
-        //            .allocation_info
-        //            .mapped_data
-        //            .cast(),
-        //        std::mem::size_of::<Camera2DUniform>(),
-        //    )
-        //};
     }
 
     pub fn reload_shaders(&mut self) {
@@ -382,6 +373,23 @@ impl Renderer {
             )
         };
 
+        // Copy camera
+        self.camera_uniform.update_proj(&self.camera);
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                &[self.camera_uniform],
+                self.device
+                    .resource_manager
+                    .get_buffer(&self.camera_buffer[self.device.buffered_resource_number()])
+                    .unwrap()
+                    .allocation_info
+                    .mapped_data
+                    .cast(),
+                std::mem::size_of::<CameraUniform>(),
+            )
+        };
+
         // Start dynamic rendering
 
         let color_attach_info = vk::RenderingAttachmentInfo::builder()
@@ -405,6 +413,11 @@ impl Renderer {
 
         let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
+        let model_matrix = Matrix4::from_axis_angle(
+            Vector3::new(0f32, 1f32, 0f32),
+            Rad(self.device.frame_number() as f32 * 0.001f32),
+        );
+
         unsafe {
             self.device.vk_device.cmd_begin_rendering(
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -423,7 +436,23 @@ impl Renderer {
                 &[self.descriptor_set[self.device.buffered_resource_number()]],
                 &[],
             );
-            self.device.vk_device.cmd_draw(self.device.graphics_command_buffer[self.device.buffered_resource_number()], 3u32, 1u32, 0u32,0u32);
+            let push_constants = PushConstants {
+                model: model_matrix.into(),
+            };
+            self.device.vk_device.cmd_push_constants(
+                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                self.pso_layout,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                0u32,
+                bytemuck::cast_slice(&[push_constants]),
+            );
+            self.device.vk_device.cmd_draw(
+                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                3u32,
+                1u32,
+                0u32,
+                0u32,
+            );
         }
 
         unsafe {
@@ -758,9 +787,7 @@ impl CameraUniform {
 }
 
 pub struct Camera {
-    pub eye: Point3<f32>,
-    pub target: Point3<f32>,
-    pub up: Vector3<f32>,
+    pub position: Vector3<f32>,
     pub aspect: f32,
     pub fovy: f32,
     pub znear: f32,
@@ -769,7 +796,7 @@ pub struct Camera {
 
 impl Camera {
     pub fn build_view_matrix(&self) -> Matrix4<f32> {
-        Matrix4::look_at_rh(self.eye, self.target, self.up)
+        Matrix4::from_translation(self.position)
     }
 
     pub fn build_projection_matrix(&self) -> Matrix4<f32> {
@@ -800,45 +827,10 @@ impl From<Colour> for Vector3<f32> {
     }
 }
 
-/// A [`Quad`] with corresponding [`Texture`].
-/// Used to tell the renderer how to draw a sprite.
-#[derive(Copy, Clone)]
-pub struct Sprite {
-    /// The x position of the quad.
-    pub x: f32,
-    /// The y position of the quad.
-    pub y: f32,
-    /// The width of the quad.
-    pub x_scale: f32,
-    /// The height of the quad.
-    pub y_scale: f32,
-    /// The rotation of the sprite.
-    pub rotation: f32,
-    /// The texture that is used to render the sprite.
-    pub texture: Texture,
-    /// Colour to modulate the sprite
-    pub colour: Colour,
-}
-
-impl Sprite {
-    pub fn new(
-        x: f32,
-        y: f32,
-        x_scale: f32,
-        y_scale: f32,
-        rotation: f32,
-        texture: Texture,
-    ) -> Self {
-        Self {
-            x,
-            y,
-            x_scale,
-            y_scale,
-            rotation,
-            texture,
-            colour: Colour::WHITE,
-        }
-    }
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct PushConstants {
+    model: [[f32; 4]; 4],
 }
 
 fn from_transforms(position: Vector2<f32>, rotation: f32, size: Vector2<f32>) -> Matrix4<f32> {
