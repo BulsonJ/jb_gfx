@@ -4,6 +4,7 @@ use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+use jb_gfx::asset::AssetManager;
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -14,9 +15,10 @@ fn main() {
         .unwrap();
 
     let mut renderer = Renderer::new(&window);
-    let mesh_data = Mesh::from_file("assets/models/monkey-smooth.obj");
-    let mesh = renderer.load_mesh(&mesh_data).unwrap();
-    renderer.set_display_mesh(mesh);
+    let models = AssetManager::load_model(&mut renderer, "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf");
+    if let Some(model) = models.get(0) {
+        renderer.set_display_mesh(model.mesh);
+    }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
     event_loop.run(move |event, _, control_flow| {

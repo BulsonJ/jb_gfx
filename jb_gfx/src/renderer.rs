@@ -11,10 +11,10 @@ use log::error;
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{Mesh, Vertex};
 use crate::device::{Device, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
+use crate::{Mesh, Vertex};
 
 const BINDLESS_BINDING_INDEX: u32 = 1u32;
 
@@ -425,7 +425,7 @@ impl Renderer {
         let frame_number_float = self.device.frame_number() as f32;
 
         let model_matrix = from_transforms(
-            Vector3::new(0.0f32, 0.0f32, 0.0f32),
+            Vector3::new(0.0f32, 0.1f32, 0.0f32),
             Quaternion::from_axis_angle(
                 Vector3::new(0.0f32, 1.0f32, 0.0f32),
                 Rad(frame_number_float * 0.001f32),
