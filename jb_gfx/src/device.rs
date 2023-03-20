@@ -6,7 +6,8 @@ use ash::extensions::{
     ext::DebugUtils,
     khr::{DynamicRendering, Swapchain},
 };
-use ash::vk::{self, PipelineStageFlags2, SwapchainKHR};
+use ash::vk::{self, DeviceSize, PipelineStageFlags2, SwapchainKHR};
+use image::EncodableLayout;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
@@ -607,7 +608,8 @@ impl Device {
         img_width: u32,
         img_height: u32,
     ) -> Result<ImageHandle, String> {
-        let img_size = (size_of::<u8>() * img_bytes.len()) as u64;
+        let img_size = (img_width * img_height * 4u32) as DeviceSize;
+        //(size_of::<u8>() * img_bytes.len()) as u64;
 
         let staging_buffer_create_info = vk::BufferCreateInfo {
             size: img_size,
@@ -627,17 +629,14 @@ impl Device {
             &staging_buffer_allocation_create_info,
         );
 
+
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                img_bytes.as_ptr(),
-                self.resource_manager
-                    .get_buffer(&staging_buffer)
-                    .unwrap()
-                    .allocation_info
-                    .mapped_data
-                    .cast(),
-                img_bytes.len(),
-            )
+            self.resource_manager
+                .get_buffer(&staging_buffer)
+                .unwrap()
+                .allocation_info
+                .mapped_data
+                .copy_from_nonoverlapping(img_bytes.as_ptr().cast(), img_bytes.len());
         };
 
         let image_create_info = vk::ImageCreateInfo::builder()

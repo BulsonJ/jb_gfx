@@ -17,7 +17,7 @@ fn main() {
     let mut renderer = Renderer::new(&window);
     let models = AssetManager::load_model(
         &mut renderer,
-        "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
+        "assets/models/Cube/glTF/Cube.gltf",
     );
     if let Some(model) = models.get(0) {
         renderer.set_display_mesh(model.mesh);

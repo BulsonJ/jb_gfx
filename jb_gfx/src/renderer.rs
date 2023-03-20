@@ -457,7 +457,8 @@ impl Renderer {
                 if let Some(tex) = &self.display_textures {
                     self.bindless_indexes
                         .get(&tex.diffuse.image_handle)
-                        .unwrap().clone()
+                        .unwrap()
+                        .clone()
                 } else {
                     0usize
                 }
