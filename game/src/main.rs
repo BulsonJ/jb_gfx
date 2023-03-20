@@ -1,5 +1,5 @@
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Colour, Renderer};
+use jb_gfx::renderer::{Colour, MaterialTextures, Renderer};
 use jb_gfx::Mesh;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -21,6 +21,9 @@ fn main() {
     );
     if let Some(model) = models.get(0) {
         renderer.set_display_mesh(model.mesh);
+        renderer.set_display_textures(MaterialTextures {
+            diffuse: model.diffuse_texture.unwrap(),
+        })
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 

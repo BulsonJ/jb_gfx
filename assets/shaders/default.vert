@@ -18,6 +18,7 @@ layout(std140,set = 0, binding = 0) uniform  CameraBuffer{
 layout( push_constant ) uniform constants
 {
 	mat4 model;
+	ivec4 textures;
 } pushConstants;
 
 void main()

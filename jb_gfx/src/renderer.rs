@@ -36,6 +36,7 @@ pub struct Renderer {
     pipeline_manager: PipelineManager,
     meshes: SlotMap<MeshHandle, RenderMesh>,
     display_mesh: Option<MeshHandle>,
+    display_textures: Option<MaterialTextures>,
 }
 
 impl Renderer {
@@ -266,6 +267,7 @@ impl Renderer {
             pipeline_manager,
             meshes: SlotMap::default(),
             display_mesh: None,
+            display_textures: None,
         }
     }
 
@@ -451,8 +453,18 @@ impl Renderer {
                 &[self.descriptor_set[self.device.buffered_resource_number()]],
                 &[],
             );
+            let diffuse_tex = {
+                if let Some(tex) = &self.display_textures {
+                    self.bindless_indexes
+                        .get(&tex.diffuse.image_handle)
+                        .unwrap().clone()
+                } else {
+                    0usize
+                }
+            };
             let push_constants = PushConstants {
                 model: model_matrix.into(),
+                textures: [diffuse_tex as i32, 0, 0, 0],
             };
             self.device.vk_device.cmd_push_constants(
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -890,6 +902,10 @@ impl Renderer {
     pub fn set_display_mesh(&mut self, handle: MeshHandle) {
         self.display_mesh = Some(handle);
     }
+
+    pub fn set_display_textures(&mut self, textures: MaterialTextures) {
+        self.display_textures = Some(textures);
+    }
 }
 
 impl Drop for Renderer {
@@ -1030,6 +1046,7 @@ impl From<Colour> for Vector3<f32> {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct PushConstants {
     model: [[f32; 4]; 4],
+    textures: [i32; 4],
 }
 
 fn from_transforms(
@@ -1078,4 +1095,8 @@ impl From<Texture> for ImageHandle {
     fn from(tex: Texture) -> ImageHandle {
         tex.image_handle
     }
+}
+
+pub struct MaterialTextures {
+    pub diffuse: Texture,
 }
