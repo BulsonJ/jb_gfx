@@ -527,8 +527,8 @@ impl Renderer {
         let render_to_src_barrier = vk::ImageMemoryBarrier2::builder()
             .src_stage_mask(PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
             .src_access_mask(AccessFlags2::COLOR_ATTACHMENT_WRITE)
-            .dst_stage_mask(PipelineStageFlags2::NONE)
-            .dst_access_mask(AccessFlags2::NONE)
+            .dst_stage_mask(PipelineStageFlags2::BLIT)
+            .dst_access_mask(AccessFlags2::TRANSFER_READ)
             .old_layout(ImageLayout::ATTACHMENT_OPTIMAL)
             .new_layout(ImageLayout::TRANSFER_SRC_OPTIMAL)
             .image(
@@ -607,8 +607,8 @@ impl Renderer {
         // Transition to present
 
         let present_attachment_barrier = vk::ImageMemoryBarrier2::builder()
-            .src_stage_mask(PipelineStageFlags2::TRANSFER)
-            .src_access_mask(AccessFlags2::MEMORY_WRITE)
+            .src_stage_mask(PipelineStageFlags2::BLIT)
+            .src_access_mask(AccessFlags2::TRANSFER_WRITE)
             .dst_stage_mask(PipelineStageFlags2::NONE)
             .dst_access_mask(AccessFlags2::NONE)
             .old_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
