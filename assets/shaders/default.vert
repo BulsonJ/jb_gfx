@@ -21,16 +21,18 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 layout( push_constant ) uniform constants
 {
 	mat4 model;
+	mat4 normal;
 	ivec4 textures;
+	ivec4 textures_two;
 } pushConstants;
 
 void main()
 {
 	vec3 worldPos = vec3(pushConstants.model * vec4(vPosition, 1.0f));
 	outWorldPos = worldPos;
-	//output the position of each vertex
-	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(worldPos, 1.0f);
 	outColor = vColor;
 	outTexCoords = vTexCoords;
-	outNormal = vNormal;
+	outNormal = mat3(pushConstants.normal) * vNormal;
+
+	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(worldPos, 1.0f);
 }

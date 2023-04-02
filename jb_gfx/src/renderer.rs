@@ -9,7 +9,7 @@ use ash::vk::{
     ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::offset_of;
-use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{Array, Deg, Matrix, Matrix4, Quaternion, Rad, Rotation, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
 use image::EncodableLayout;
 use log::error;
 use slotmap::{new_key_type, SlotMap};
@@ -230,15 +230,15 @@ impl Renderer {
             ),
             LightUniform::new(
                 Vector3::new(0.0f32, 0.0f32, 10.0f32),
-                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(100.0f32, 100.0f32, 100.0f32),
             ),
             LightUniform::new(
                 Vector3::new(0.0f32, 0.0f32, 10.0f32),
-                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(100.0f32, 100.0f32, 100.0f32),
             ),
             LightUniform::new(
                 Vector3::new(0.0f32, 0.0f32, 10.0f32),
-                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(100.0f32, 100.0f32, 100.0f32),
             ),
         ];
 
@@ -563,11 +563,6 @@ impl Renderer {
 
         let frame_number_float = self.device.frame_number() as f32;
 
-        *self.lights.get_mut(0).unwrap() = LightUniform::new(
-            Vector3::new(5.0f32, ((frame_number_float * 0.001f32).sin() * 10.0f32) + 5.0f32, -10.0f32),
-            Vector3::new(100.0f32, 100.0f32, 100.0f32),
-        );
-
         self.device
             .resource_manager
             .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
@@ -621,13 +616,14 @@ impl Renderer {
             Vector3::new(1.0f32, 0.0f32, 0.0f32),
             Deg(-45f32),
         );
-        let rotation = static_rotation;
+        let rotation = timed_rotation;
 
         let model_matrix = from_transforms(
-            Vector3::new(0.0f32, 5.0f32, -10.0f32),
+            Vector3::new(0.0f32, -50.0f32, 0.0f32),
             rotation,
             Vector3::from_value(1f32),
         );
+        let normal_matrix = model_matrix.invert().unwrap().transpose();
 
         unsafe {
             self.device.vk_device.cmd_begin_rendering(
@@ -700,6 +696,7 @@ impl Renderer {
 
             let push_constants = PushConstants {
                 model: model_matrix.into(),
+                normal: normal_matrix.into(),
                 textures: [
                     diffuse_tex as i32,
                     normal_tex as i32,
@@ -1306,6 +1303,7 @@ impl From<Colour> for Vector3<f32> {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct PushConstants {
     model: [[f32; 4]; 4],
+    normal: [[f32; 4]; 4],
     textures: [i32; 8],
 }
 
