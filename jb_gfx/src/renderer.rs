@@ -607,7 +607,6 @@ impl Renderer {
         let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
         let frame_number_float = self.device.frame_number() as f32;
-
         let timed_rotation = Quaternion::from_axis_angle(
             Vector3::new(0.0f32, 1.0f32, 0.0f32),
             Deg(frame_number_float * 0.01f32),
@@ -616,9 +615,11 @@ impl Renderer {
             Vector3::new(1.0f32, 0.0f32, 0.0f32),
             Deg(45f32),
         );
+        let rotation = static_rotation;
+
         let model_matrix = from_transforms(
-            Vector3::new(0.0f32, 0.1f32, 0.0f32),
-            static_rotation * timed_rotation,
+            Vector3::new(0.0f32, 0.0f32, 0.0f32),
+            rotation,
             Vector3::from_value(1f32),
         );
 
@@ -683,13 +684,25 @@ impl Renderer {
                 }
             };
 
+            let occlusion_tex = {
+                if let Some(tex) = model.textures.occlusion_tex {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
             let push_constants = PushConstants {
                 model: model_matrix.into(),
                 textures: [
                     diffuse_tex as i32,
                     normal_tex as i32,
                     metallic_roughness_tex as i32,
+                    occlusion_tex as i32,
                     emissive_tex as i32,
+                    0,
+                    0,
+                    0
                 ],
             };
             unsafe {
@@ -1287,7 +1300,7 @@ impl From<Colour> for Vector3<f32> {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct PushConstants {
     model: [[f32; 4]; 4],
-    textures: [i32; 4],
+    textures: [i32; 8],
 }
 
 fn from_transforms(
@@ -1297,15 +1310,7 @@ fn from_transforms(
 ) -> Matrix4<f32> {
     let translation = Matrix4::from_translation(position);
     // TODO : Fix rotation when position is zero
-    let rotation = Matrix4::from({
-        if position.is_zero() {
-            // this is needed so an object at (0, 0, 0) won't get scaled to zero
-            // as Quaternions can effect scale if they're not created correctly
-            Quaternion::from_axis_angle(Vector3::unit_z(), Deg(0.0))
-        } else {
-            rotation
-        }
-    });
+    let rotation = Matrix4::from(rotation);
     let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     let mut model = translation;
@@ -1344,6 +1349,7 @@ pub struct MaterialTextures {
     pub normal: Option<Texture>,
     pub metallic_roughness: Option<Texture>,
     pub emissive: Option<Texture>,
+    pub occlusion_tex: Option<Texture>,
 }
 
 struct RenderModel {

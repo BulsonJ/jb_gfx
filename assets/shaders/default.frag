@@ -29,6 +29,7 @@ layout( push_constant ) uniform constants
 {
 	mat4 model;
 	ivec4 textures;
+	ivec4 textures_two;
 } pushConstants;
 
 void main()
@@ -45,9 +46,6 @@ void main()
 	float metallicFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).b;
 	float roughnessFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).g;
 	float ambientFactor = SampleBindlessTexture(pushConstants.textures.a, inTexCoords).r;
-
-	//vec4 emissiveTexture = SampleBindlessTexture(pushConstants.textures.a, inTexCoords);
-	//outColour += emissiveTexture.rgb;
 
 	vec3 albedo     = pow(diffuseTexture.rgb, vec3(2.2));
 	vec3 normal     = normalTexture.rgb;
@@ -95,6 +93,10 @@ void main()
 
 	color = color / (color + vec3(1.0));
 	color = pow(color, vec3(1.0/2.2));
+
+
+	vec4 emissiveTexture = SampleBindlessTexture(pushConstants.textures_two.r, inTexCoords);
+	color += emissiveTexture.rgb;
 
 	outFragColor = vec4(color,1.0f);
 }

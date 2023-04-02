@@ -113,8 +113,20 @@ impl AssetManager {
                         None
                     }
                 };
-                let emissive_tex = {
+                let occlusion_tex = {
                     if let Some(emissive) = material.occlusion_texture() {
+                        match emissive.texture().source().source() {
+                            Source::View { .. } => None,
+                            Source::Uri { uri, .. } => {
+                                Some(*self.loaded_textures.get(uri).unwrap())
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                };
+                let emissive_tex = {
+                    if let Some(emissive) = material.emissive_texture() {
                         match emissive.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
@@ -160,6 +172,7 @@ impl AssetManager {
                         emissive: emissive_tex,
                         normal: normal_tex,
                         metallic_roughness: metallic_roughness_tex,
+                        occlusion_tex,
                         ..Default::default()
                     },
                 };
