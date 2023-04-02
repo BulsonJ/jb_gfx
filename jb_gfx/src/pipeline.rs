@@ -38,7 +38,7 @@ impl PipelineManager {
 
     fn create_pipeline_internal(
         shader_compiler: &mut shaderc::Compiler,
-        device: &mut crate::device::GraphicsDevice,
+        device: &mut GraphicsDevice,
         build_info: PipelineCreateInfo,
     ) -> vk::Pipeline {
         let vertex_file = fs::read_to_string(&build_info.vertex_shader).unwrap();

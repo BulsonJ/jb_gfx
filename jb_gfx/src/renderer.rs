@@ -320,8 +320,9 @@ impl Renderer {
         })
     }
 
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        self.device.resize(new_size);
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
+        self.device.resize(new_size)?;
+        Ok(())
     }
 
     pub fn reload_shaders(&mut self) {
@@ -855,7 +856,7 @@ impl Renderer {
         Ok(texture)
     }
 
-    pub fn load_mesh(&mut self, mesh: &Mesh) -> MeshHandle {
+    pub fn load_mesh(&mut self, mesh: &Mesh) -> Result<MeshHandle> {
         let vertex_buffer = {
             let staging_buffer_create_info = vk::BufferCreateInfo {
                 size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
@@ -880,7 +881,7 @@ impl Renderer {
                 .get_buffer_mut(staging_buffer)
                 .unwrap()
                 .mapped_slice::<Vertex>()
-                .unwrap()
+                ?
                 .copy_from_slice(mesh.vertices.as_slice());
 
             let vertex_buffer_create_info = vk::BufferCreateInfo {
@@ -925,7 +926,7 @@ impl Renderer {
                     index_buffer: None,
                     vertex_count: mesh.vertices.len() as u32,
                 };
-                self.meshes.insert(render_mesh)
+                Ok(self.meshes.insert(render_mesh))
             }
             Some(indices) => {
                 let index_buffer = {
@@ -954,7 +955,7 @@ impl Renderer {
                         .get_buffer_mut(staging_buffer)
                         .unwrap()
                         .mapped_slice::<u32>()
-                        .unwrap()
+                        ?
                         .copy_from_slice(indices.as_slice());
 
                     let index_buffer_create_info = vk::BufferCreateInfo {
@@ -997,7 +998,7 @@ impl Renderer {
                     index_buffer: Some(index_buffer),
                     vertex_count: indices.len() as u32,
                 };
-                self.meshes.insert(render_mesh)
+                Ok(self.meshes.insert(render_mesh))
             }
         }
     }

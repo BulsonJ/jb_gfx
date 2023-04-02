@@ -4,6 +4,7 @@ use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+use anyhow::Result;
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -49,11 +50,11 @@ fn main() {
                     if initial_resize {
                         initial_resize = false;
                     } else {
-                        renderer.resize(*physical_size);
+                        renderer.resize(*physical_size).unwrap();
                     }
                 }
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    renderer.resize(**new_inner_size);
+                    renderer.resize(**new_inner_size).unwrap();
                 }
                 _ => {}
             },
