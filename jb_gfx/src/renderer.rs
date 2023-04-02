@@ -35,8 +35,7 @@ pub struct Renderer {
     pub clear_colour: Colour,
     pipeline_manager: PipelineManager,
     meshes: SlotMap<MeshHandle, RenderMesh>,
-    display_mesh: Option<MeshHandle>,
-    display_textures: Option<MaterialTextures>,
+    render_models: Vec<RenderModel>,
 }
 
 impl Renderer {
@@ -266,8 +265,7 @@ impl Renderer {
             clear_colour: Colour::BLACK,
             pipeline_manager,
             meshes: SlotMap::default(),
-            display_mesh: None,
-            display_textures: None,
+            render_models: Vec::default(),
         }
     }
 
@@ -453,31 +451,29 @@ impl Renderer {
                 &[self.descriptor_set[self.device.buffered_resource_number()]],
                 &[],
             );
-            let diffuse_tex = {
-                if let Some(tex) = &self.display_textures {
-                    self.bindless_indexes
-                        .get(&tex.diffuse.image_handle)
-                        .unwrap()
-                        .clone()
-                } else {
-                    0usize
-                }
-            };
+        };
+
+        for model in self.render_models.iter() {
+            let diffuse_tex = self
+                .bindless_indexes
+                .get(&model.textures.diffuse.image_handle)
+                .unwrap()
+                .clone();
             let push_constants = PushConstants {
                 model: model_matrix.into(),
                 textures: [diffuse_tex as i32, 0, 0, 0],
             };
-            self.device.vk_device.cmd_push_constants(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                self.pso_layout,
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                0u32,
-                bytemuck::cast_slice(&[push_constants]),
-            );
-        };
+            unsafe {
+                self.device.vk_device.cmd_push_constants(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    self.pso_layout,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0u32,
+                    bytemuck::cast_slice(&[push_constants]),
+                )
+            };
 
-        if let Some(display_mesh_handle) = self.display_mesh {
-            if let Some(display_mesh) = self.meshes.get(display_mesh_handle) {
+            if let Some(display_mesh) = self.meshes.get(model.mesh_handle) {
                 let vertex_buffer = self
                     .device
                     .resource_manager
@@ -900,12 +896,11 @@ impl Renderer {
         }
     }
 
-    pub fn set_display_mesh(&mut self, handle: MeshHandle) {
-        self.display_mesh = Some(handle);
-    }
-
-    pub fn set_display_textures(&mut self, textures: MaterialTextures) {
-        self.display_textures = Some(textures);
+    pub fn add_render_model(&mut self, handle: MeshHandle, textures: MaterialTextures) {
+        self.render_models.push(RenderModel {
+            mesh_handle: handle,
+            textures,
+        });
     }
 }
 
@@ -1100,4 +1095,9 @@ impl From<Texture> for ImageHandle {
 
 pub struct MaterialTextures {
     pub diffuse: Texture,
+}
+
+struct RenderModel {
+    mesh_handle: MeshHandle,
+    textures: MaterialTextures,
 }

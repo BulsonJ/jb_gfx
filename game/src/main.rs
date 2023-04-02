@@ -17,13 +17,15 @@ fn main() {
     let mut renderer = Renderer::new(&window);
     let models = AssetManager::load_model(
         &mut renderer,
-        "assets/models/Cube/glTF/Cube.gltf",
+        "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
     );
-    if let Some(model) = models.get(0) {
-        renderer.set_display_mesh(model.mesh);
-        renderer.set_display_textures(MaterialTextures {
-            diffuse: model.diffuse_texture.unwrap(),
-        })
+    for model in models.iter() {
+        renderer.add_render_model(
+            model.mesh,
+            MaterialTextures {
+                diffuse: model.diffuse_texture.unwrap(),
+            },
+        );
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
