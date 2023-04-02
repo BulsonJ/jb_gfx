@@ -1,11 +1,9 @@
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::mem::size_of;
 
 use ash::vk;
-use ash::vk::{
-    AccessFlags2, ClearDepthStencilValue, DeviceSize, ImageAspectFlags, ImageLayout, IndexType,
-    PipelineStageFlags2,
-};
+use ash::vk::{AccessFlags2, ClearDepthStencilValue, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2};
 use bytemuck::offset_of;
 use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation3, SquareMatrix, Vector3, Zero};
 use log::error;
@@ -207,6 +205,20 @@ impl Renderer {
             [first, second]
         };
 
+        for set in descriptor_set.iter() {
+            let object_name = CString::new("Global Descriptor Set(1)").unwrap();
+            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(ObjectType::DESCRIPTOR_SET)
+                .object_handle(set.as_raw())
+                .object_name(object_name.as_ref());
+
+            unsafe {
+                device.debug_utils_loader
+                    .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
+                    .expect("Named object");
+            }
+        }
+
         for (i, set) in descriptor_set.iter().enumerate() {
             let camera_buffer = camera_buffer.get(i).unwrap();
             unsafe {
@@ -273,6 +285,20 @@ impl Renderer {
 
             [first, second]
         };
+
+        for set in bindless_descriptor_set.iter() {
+            let object_name = CString::new("Bindless Descriptor Set(0)").unwrap();
+            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(ObjectType::DESCRIPTOR_SET)
+                .object_handle(set.as_raw())
+                .object_name(object_name.as_ref());
+
+            unsafe {
+                device.debug_utils_loader
+                    .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
+                    .expect("Named object");
+            }
+        }
 
         let bindless_textures = Vec::new();
         let bindless_indexes = HashMap::new();
