@@ -83,6 +83,10 @@ impl ResourceManager {
         self.buffers.get(handle)
     }
 
+    pub fn get_buffer_mut(&mut self, handle: BufferHandle) -> Option<&mut Buffer> {
+        self.buffers.get_mut(handle)
+    }
+
     /// Creates an [`Image`] on the GPU.
     ///
     /// # Arguments
@@ -193,6 +197,25 @@ pub struct Buffer {
     pub buffer: vk::Buffer,
     pub allocation: vk_mem_alloc::Allocation,
     pub allocation_info: vk_mem_alloc::AllocationInfo,
+}
+
+impl Buffer {
+    /// Obtain a slice to the mapped memory of this buffer.
+    /// # Errors
+    /// Fails if this buffer is not mappable (not `HOST_VISIBLE`).
+    pub fn mapped_slice<T>(&mut self) -> Result<&mut [T], String> {
+        if self.allocation_info.mapped_data.is_null() {
+            return Err(String::from("Not mapped!"));
+        }
+
+        let pointer = self.allocation_info.mapped_data;
+        Ok(unsafe {
+            std::slice::from_raw_parts_mut(
+                pointer.cast::<T>(),
+                self.allocation_info.size as usize / std::mem::size_of::<T>(),
+            )
+        })
+    }
 }
 
 /// A image and it's memory allocation.

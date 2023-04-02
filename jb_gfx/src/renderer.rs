@@ -3,9 +3,13 @@ use std::ffi::CString;
 use std::mem::size_of;
 
 use ash::vk;
-use ash::vk::{AccessFlags2, ClearDepthStencilValue, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2};
+use ash::vk::{
+    AccessFlags2, ClearDepthStencilValue, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle,
+    ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
+};
 use bytemuck::offset_of;
 use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation3, SquareMatrix, Vector3, Zero};
+use image::EncodableLayout;
 use log::error;
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
@@ -213,7 +217,8 @@ impl Renderer {
                 .object_name(object_name.as_ref());
 
             unsafe {
-                device.debug_utils_loader
+                device
+                    .debug_utils_loader
                     .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
                     .expect("Named object");
             }
@@ -294,7 +299,8 @@ impl Renderer {
                 .object_name(object_name.as_ref());
 
             unsafe {
-                device.debug_utils_loader
+                device
+                    .debug_utils_loader
                     .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
                     .expect("Named object");
             }
@@ -795,7 +801,8 @@ impl Renderer {
         }
 
         let img = img.unwrap();
-        let img_bytes = img.as_bytes();
+        let rgba_img = img.to_rgba8();
+        let img_bytes = rgba_img.as_bytes();
         let image = self
             .device
             .load_image(img_bytes, img.width(), img.height())
@@ -844,11 +851,14 @@ impl Renderer {
 
         // Debug name image
         {
-            let object_name = CString::new("Image:".to_string() + file_location.rsplit_once('/').unwrap().1).unwrap();
+            let object_name =
+                CString::new("Image:".to_string() + file_location.rsplit_once('/').unwrap().1)
+                    .unwrap();
             let debug_info = DebugUtilsObjectNameInfoEXT::builder()
                 .object_type(ObjectType::IMAGE)
                 .object_handle(
-                    self.device.resource_manager
+                    self.device
+                        .resource_manager
                         .get_image(image)
                         .unwrap()
                         .image
@@ -857,7 +867,8 @@ impl Renderer {
                 .object_name(object_name.as_ref());
 
             unsafe {
-                self.device.debug_utils_loader
+                self.device
+                    .debug_utils_loader
                     .set_debug_utils_object_name(self.device.vk_device.handle(), &debug_info)
                     .expect("Named object");
             }
@@ -886,19 +897,13 @@ impl Renderer {
                 &staging_buffer_allocation_create_info,
             );
 
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    mesh.vertices.as_ptr(),
-                    self.device
-                        .resource_manager
-                        .get_buffer(staging_buffer)
-                        .unwrap()
-                        .allocation_info
-                        .mapped_data
-                        .cast(),
-                    mesh.vertices.len(),
-                )
-            };
+            self.device
+                .resource_manager
+                .get_buffer_mut(staging_buffer)
+                .unwrap()
+                .mapped_slice::<Vertex>()
+                .unwrap()
+                .copy_from_slice(mesh.vertices.as_slice());
 
             let vertex_buffer_create_info = vk::BufferCreateInfo {
                 size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
@@ -966,19 +971,13 @@ impl Renderer {
                         &staging_buffer_allocation_create_info,
                     );
 
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            indices.as_ptr(),
-                            self.device
-                                .resource_manager
-                                .get_buffer(staging_buffer)
-                                .unwrap()
-                                .allocation_info
-                                .mapped_data
-                                .cast(),
-                            indices.len(),
-                        )
-                    };
+                    self.device
+                        .resource_manager
+                        .get_buffer_mut(staging_buffer)
+                        .unwrap()
+                        .mapped_slice::<u32>()
+                        .unwrap()
+                        .copy_from_slice(indices.as_slice());
 
                     let index_buffer_create_info = vk::BufferCreateInfo {
                         size: buffer_size,

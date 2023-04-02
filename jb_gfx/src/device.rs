@@ -704,14 +704,12 @@ impl GraphicsDevice {
             &staging_buffer_allocation_create_info,
         );
 
-        unsafe {
-            self.resource_manager
-                .get_buffer(staging_buffer)
-                .unwrap()
-                .allocation_info
-                .mapped_data
-                .copy_from_nonoverlapping(img_bytes.as_ptr().cast(), img_bytes.len());
-        };
+        self.resource_manager
+            .get_buffer_mut(staging_buffer)
+            .unwrap()
+            .mapped_slice::<u8>()
+            .unwrap()
+            .copy_from_slice(img_bytes);
 
         let image_create_info = vk::ImageCreateInfo::builder()
             .format(vk::Format::R8G8B8A8_SRGB)
