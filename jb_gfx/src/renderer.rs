@@ -11,7 +11,7 @@ use log::error;
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::device::{Device, FRAMES_IN_FLIGHT};
+use crate::device::{GraphicsDevice, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Mesh, Vertex};
@@ -21,7 +21,7 @@ const BINDLESS_BINDING_INDEX: u32 = 1u32;
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
 pub struct Renderer {
-    device: Device,
+    device: GraphicsDevice,
     pso_layout: vk::PipelineLayout,
     pso: PipelineHandle,
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
@@ -40,7 +40,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(window: &Window) -> Self {
-        let mut device = Device::new(window);
+        let mut device = GraphicsDevice::new(window);
 
         let vertex_input_desc = Vertex::get_vertex_input_desc();
 
@@ -143,7 +143,7 @@ impl Renderer {
 
         // TODO : Move more into PipelineManager
         let mut pipeline_manager = PipelineManager::new();
-        let pso = pipeline_manager.create_pipeline(&mut device.vk_device, &pso_build_info);
+        let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info);
 
         let camera = Camera {
             position: (0.0, 0.0, -2.0).into(),
@@ -275,7 +275,7 @@ impl Renderer {
 
     pub fn reload_shaders(&mut self) {
         self.pipeline_manager
-            .reload_shaders(&mut self.device.vk_device)
+            .reload_shaders(&mut self.device)
     }
 
     pub fn render(&mut self) {

@@ -17,7 +17,7 @@ use crate::resource::{ImageHandle, ResourceManager};
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 
-pub struct Device {
+pub struct GraphicsDevice {
     instance: ash::Instance,
     pub size: winit::dpi::PhysicalSize<u32>,
     surface: vk::SurfaceKHR,
@@ -27,7 +27,7 @@ pub struct Device {
     pub vk_device: ash::Device,
     pdevice: vk::PhysicalDevice,
     pub resource_manager: ResourceManager,
-    debug_utils_loader: DebugUtils,
+    pub debug_utils_loader: DebugUtils,
     debug_call_back: vk::DebugUtilsMessengerEXT,
     swapchain: SwapchainKHR,
     swapchain_loader: Swapchain,
@@ -46,7 +46,7 @@ pub struct Device {
     frame_number: usize,
 }
 
-impl Device {
+impl GraphicsDevice {
     pub fn new(window: &Window) -> Self {
         let size = window.inner_size();
 
@@ -741,7 +741,7 @@ impl Device {
     }
 }
 
-impl Drop for Device {
+impl Drop for GraphicsDevice {
     fn drop(&mut self) {
         unsafe {
             self.vk_device.device_wait_idle().unwrap();

@@ -1,8 +1,10 @@
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::fs;
 
 use ash::vk;
+use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
 use slotmap::{new_key_type, SlotMap};
+use crate::device::GraphicsDevice;
 
 pub(crate) struct PipelineManager {
     shader_compiler: shaderc::Compiler,
@@ -20,7 +22,7 @@ impl PipelineManager {
 
     pub fn create_pipeline(
         &mut self,
-        device: &mut ash::Device,
+        device: &mut GraphicsDevice,
         build_info: &PipelineCreateInfo,
     ) -> PipelineHandle {
         let pso = PipelineManager::create_pipeline_internal(
@@ -36,7 +38,7 @@ impl PipelineManager {
 
     fn create_pipeline_internal(
         shader_compiler: &mut shaderc::Compiler,
-        device: &mut ash::Device,
+        device: &mut crate::device::GraphicsDevice,
         build_info: PipelineCreateInfo,
     ) -> vk::Pipeline {
         let vertex_file = fs::read_to_string(&build_info.vertex_shader).unwrap();
@@ -62,7 +64,7 @@ impl PipelineManager {
             )
             .unwrap();
 
-        let vertex_shader = load_shader_module(&device, vert_binary.as_binary()).unwrap();
+        let vertex_shader = load_shader_module(&device.vk_device, vert_binary.as_binary()).unwrap();
 
         let vertex_stage_info = vk::PipelineShaderStageCreateInfo::builder()
             .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") })
@@ -70,7 +72,7 @@ impl PipelineManager {
             .module(vertex_shader)
             .build();
 
-        let fragment_shader = load_shader_module(&device, frag_binary.as_binary()).unwrap();
+        let fragment_shader = load_shader_module(&device.vk_device, frag_binary.as_binary()).unwrap();
 
         let fragment_stage_info = vk::PipelineShaderStageCreateInfo::builder()
             .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") })
@@ -87,11 +89,20 @@ impl PipelineManager {
             pipeline_layout: build_info.pipeline_layout,
         };
 
-        let pipeline = build_pipeline(device, info);
+        let pipeline = build_pipeline(&mut device.vk_device, info);
+
+        let object_name_string = String::from(build_info.vertex_shader.rsplit_once('/').unwrap().1) + " " + build_info.fragment_shader.rsplit_once('/').unwrap().1;
+        let object_name = CString::new(object_name_string).unwrap();
+        let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
+            .object_type(ObjectType::PIPELINE)
+            .object_handle(pipeline.as_raw())
+            .object_name(object_name.as_ref());
+
+        unsafe { device.debug_utils_loader.set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info).expect("Named object"); }
 
         unsafe {
-            device.destroy_shader_module(vertex_shader, None);
-            device.destroy_shader_module(fragment_shader, None);
+            device.vk_device.destroy_shader_module(vertex_shader, None);
+            device.vk_device.destroy_shader_module(fragment_shader, None);
         }
 
         pipeline
@@ -101,7 +112,7 @@ impl PipelineManager {
         self.pipelines.get(handle).unwrap().pso
     }
 
-    pub fn reload_shaders(&mut self, device: &mut ash::Device) {
+    pub fn reload_shaders(&mut self, device: &mut GraphicsDevice) {
         for (_, pipeline) in self.pipelines.iter_mut() {
             pipeline.pso = PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,
@@ -211,7 +222,9 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
     let create_info = [*pso_create_info];
     let pso =
         unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), &create_info, None) };
-    *pso.unwrap().get(0usize).unwrap()
+
+    let pipeline_object = *pso.unwrap().get(0usize).unwrap();
+    pipeline_object
 }
 
 pub fn load_shader_module(device: &ash::Device, code: &[u32]) -> Option<vk::ShaderModule> {
