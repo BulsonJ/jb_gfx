@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use gltf::image::Source;
 
-use crate::{Mesh, Vertex};
 use crate::renderer::{MeshHandle, Renderer, Texture};
+use crate::{Mesh, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -80,14 +80,14 @@ impl AssetManager {
                     .unwrap();
                 let diffuse_tex = match diffuse.texture().source().source() {
                     Source::View { .. } => None,
-                    Source::Uri { uri, .. } => Some(self.loaded_textures.get(uri).unwrap().clone()),
+                    Source::Uri { uri, .. } => Some(*self.loaded_textures.get(uri).unwrap()),
                 };
 
                 let mut vertices = Vec::new();
                 for i in 0..positions.len() {
-                    let position = positions.get(i).unwrap().clone();
-                    let tex_coords = tex_coords.get(i).unwrap().clone();
-                    let normal = normals.get(i).unwrap().clone();
+                    let position = *positions.get(i).unwrap();
+                    let tex_coords = *tex_coords.get(i).unwrap();
+                    let normal = *normals.get(i).unwrap();
                     //let color = colors.get(i).unwrap().clone();
 
                     let vertex = Vertex {

@@ -1,15 +1,15 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
     ext::DebugUtils,
     khr::{DynamicRendering, Swapchain},
 };
 use ash::vk::{
-    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageView, ObjectType,
-    PipelineStageFlags2, SwapchainKHR,
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ObjectType, PipelineStageFlags2,
+    SwapchainKHR,
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -65,9 +65,7 @@ impl GraphicsDevice {
             .api_version(vk::make_api_version(0, 1, 3, 0));
 
         let mut instance_extensions =
-            ash_window::enumerate_required_extensions(window.raw_display_handle())
-                ?
-                .to_vec();
+            ash_window::enumerate_required_extensions(window.raw_display_handle())?.to_vec();
 
         instance_extensions.push(DebugUtils::name().as_ptr());
 
@@ -181,8 +179,7 @@ impl GraphicsDevice {
         let graphics_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
 
         let surface_format =
-            unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }
-                ?
+            unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }?
                 .into_iter()
                 .find(|&x| {
                     x.format == vk::Format::B8G8R8A8_SRGB || x.format == vk::Format::R8G8B8A8_SRGB

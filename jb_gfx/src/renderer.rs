@@ -786,7 +786,9 @@ impl Renderer {
         let img = img?;
         let rgba_img = img.to_rgba8();
         let img_bytes = rgba_img.as_bytes();
-        let image = self.device.load_image(img_bytes, img.width(), img.height())?;
+        let image = self
+            .device
+            .load_image(img_bytes, img.width(), img.height())?;
 
         self.bindless_textures.push(image);
         let bindless_index = self.bindless_textures.len();
@@ -880,8 +882,7 @@ impl Renderer {
                 .resource_manager
                 .get_buffer_mut(staging_buffer)
                 .unwrap()
-                .mapped_slice::<Vertex>()
-                ?
+                .mapped_slice::<Vertex>()?
                 .copy_from_slice(mesh.vertices.as_slice());
 
             let vertex_buffer_create_info = vk::BufferCreateInfo {
@@ -954,8 +955,7 @@ impl Renderer {
                         .resource_manager
                         .get_buffer_mut(staging_buffer)
                         .unwrap()
-                        .mapped_slice::<u32>()
-                        ?
+                        .mapped_slice::<u32>()?
                         .copy_from_slice(indices.as_slice());
 
                     let index_buffer_create_info = vk::BufferCreateInfo {

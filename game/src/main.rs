@@ -4,7 +4,6 @@ use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
-use anyhow::Result;
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -15,6 +14,7 @@ fn main() {
         .unwrap();
 
     let mut renderer = Renderer::new(&window).unwrap();
+    renderer.render().unwrap();
     let mut asset_manager = AssetManager::default();
     let models = asset_manager
         .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
@@ -28,6 +28,7 @@ fn main() {
         );
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
+
 
     let mut initial_resize = true;
     event_loop.run(move |event, _, control_flow| {
