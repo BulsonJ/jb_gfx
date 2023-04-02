@@ -1,5 +1,4 @@
 #version 460
-#extension GL_EXT_nonuniform_qualifier: enable
 #include "assets/shaders/library/pbr.glsl"
 #include "assets/shaders/library/texture.glsl"
 
