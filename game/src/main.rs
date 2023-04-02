@@ -15,10 +15,8 @@ fn main() {
         .unwrap();
 
     let mut renderer = Renderer::new(&window);
-    let models = AssetManager::load_model(
-        &mut renderer,
-        "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
-    );
+    let mut asset_manager = AssetManager::default();
+    let models = asset_manager.load_model(&mut renderer, "assets/models/Cube/glTF/Cube.gltf");
     for model in models.iter() {
         renderer.add_render_model(
             model.mesh,

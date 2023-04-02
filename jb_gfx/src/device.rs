@@ -629,7 +629,6 @@ impl Device {
             &staging_buffer_allocation_create_info,
         );
 
-
         unsafe {
             self.resource_manager
                 .get_buffer(&staging_buffer)

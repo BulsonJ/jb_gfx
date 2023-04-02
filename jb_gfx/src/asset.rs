@@ -5,14 +5,15 @@ use gltf::image::Source;
 use gltf::{Gltf, Semantic};
 use std::collections::HashMap;
 
-pub struct AssetManager {}
+pub struct AssetManager {
+    loaded_textures: HashMap<String, Texture>,
+}
 
 impl AssetManager {
-    pub fn load_model(renderer: &mut Renderer, file: &str) -> Vec<Model> {
+    pub fn load_model(&mut self, renderer: &mut Renderer, file: &str) -> Vec<Model> {
         let mut models = Vec::new();
 
         let (gltf, buffers, _) = gltf::import(file).unwrap();
-        let mut textures = HashMap::new();
 
         let (source_folder, asset_name) = file.rsplit_once('/').unwrap();
 
@@ -23,7 +24,7 @@ impl AssetManager {
                 Source::Uri { uri, mime_type } => {
                     let image_asset = String::from(source_folder) + "/" + uri;
                     if let Ok(loaded_texture) = renderer.load_texture(&image_asset) {
-                        textures.insert(uri, loaded_texture);
+                        self.loaded_textures.insert(uri.to_string(), loaded_texture);
                     }
                 }
             };
@@ -71,7 +72,7 @@ impl AssetManager {
                     .unwrap();
                 let diffuse_tex = match diffuse.texture().source().source() {
                     Source::View { .. } => None,
-                    Source::Uri { uri, .. } => Some(textures.get(uri).unwrap().clone()),
+                    Source::Uri { uri, .. } => Some(self.loaded_textures.get(uri).unwrap().clone()),
                 };
 
                 let mut vertices = Vec::new();
@@ -111,6 +112,14 @@ impl AssetManager {
         }
 
         models
+    }
+}
+
+impl Default for AssetManager {
+    fn default() -> Self {
+        Self {
+            loaded_textures: Default::default(),
+        }
     }
 }
 
