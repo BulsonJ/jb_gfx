@@ -214,7 +214,7 @@ impl Renderer {
                     &camera_uniform,
                     device
                         .resource_manager
-                        .get_buffer(camera_buffer)
+                        .get_buffer(*camera_buffer)
                         .unwrap()
                         .allocation_info
                         .mapped_data
@@ -227,14 +227,14 @@ impl Renderer {
                 .buffer(
                     device
                         .resource_manager
-                        .get_buffer(camera_buffer)
+                        .get_buffer(*camera_buffer)
                         .unwrap()
                         .buffer,
                 )
                 .range(
                     device
                         .resource_manager
-                        .get_buffer(camera_buffer)
+                        .get_buffer(*camera_buffer)
                         .unwrap()
                         .allocation_info
                         .size,
@@ -393,7 +393,7 @@ impl Renderer {
             .image(
                 self.device
                     .resource_manager
-                    .get_image(&self.device.render_image)
+                    .get_image(self.device.render_image)
                     .unwrap()
                     .image,
             )
@@ -415,7 +415,7 @@ impl Renderer {
             .image(
                 self.device
                     .resource_manager
-                    .get_image(&self.device.depth_image)
+                    .get_image(self.device.depth_image)
                     .unwrap()
                     .image,
             )
@@ -427,7 +427,11 @@ impl Renderer {
                 layer_count: 1,
             });
 
-        let image_memory_barriers = [*render_image_attachment_barrier, *present_to_dst_barrier, *depth_image_attachment_barrier];
+        let image_memory_barriers = [
+            *render_image_attachment_barrier,
+            *present_to_dst_barrier,
+            *depth_image_attachment_barrier,
+        ];
         let graphics_barrier_dependency_info =
             vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
 
@@ -446,7 +450,7 @@ impl Renderer {
                 &[self.camera_uniform],
                 self.device
                     .resource_manager
-                    .get_buffer(&self.camera_buffer[self.device.buffered_resource_number()])
+                    .get_buffer(self.camera_buffer[self.device.buffered_resource_number()])
                     .unwrap()
                     .allocation_info
                     .mapped_data
@@ -461,7 +465,7 @@ impl Renderer {
             .image_view(
                 self.device
                     .resource_manager
-                    .get_image(&self.device.render_image)
+                    .get_image(self.device.render_image)
                     .unwrap()
                     .default_view,
             )
@@ -474,7 +478,7 @@ impl Renderer {
             .image_view(
                 self.device
                     .resource_manager
-                    .get_image(&self.device.depth_image)
+                    .get_image(self.device.depth_image)
                     .unwrap()
                     .default_view,
             )
@@ -555,13 +559,13 @@ impl Renderer {
                 let vertex_buffer = self
                     .device
                     .resource_manager
-                    .get_buffer(&display_mesh.vertex_buffer)
+                    .get_buffer(display_mesh.vertex_buffer)
                     .unwrap()
                     .buffer;
                 let index_buffer = self
                     .device
                     .resource_manager
-                    .get_buffer(&display_mesh.index_buffer.unwrap())
+                    .get_buffer(display_mesh.index_buffer.unwrap())
                     .unwrap()
                     .buffer;
 
@@ -608,7 +612,7 @@ impl Renderer {
             .image(
                 self.device
                     .resource_manager
-                    .get_image(&self.device.render_image)
+                    .get_image(self.device.render_image)
                     .unwrap()
                     .image,
             )
@@ -667,7 +671,7 @@ impl Renderer {
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 self.device
                     .resource_manager
-                    .get_image(&self.device.render_image)
+                    .get_image(self.device.render_image)
                     .unwrap()
                     .image,
                 ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -780,7 +784,7 @@ impl Renderer {
             .image_view(
                 self.device
                     .resource_manager
-                    .get_image(&image)
+                    .get_image(image)
                     .unwrap()
                     .default_view,
             )
@@ -840,7 +844,7 @@ impl Renderer {
                     mesh.vertices.as_ptr(),
                     self.device
                         .resource_manager
-                        .get_buffer(&staging_buffer)
+                        .get_buffer(staging_buffer)
                         .unwrap()
                         .allocation_info
                         .mapped_data
@@ -874,8 +878,8 @@ impl Renderer {
                     unsafe {
                         vk_device.cmd_copy_buffer(
                             *cmd,
-                            resource_manager.get_buffer(&staging_buffer).unwrap().buffer,
-                            resource_manager.get_buffer(&buffer).unwrap().buffer,
+                            resource_manager.get_buffer(staging_buffer).unwrap().buffer,
+                            resource_manager.get_buffer(buffer).unwrap().buffer,
                             &[*buffer_copy_info],
                         )
                     }
@@ -920,7 +924,7 @@ impl Renderer {
                             indices.as_ptr(),
                             self.device
                                 .resource_manager
-                                .get_buffer(&staging_buffer)
+                                .get_buffer(staging_buffer)
                                 .unwrap()
                                 .allocation_info
                                 .mapped_data
@@ -954,8 +958,8 @@ impl Renderer {
                             unsafe {
                                 vk_device.cmd_copy_buffer(
                                     *cmd,
-                                    resource_manager.get_buffer(&staging_buffer).unwrap().buffer,
-                                    resource_manager.get_buffer(&buffer).unwrap().buffer,
+                                    resource_manager.get_buffer(staging_buffer).unwrap().buffer,
+                                    resource_manager.get_buffer(buffer).unwrap().buffer,
                                     &[*buffer_copy_info],
                                 )
                             }

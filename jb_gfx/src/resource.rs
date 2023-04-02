@@ -79,8 +79,8 @@ impl ResourceManager {
     /// ```
     ///
     /// ```
-    pub fn get_buffer(&self, handle: &BufferHandle) -> Option<&Buffer> {
-        self.buffers.get(*handle)
+    pub fn get_buffer(&self, handle: BufferHandle) -> Option<&Buffer> {
+        self.buffers.get(handle)
     }
 
     /// Creates an [`Image`] on the GPU.
@@ -148,12 +148,12 @@ impl ResourceManager {
         self.images.insert(image)
     }
 
-    pub fn get_image(&mut self, handle: &ImageHandle) -> Option<&Image> {
-        self.images.get(*handle)
+    pub fn get_image(&mut self, handle: ImageHandle) -> Option<&Image> {
+        self.images.get(handle)
     }
 
-    pub fn destroy_image(&mut self, handle: &ImageHandle) {
-        let image = self.images.remove(*handle).unwrap();
+    pub fn destroy_image(&mut self, handle: ImageHandle) {
+        let image = self.images.remove(handle).unwrap();
         unsafe {
             self.device.destroy_image_view(image.default_view, None);
             vk_mem_alloc::destroy_image(self.allocator, image.image, image.allocation)

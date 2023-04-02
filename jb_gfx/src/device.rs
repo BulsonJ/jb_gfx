@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::mem::size_of;
 use std::{borrow::Cow, ffi::CStr};
 
@@ -6,7 +7,10 @@ use ash::extensions::{
     ext::DebugUtils,
     khr::{DynamicRendering, Swapchain},
 };
-use ash::vk::{self, DeviceSize, PipelineStageFlags2, SwapchainKHR};
+use ash::vk::{
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ObjectType, PipelineStageFlags2,
+    SwapchainKHR,
+};
 use image::EncodableLayout;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -335,47 +339,93 @@ impl GraphicsDevice {
             unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap(),
         ];
 
-        let render_image_create_info = vk::ImageCreateInfo::builder()
-            .format(vk::Format::R8G8B8A8_SRGB)
-            .usage(
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )
-            .extent(vk::Extent3D {
-                width: surface_resolution.width,
-                height: surface_resolution.height,
-                depth: 1,
-            })
-            .image_type(vk::ImageType::TYPE_2D)
-            .array_layers(1u32)
-            .mip_levels(1u32)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL);
+        let render_image_format = vk::Format::R8G8B8A8_SRGB;
+        let render_image = {
+            let render_image_create_info = vk::ImageCreateInfo::builder()
+                .format(render_image_format)
+                .usage(
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_SRC,
+                )
+                .extent(vk::Extent3D {
+                    width: surface_resolution.width,
+                    height: surface_resolution.height,
+                    depth: 1,
+                })
+                .image_type(vk::ImageType::TYPE_2D)
+                .array_layers(1u32)
+                .mip_levels(1u32)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL);
 
-        let render_image = resource_manager
-            .create_image(&render_image_create_info, resource::ImageAspectType::Color);
+            resource_manager
+                .create_image(&render_image_create_info, resource::ImageAspectType::Color)
+        };
 
-        let depth_image_create_info = vk::ImageCreateInfo::builder()
-            .format(vk::Format::D32_SFLOAT)
-            .usage(
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )
-            .extent(vk::Extent3D {
-                width: surface_resolution.width,
-                height: surface_resolution.height,
-                depth: 1,
-            })
-            .image_type(vk::ImageType::TYPE_2D)
-            .array_layers(1u32)
-            .mip_levels(1u32)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL);
+        {
+            let object_name = CString::new("Render Image").unwrap();
+            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(ObjectType::IMAGE)
+                .object_handle(
+                    resource_manager
+                        .get_image(render_image)
+                        .unwrap()
+                        .image
+                        .as_raw(),
+                )
+                .object_name(object_name.as_ref());
 
-        let depth_image = resource_manager
-            .create_image(&depth_image_create_info, resource::ImageAspectType::Depth);
+            unsafe {
+                debug_utils_loader
+                    .set_debug_utils_object_name(device.handle(), &pipeline_debug_info)
+                    .expect("Named object");
+            }
+        }
+
+        let depth_image_format = vk::Format::D32_SFLOAT;
+        let depth_image = {
+            let depth_image_create_info = vk::ImageCreateInfo::builder()
+                .format(depth_image_format)
+                .usage(
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_SRC,
+                )
+                .extent(vk::Extent3D {
+                    width: surface_resolution.width,
+                    height: surface_resolution.height,
+                    depth: 1,
+                })
+                .image_type(vk::ImageType::TYPE_2D)
+                .array_layers(1u32)
+                .mip_levels(1u32)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL);
+
+            resource_manager
+                .create_image(&depth_image_create_info, resource::ImageAspectType::Depth)
+        };
+
+        {
+            let object_name = CString::new("Depth Image").unwrap();
+            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(ObjectType::IMAGE)
+                .object_handle(
+                    resource_manager
+                        .get_image(depth_image)
+                        .unwrap()
+                        .image
+                        .as_raw(),
+                )
+                .object_name(object_name.as_ref());
+
+            unsafe {
+                debug_utils_loader
+                    .set_debug_utils_object_name(device.handle(), &pipeline_debug_info)
+                    .expect("Named object");
+            }
+        }
 
         let default_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
@@ -414,9 +464,9 @@ impl GraphicsDevice {
             present_images,
             present_image_views,
             render_image,
-            render_image_format: render_image_create_info.format,
+            render_image_format,
             depth_image,
-            depth_image_format: depth_image_create_info.format,
+            depth_image_format,
             graphics_queue,
             graphics_command_pool,
             graphics_command_buffer,
@@ -618,7 +668,7 @@ impl GraphicsDevice {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL);
 
-        self.resource_manager.destroy_image(&self.render_image);
+        self.resource_manager.destroy_image(self.render_image);
 
         self.render_image = self
             .resource_manager
@@ -656,7 +706,7 @@ impl GraphicsDevice {
 
         unsafe {
             self.resource_manager
-                .get_buffer(&staging_buffer)
+                .get_buffer(staging_buffer)
                 .unwrap()
                 .allocation_info
                 .mapped_data
@@ -700,7 +750,7 @@ impl GraphicsDevice {
                         .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
                         .old_layout(vk::ImageLayout::UNDEFINED)
                         .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                        .image(resource_manager.get_image(&image).unwrap().image)
+                        .image(resource_manager.get_image(image).unwrap().image)
                         .subresource_range(*range);
 
                     let image_memory_barriers = [*image_barrier_transfer_to];
@@ -731,8 +781,8 @@ impl GraphicsDevice {
                 unsafe {
                     device.cmd_copy_buffer_to_image(
                         *cmd,
-                        resource_manager.get_buffer(&staging_buffer).unwrap().buffer,
-                        resource_manager.get_image(&image).unwrap().image,
+                        resource_manager.get_buffer(staging_buffer).unwrap().buffer,
+                        resource_manager.get_image(image).unwrap().image,
                         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                         &[*copy_region],
                     );
@@ -746,7 +796,7 @@ impl GraphicsDevice {
                         .dst_access_mask(vk::AccessFlags2::SHADER_READ)
                         .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                         .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                        .image(resource_manager.get_image(&image).unwrap().image)
+                        .image(resource_manager.get_image(image).unwrap().image)
                         .subresource_range(*range);
 
                     let image_memory_barriers = [*image_barrier_transfer];
