@@ -876,38 +876,35 @@ impl UploadContext {
         vk_device: &mut ash::Device,
         resource_manager: &mut ResourceManager,
         function: F,
-    ) {
+    ) -> Result<()> {
         let mut cmd = self.command_buffer;
 
         let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
 
-        unsafe { vk_device.begin_command_buffer(cmd, &cmd_begin_info) }
-            .expect("Upload start command buffer failed.");
+        unsafe { vk_device.begin_command_buffer(cmd, &cmd_begin_info) }?;
 
         function(vk_device, resource_manager, &mut cmd);
 
-        unsafe { vk_device.end_command_buffer(cmd) }.expect("Upload end command buffer failed.");
+        unsafe { vk_device.end_command_buffer(cmd) }?;
 
         let command_buffers = [cmd];
         let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
 
         let submits = [*submit_info];
-        unsafe { vk_device.queue_submit(self.queue, &submits, self.fence) }
-            .expect("Upload submission failed.");
+        unsafe { vk_device.queue_submit(self.queue, &submits, self.fence) }?;
 
-        unsafe { vk_device.wait_for_fences(&[self.fence], true, u64::MAX) }
-            .expect("Wait for fence failed.");
+        unsafe { vk_device.wait_for_fences(&[self.fence], true, u64::MAX) }?;
 
-        unsafe { vk_device.reset_fences(&[self.fence]) }.expect("Reset upload fence failed.");
+        unsafe { vk_device.reset_fences(&[self.fence]) }?;
 
         unsafe {
             vk_device.reset_command_pool(
                 self.command_pool,
                 vk::CommandPoolResetFlags::RELEASE_RESOURCES,
             )
-        }
-        .expect("Reset upload command pool failed");
+        }?;
+        Ok(())
     }
 }
 
