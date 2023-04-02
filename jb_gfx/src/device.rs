@@ -1,14 +1,15 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
+use anyhow::{anyhow, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
     ext::DebugUtils,
     khr::{DynamicRendering, Swapchain},
 };
 use ash::vk::{
-    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ObjectType, PipelineStageFlags2,
-    SwapchainKHR,
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageView, ObjectType,
+    PipelineStageFlags2, SwapchainKHR,
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -51,7 +52,7 @@ pub struct GraphicsDevice {
 }
 
 impl GraphicsDevice {
-    pub fn new(window: &Window) -> Self {
+    pub fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
 
         let entry = ash::Entry::linked();
@@ -65,7 +66,7 @@ impl GraphicsDevice {
 
         let mut instance_extensions =
             ash_window::enumerate_required_extensions(window.raw_display_handle())
-                .unwrap()
+                ?
                 .to_vec();
 
         instance_extensions.push(DebugUtils::name().as_ptr());
@@ -94,7 +95,7 @@ impl GraphicsDevice {
 
         let debug_utils_loader = DebugUtils::new(&entry, &instance);
         let debug_call_back =
-            unsafe { debug_utils_loader.create_debug_utils_messenger(&debug_info, None) }.unwrap();
+            unsafe { debug_utils_loader.create_debug_utils_messenger(&debug_info, None) }?;
 
         let surface = unsafe {
             ash_window::create_surface(
@@ -104,8 +105,7 @@ impl GraphicsDevice {
                 window.raw_window_handle(),
                 None,
             )
-        }
-        .unwrap();
+        }?;
 
         let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
 
@@ -174,7 +174,7 @@ impl GraphicsDevice {
             .enabled_extension_names(&device_extension_names_raw)
             .enabled_features(&features);
 
-        let device = unsafe { instance.create_device(pdevice, &device_create_info, None) }.unwrap();
+        let device = unsafe { instance.create_device(pdevice, &device_create_info, None) }?;
 
         let mut resource_manager = ResourceManager::new(&instance, &pdevice, device.clone());
 
@@ -182,7 +182,7 @@ impl GraphicsDevice {
 
         let surface_format =
             unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }
-                .unwrap()
+                ?
                 .into_iter()
                 .find(|&x| {
                     x.format == vk::Format::B8G8R8A8_SRGB || x.format == vk::Format::R8G8B8A8_SRGB
@@ -190,8 +190,7 @@ impl GraphicsDevice {
                 .unwrap();
 
         let surface_capabilities =
-            unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface) }
-                .unwrap();
+            unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface) }?;
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
             && desired_image_count > surface_capabilities.max_image_count
@@ -214,8 +213,7 @@ impl GraphicsDevice {
             surface_capabilities.current_transform
         };
         let present_modes =
-            unsafe { surface_loader.get_physical_device_surface_present_modes(pdevice, surface) }
-                .unwrap();
+            unsafe { surface_loader.get_physical_device_surface_present_modes(pdevice, surface) }?;
         let present_mode = present_modes
             .iter()
             .cloned()
@@ -237,10 +235,9 @@ impl GraphicsDevice {
             .clipped(true)
             .image_array_layers(1);
 
-        let swapchain =
-            unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }.unwrap();
+        let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }?;
 
-        let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }.unwrap();
+        let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }?;
         let present_image_views: Vec<vk::ImageView> = present_images
             .iter()
             .map(|&image| {
@@ -270,8 +267,8 @@ impl GraphicsDevice {
             .queue_family_index(queue_family_index);
 
         let graphics_command_pool = [
-            unsafe { device.create_command_pool(&pool_create_info, None) }.unwrap(),
-            unsafe { device.create_command_pool(&pool_create_info, None) }.unwrap(),
+            unsafe { device.create_command_pool(&pool_create_info, None) }?,
+            unsafe { device.create_command_pool(&pool_create_info, None) }?,
         ];
 
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -280,7 +277,7 @@ impl GraphicsDevice {
             .level(vk::CommandBufferLevel::PRIMARY);
 
         let command_buffers =
-            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }.unwrap();
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }?;
 
         let command_buffer_allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_buffer_count(1)
@@ -288,7 +285,7 @@ impl GraphicsDevice {
             .level(vk::CommandBufferLevel::PRIMARY);
 
         let command_buffers_two =
-            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }.unwrap();
+            unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }?;
 
         let graphics_command_buffer = [command_buffers[0], command_buffers_two[0]];
 
@@ -297,7 +294,7 @@ impl GraphicsDevice {
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
                 .queue_family_index(queue_family_index);
 
-            unsafe { device.create_command_pool(&pool_create_info, None) }.unwrap()
+            unsafe { device.create_command_pool(&pool_create_info, None) }?
         };
 
         let upload_command_buffer = {
@@ -307,7 +304,7 @@ impl GraphicsDevice {
                 .level(vk::CommandBufferLevel::PRIMARY);
 
             let command_buffers =
-                unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }.unwrap();
+                unsafe { device.allocate_command_buffers(&command_buffer_allocate_info) }?;
 
             command_buffers[0]
         };
@@ -329,12 +326,12 @@ impl GraphicsDevice {
         let semaphore_create_info = vk::SemaphoreCreateInfo::default();
 
         let present_complete_semaphore = [
-            unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap(),
-            unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap(),
+            unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
+            unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
         ];
         let rendering_complete_semaphore = [
-            unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap(),
-            unsafe { device.create_semaphore(&semaphore_create_info, None) }.unwrap(),
+            unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
+            unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
         ];
 
         let render_image_format = vk::Format::R8G8B8A8_SRGB;
@@ -362,7 +359,7 @@ impl GraphicsDevice {
         };
 
         {
-            let object_name = CString::new("Render Image").unwrap();
+            let object_name = CString::new("Render Image")?;
             let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
                 .object_type(ObjectType::IMAGE)
                 .object_handle(
@@ -433,7 +430,7 @@ impl GraphicsDevice {
                 .address_mode_v(vk::SamplerAddressMode::REPEAT)
                 .address_mode_w(vk::SamplerAddressMode::REPEAT);
 
-            unsafe { device.create_sampler(&sampler_info, None).unwrap() }
+            unsafe { device.create_sampler(&sampler_info, None)? }
         };
 
         let upload_context = UploadContext {
@@ -445,7 +442,7 @@ impl GraphicsDevice {
 
         info!("Device created");
 
-        Self {
+        Ok(Self {
             instance,
             size,
             surface,
@@ -474,7 +471,7 @@ impl GraphicsDevice {
             upload_context,
             default_sampler,
             frame_number: 0usize,
-        }
+        })
     }
 
     pub fn frame_number(&self) -> usize {
@@ -485,29 +482,26 @@ impl GraphicsDevice {
         self.frame_number % 2
     }
 
-    pub fn start_frame(&mut self) -> u32 {
+    pub fn start_frame(&mut self) -> Result<u32> {
         unsafe {
             self.vk_device.wait_for_fences(
                 &[self.draw_commands_reuse_fence[self.buffered_resource_number()]],
                 true,
                 u64::MAX,
             )
-        }
-        .expect("Wait for fence failed.");
+        }?;
 
         unsafe {
             self.vk_device
                 .reset_fences(&[self.draw_commands_reuse_fence[self.buffered_resource_number()]])
-        }
-        .expect("Reset fences failed.");
+        }?;
 
         unsafe {
             self.vk_device.reset_command_buffer(
                 self.graphics_command_buffer[self.buffered_resource_number()],
                 vk::CommandBufferResetFlags::RELEASE_RESOURCES,
             )
-        }
-        .expect("Reset command buffer failed.");
+        }?;
 
         let (present_index, _) = unsafe {
             self.swapchain_loader.acquire_next_image(
@@ -516,13 +510,12 @@ impl GraphicsDevice {
                 self.present_complete_semaphore[self.buffered_resource_number()],
                 vk::Fence::null(),
             )
-        }
-        .unwrap();
+        }?;
 
-        present_index
+        Ok(present_index)
     }
 
-    pub fn end_frame(&mut self, present_index: u32) {
+    pub fn end_frame(&mut self, present_index: u32) -> Result<()> {
         let wait_semaphores = [self.rendering_complete_semaphore[self.buffered_resource_number()]];
         let swapchains = [self.swapchain];
         let image_indices = [present_index];
@@ -534,18 +527,18 @@ impl GraphicsDevice {
         unsafe {
             self.swapchain_loader
                 .queue_present(self.graphics_queue, &present_info)
-        }
-        .unwrap();
+        }?;
 
         self.frame_number += 1usize;
+        Ok(())
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) -> Result<()> {
         if new_size.width == 0u32 || new_size.height == 0u32 || new_size == self.size {
-            return;
+            return Ok(());
         }
 
-        unsafe { self.vk_device.device_wait_idle() }.unwrap();
+        unsafe { self.vk_device.device_wait_idle() }?;
         self.size = new_size;
 
         // Destroy old swapchain
@@ -565,8 +558,7 @@ impl GraphicsDevice {
         let surface_capabilities = unsafe {
             self.surface_loader
                 .get_physical_device_surface_capabilities(self.pdevice, self.surface)
-        }
-        .unwrap();
+        }?;
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
             && desired_image_count > surface_capabilities.max_image_count
@@ -591,8 +583,7 @@ impl GraphicsDevice {
         let present_modes = unsafe {
             self.surface_loader
                 .get_physical_device_surface_present_modes(self.pdevice, self.surface)
-        }
-        .unwrap();
+        }?;
         let present_mode = present_modes
             .iter()
             .cloned()
@@ -616,11 +607,10 @@ impl GraphicsDevice {
         self.swapchain = unsafe {
             self.swapchain_loader
                 .create_swapchain(&swapchain_create_info, None)
-        }
-        .unwrap();
+        }?;
 
         self.present_images =
-            unsafe { self.swapchain_loader.get_swapchain_images(self.swapchain) }.unwrap();
+            unsafe { self.swapchain_loader.get_swapchain_images(self.swapchain) }?;
         self.present_image_views = self
             .present_images
             .iter()
@@ -699,6 +689,7 @@ impl GraphicsDevice {
             .create_image(&depth_image_create_info, resource::ImageAspectType::Depth);
 
         info!("Recreating swapchain.");
+        Ok(())
     }
 
     pub(crate) fn load_image(
@@ -706,7 +697,7 @@ impl GraphicsDevice {
         img_bytes: &[u8],
         img_width: u32,
         img_height: u32,
-    ) -> Result<ImageHandle, String> {
+    ) -> Result<ImageHandle> {
         let img_size = (img_width * img_height * 4u32) as DeviceSize;
 
         let staging_buffer_create_info = vk::BufferCreateInfo {
@@ -730,8 +721,7 @@ impl GraphicsDevice {
         self.resource_manager
             .get_buffer_mut(staging_buffer)
             .unwrap()
-            .mapped_slice::<u8>()
-            .unwrap()
+            .mapped_slice::<u8>()?
             .copy_from_slice(img_bytes);
 
         let image_create_info = vk::ImageCreateInfo::builder()

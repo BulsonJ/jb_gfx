@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use ash::vk;
 use log::info;
 use slotmap::{self, new_key_type, SlotMap};
@@ -203,9 +204,9 @@ impl Buffer {
     /// Obtain a slice to the mapped memory of this buffer.
     /// # Errors
     /// Fails if this buffer is not mappable (not `HOST_VISIBLE`).
-    pub fn mapped_slice<T>(&mut self) -> Result<&mut [T], String> {
+    pub fn mapped_slice<T>(&mut self) -> Result<&mut [T]> {
         if self.allocation_info.mapped_data.is_null() {
-            return Err(String::from("Not mapped!"));
+            return Err(anyhow!("Not mapped!"));
         }
 
         let pointer = self.allocation_info.mapped_data;

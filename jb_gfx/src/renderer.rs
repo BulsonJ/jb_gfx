@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem::size_of;
@@ -42,8 +43,8 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: &Window) -> Self {
-        let mut device = GraphicsDevice::new(window);
+    pub fn new(window: &Window) -> Result<Self> {
+        let mut device = GraphicsDevice::new(window)?;
 
         let vertex_input_desc = Vertex::get_vertex_input_desc();
 
@@ -80,8 +81,7 @@ impl Renderer {
             device
                 .vk_device
                 .create_descriptor_pool(&pool_create_info, None)
-        }
-        .unwrap();
+        }?;
 
         let descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
             .binding(0u32)
@@ -96,8 +96,7 @@ impl Renderer {
             device
                 .vk_device
                 .create_descriptor_set_layout(&descriptor_set_layout_create_info, None)
-        }
-        .unwrap();
+        }?;
 
         // Create bindless set
 
@@ -123,8 +122,7 @@ impl Renderer {
             device
                 .vk_device
                 .create_descriptor_set_layout(&bindless_descriptor_set_layout_create_info, None)
-        }
-        .unwrap();
+        }?;
 
         let push_constant_range = *vk::PushConstantRange::builder()
             .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
@@ -141,8 +139,7 @@ impl Renderer {
             device
                 .vk_device
                 .create_pipeline_layout(&pipeline_layout_info, None)
-        }
-        .unwrap();
+        }?;
 
         let pso_build_info = PipelineCreateInfo {
             pipeline_layout: pso_layout,
@@ -200,17 +197,17 @@ impl Renderer {
                 .set_layouts(&set_layouts);
 
             let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }.unwrap();
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
             let first = *descriptor_sets.get(0).unwrap();
             let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }.unwrap();
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
             let second = *descriptor_sets.get(0).unwrap();
 
             [first, second]
         };
 
         for set in descriptor_set.iter() {
-            let object_name = CString::new("Global Descriptor Set(1)").unwrap();
+            let object_name = CString::new("Global Descriptor Set(1)")?;
             let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
                 .object_type(ObjectType::DESCRIPTOR_SET)
                 .object_handle(set.as_raw())
@@ -226,19 +223,12 @@ impl Renderer {
 
         for (i, set) in descriptor_set.iter().enumerate() {
             let camera_buffer = camera_buffer.get(i).unwrap();
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    &camera_uniform,
-                    device
-                        .resource_manager
-                        .get_buffer(*camera_buffer)
-                        .unwrap()
-                        .allocation_info
-                        .mapped_data
-                        .cast(),
-                    1,
-                );
-            };
+            device
+                .resource_manager
+                .get_buffer_mut(*camera_buffer)
+                .unwrap()
+                .mapped_slice::<CameraUniform>()?
+                .copy_from_slice(&[camera_uniform]);
 
             let camera_buffer_write = vk::DescriptorBufferInfo::builder()
                 .buffer(
@@ -282,17 +272,17 @@ impl Renderer {
                 .set_layouts(&set_layouts);
 
             let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }.unwrap();
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
             let first = *descriptor_sets.get(0).unwrap();
             let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }.unwrap();
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
             let second = *descriptor_sets.get(0).unwrap();
 
             [first, second]
         };
 
         for set in bindless_descriptor_set.iter() {
-            let object_name = CString::new("Bindless Descriptor Set(0)").unwrap();
+            let object_name = CString::new("Bindless Descriptor Set(0)")?;
             let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
                 .object_type(ObjectType::DESCRIPTOR_SET)
                 .object_handle(set.as_raw())
@@ -309,7 +299,7 @@ impl Renderer {
         let bindless_textures = Vec::new();
         let bindless_indexes = HashMap::new();
 
-        Self {
+        Ok(Self {
             device,
             pso_layout,
             pso,
@@ -327,7 +317,7 @@ impl Renderer {
             pipeline_manager,
             meshes: SlotMap::default(),
             render_models: Vec::default(),
-        }
+        })
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -338,8 +328,8 @@ impl Renderer {
         self.pipeline_manager.reload_shaders(&mut self.device)
     }
 
-    pub fn render(&mut self) {
-        let present_index = self.device.start_frame();
+    pub fn render(&mut self) -> Result<()> {
+        let present_index = self.device.start_frame()?;
 
         let clear_colour: Vector3<f32> = self.clear_colour.into();
         let clear_value = vk::ClearValue {
@@ -364,8 +354,7 @@ impl Renderer {
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 &cmd_begin_info,
             )
-        }
-        .unwrap();
+        }?;
 
         let viewport = vk::Viewport::builder()
             .x(0.0f32)
@@ -477,19 +466,13 @@ impl Renderer {
         // Copy camera
         self.camera_uniform.update_proj(&self.camera);
 
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                &[self.camera_uniform],
-                self.device
-                    .resource_manager
-                    .get_buffer(self.camera_buffer[self.device.buffered_resource_number()])
-                    .unwrap()
-                    .allocation_info
-                    .mapped_data
-                    .cast(),
-                std::mem::size_of::<CameraUniform>(),
-            )
-        };
+        self.device
+            .resource_manager
+            .get_buffer_mut(self.camera_buffer[self.device.buffered_resource_number()])
+            .unwrap()
+            .mapped_slice::<CameraUniform>()
+            .unwrap()
+            .copy_from_slice(&[self.camera_uniform]);
 
         // Start dynamic rendering
 
@@ -571,11 +554,10 @@ impl Renderer {
             let diffuse_tex = self
                 .bindless_indexes
                 .get(&model.textures.diffuse.image_handle)
-                .unwrap()
-                .clone();
+                .unwrap();
             let push_constants = PushConstants {
                 model: model_matrix.into(),
-                textures: [diffuse_tex as i32, 0, 0, 0],
+                textures: [*diffuse_tex as i32, 0, 0, 0],
             };
             unsafe {
                 self.device.vk_device.cmd_push_constants(
@@ -749,8 +731,7 @@ impl Renderer {
             self.device.vk_device.end_command_buffer(
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
             )
-        }
-        .unwrap();
+        }?;
 
         let wait_semaphores =
             [self.device.present_complete_semaphore[self.device.buffered_resource_number()]];
@@ -777,7 +758,8 @@ impl Renderer {
             error!("{}", error);
         }
 
-        self.device.end_frame(present_index);
+        self.device.end_frame(present_index)?;
+        Ok(())
     }
 
     /// Loads a texture into GPU memory and returns back a Texture or an error.
@@ -793,20 +775,17 @@ impl Renderer {
     /// ```
     ///
     /// ```
-    pub fn load_texture(&mut self, file_location: &str) -> Result<Texture, String> {
+    pub fn load_texture(&mut self, file_location: &str) -> Result<Texture> {
         let img = image::open(file_location);
 
         if let Err(error) = img {
-            return Err(error.to_string());
+            return Err(anyhow!(error.to_string()));
         }
 
-        let img = img.unwrap();
+        let img = img?;
         let rgba_img = img.to_rgba8();
         let img_bytes = rgba_img.as_bytes();
-        let image = self
-            .device
-            .load_image(img_bytes, img.width(), img.height())
-            .unwrap();
+        let image = self.device.load_image(img_bytes, img.width(), img.height())?;
 
         self.bindless_textures.push(image);
         let bindless_index = self.bindless_textures.len();
@@ -852,8 +831,7 @@ impl Renderer {
         // Debug name image
         {
             let object_name =
-                CString::new("Image:".to_string() + file_location.rsplit_once('/').unwrap().1)
-                    .unwrap();
+                CString::new("Image:".to_string() + file_location.rsplit_once('/').unwrap().1)?;
             let debug_info = DebugUtilsObjectNameInfoEXT::builder()
                 .object_type(ObjectType::IMAGE)
                 .object_handle(
@@ -877,7 +855,7 @@ impl Renderer {
         Ok(texture)
     }
 
-    pub fn load_mesh(&mut self, mesh: &Mesh) -> Result<MeshHandle, String> {
+    pub fn load_mesh(&mut self, mesh: &Mesh) -> MeshHandle {
         let vertex_buffer = {
             let staging_buffer_create_info = vk::BufferCreateInfo {
                 size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
@@ -947,7 +925,7 @@ impl Renderer {
                     index_buffer: None,
                     vertex_count: mesh.vertices.len() as u32,
                 };
-                Ok(self.meshes.insert(render_mesh))
+                self.meshes.insert(render_mesh)
             }
             Some(indices) => {
                 let index_buffer = {
@@ -1019,7 +997,7 @@ impl Renderer {
                     index_buffer: Some(index_buffer),
                     vertex_count: indices.len() as u32,
                 };
-                Ok(self.meshes.insert(render_mesh))
+                self.meshes.insert(render_mesh)
             }
         }
     }

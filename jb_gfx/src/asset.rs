@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use gltf::image::Source;
 
-use crate::{Mesh, Vertex};
 use crate::renderer::{MeshHandle, Renderer, Texture};
+use crate::{Mesh, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -11,10 +11,14 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn load_model(&mut self, renderer: &mut Renderer, file: &str) -> Vec<Model> {
+    pub fn load_model(
+        &mut self,
+        renderer: &mut Renderer,
+        file: &str,
+    ) -> anyhow::Result<Vec<Model>> {
         let mut models = Vec::new();
 
-        let (gltf, buffers, _) = gltf::import(file).unwrap();
+        let (gltf, buffers, _) = gltf::import(file)?;
 
         let (source_folder, _asset_name) = file.rsplit_once('/').unwrap();
 
@@ -105,7 +109,7 @@ impl AssetManager {
 
                 let mesh = Mesh { vertices, indices };
 
-                let mesh_handle = renderer.load_mesh(&mesh).unwrap();
+                let mesh_handle = renderer.load_mesh(&mesh);
                 let model = Model {
                     mesh: mesh_handle,
                     diffuse_texture: diffuse_tex,
@@ -115,7 +119,7 @@ impl AssetManager {
             }
         }
 
-        models
+        Ok(models)
     }
 }
 

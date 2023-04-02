@@ -13,9 +13,11 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let mut renderer = Renderer::new(&window);
+    let mut renderer = Renderer::new(&window).unwrap();
     let mut asset_manager = AssetManager::default();
-    let models = asset_manager.load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf");
+    let models = asset_manager
+        .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+        .unwrap();
     for model in models.iter() {
         renderer.add_render_model(
             model.mesh,
@@ -30,7 +32,7 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared => {
-                renderer.render();
+                renderer.render().unwrap();
             }
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::CloseRequested
