@@ -40,6 +40,8 @@ pub struct Renderer {
     pipeline_manager: PipelineManager,
     meshes: SlotMap<MeshHandle, RenderMesh>,
     render_models: Vec<RenderModel>,
+    light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    lights: [LightUniform; 4],
 }
 
 impl Renderer {
@@ -83,11 +85,18 @@ impl Renderer {
                 .create_descriptor_pool(&pool_create_info, None)
         }?;
 
-        let descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
-            .binding(0u32)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1u32)
-            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)];
+        let descriptor_set_bindings = [
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(0u32)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1u32)
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(1u32)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1u32)
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+        ];
 
         let descriptor_set_layout_create_info =
             vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
@@ -190,6 +199,49 @@ impl Renderer {
             ]
         };
 
+        let light_buffer = {
+            let buffer_create_info = vk::BufferCreateInfo {
+                size: size_of::<LightUniform>() as u64 * 4,
+                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+                ..Default::default()
+            };
+
+            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
+                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
+                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
+                usage: vk_mem_alloc::MemoryUsage::AUTO,
+                ..Default::default()
+            };
+
+            [
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+            ]
+        };
+
+        let lights = [
+            LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            ),
+            LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            ),
+            LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            ),
+            LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            ),
+        ];
+
         let descriptor_set = {
             let set_layouts = [descriptor_set_layout];
             let create_info = vk::DescriptorSetAllocateInfo::builder()
@@ -230,6 +282,14 @@ impl Renderer {
                 .mapped_slice::<CameraUniform>()?
                 .copy_from_slice(&[camera_uniform]);
 
+            let light_buffer = light_buffer.get(i).unwrap();
+            device
+                .resource_manager
+                .get_buffer_mut(*light_buffer)
+                .unwrap()
+                .mapped_slice::<LightUniform>()?
+                .copy_from_slice(&lights);
+
             let camera_buffer_write = vk::DescriptorBufferInfo::builder()
                 .buffer(
                     device
@@ -247,11 +307,35 @@ impl Renderer {
                         .size,
                 );
 
-            let desc_set_writes = [*vk::WriteDescriptorSet::builder()
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .dst_binding(0)
-                .dst_set(*set)
-                .buffer_info(&[*camera_buffer_write])];
+            let light_buffer_write = vk::DescriptorBufferInfo::builder()
+                .buffer(
+                    device
+                        .resource_manager
+                        .get_buffer(*light_buffer)
+                        .unwrap()
+                        .buffer,
+                )
+                .range(
+                    device
+                        .resource_manager
+                        .get_buffer(*light_buffer)
+                        .unwrap()
+                        .allocation_info
+                        .size,
+                );
+
+            let desc_set_writes = [
+                *vk::WriteDescriptorSet::builder()
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .dst_binding(0)
+                    .dst_set(*set)
+                    .buffer_info(&[*camera_buffer_write]),
+                *vk::WriteDescriptorSet::builder()
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .dst_binding(1)
+                    .dst_set(*set)
+                    .buffer_info(&[*light_buffer_write]),
+            ];
 
             unsafe {
                 device
@@ -317,6 +401,8 @@ impl Renderer {
             pipeline_manager,
             meshes: SlotMap::default(),
             render_models: Vec::default(),
+            light_buffer,
+            lights,
         })
     }
 
@@ -475,6 +561,14 @@ impl Renderer {
             .unwrap()
             .copy_from_slice(&[self.camera_uniform]);
 
+        self.device
+            .resource_manager
+            .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
+            .unwrap()
+            .mapped_slice::<LightUniform>()
+            .unwrap()
+            .copy_from_slice(&self.lights);
+
         // Start dynamic rendering
 
         let color_attach_info = vk::RenderingAttachmentInfo::builder()
@@ -590,7 +684,7 @@ impl Renderer {
                     diffuse_tex as i32,
                     normal_tex as i32,
                     metallic_roughness_tex as i32,
-                    emissive_tex as i32
+                    emissive_tex as i32,
                 ],
             };
             unsafe {
@@ -1247,4 +1341,23 @@ pub struct MaterialTextures {
 struct RenderModel {
     mesh_handle: MeshHandle,
     textures: MaterialTextures,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct LightUniform {
+    pos: [f32; 4],
+    colour: [f32; 4],
+}
+
+impl LightUniform {
+    fn new(position: Vector3<f32>, colour: Vector3<f32>) -> Self {
+        let position = position.extend(0f32);
+        let colour = colour.extend(0f32);
+
+        Self {
+            pos: position.into(),
+            colour: colour.into(),
+        }
+    }
 }

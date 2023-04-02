@@ -9,6 +9,15 @@ layout (location = 2) in vec3 inNormal;
 
 layout (location = 0) out vec4 outFragColor;
 
+struct Light{
+	vec4 position;
+	vec4 colour;
+};
+
+layout(std140,set = 1, binding = 1) uniform LightBuffer{
+	Light lights[4];
+} lightData;
+
 layout( push_constant ) uniform constants
 {
 	mat4 model;

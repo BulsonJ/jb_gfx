@@ -99,7 +99,10 @@ impl AssetManager {
                     }
                 };
                 let metallic_roughness_tex = {
-                    if let Some(info) = material.pbr_metallic_roughness().metallic_roughness_texture() {
+                    if let Some(info) = material
+                        .pbr_metallic_roughness()
+                        .metallic_roughness_texture()
+                    {
                         match info.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
