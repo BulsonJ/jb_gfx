@@ -20,12 +20,7 @@ fn main() {
         .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
         .unwrap();
     for model in models.iter() {
-        renderer.add_render_model(
-            model.mesh,
-            MaterialTextures {
-                diffuse: model.diffuse_texture.unwrap(),
-            },
-        );
+        renderer.add_render_model(model.mesh, model.textures.clone());
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 

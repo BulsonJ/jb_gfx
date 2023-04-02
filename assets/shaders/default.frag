@@ -22,7 +22,15 @@ void main()
 	if (diffuseTexture.a == 0){
 		discard;
 	}
-
 	outColour *= diffuseTexture.rgb;
+
+	vec4 normalTexture = SampleBindlessTexture(pushConstants.textures.g, inTexCoords);
+
+	float metallicFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).b;
+	float roughnessFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).g;
+
+	vec4 emissiveTexture = SampleBindlessTexture(pushConstants.textures.a, inTexCoords);
+	outColour += emissiveTexture.rgb;
+
 	outFragColor = vec4(outColour,1.0f);
 }

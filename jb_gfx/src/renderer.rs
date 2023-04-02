@@ -552,13 +552,46 @@ impl Renderer {
         };
 
         for model in self.render_models.iter() {
-            let diffuse_tex = self
-                .bindless_indexes
-                .get(&model.textures.diffuse.image_handle)
-                .unwrap();
+            let diffuse_tex = {
+                if let Some(tex) = model.textures.diffuse {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let normal_tex = {
+                if let Some(tex) = model.textures.normal {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let metallic_roughness_tex = {
+                if let Some(tex) = model.textures.metallic_roughness {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let emissive_tex = {
+                if let Some(tex) = model.textures.emissive {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
             let push_constants = PushConstants {
                 model: model_matrix.into(),
-                textures: [*diffuse_tex as i32, 0, 0, 0],
+                textures: [
+                    diffuse_tex as i32,
+                    normal_tex as i32,
+                    metallic_roughness_tex as i32,
+                    emissive_tex as i32
+                ],
             };
             unsafe {
                 self.device.vk_device.cmd_push_constants(
@@ -1203,8 +1236,12 @@ impl From<Texture> for ImageHandle {
     }
 }
 
+#[derive(Clone, Default)]
 pub struct MaterialTextures {
-    pub diffuse: Texture,
+    pub diffuse: Option<Texture>,
+    pub normal: Option<Texture>,
+    pub metallic_roughness: Option<Texture>,
+    pub emissive: Option<Texture>,
 }
 
 struct RenderModel {

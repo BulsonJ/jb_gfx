@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use gltf::image::Source;
 
-use crate::renderer::{MeshHandle, Renderer, Texture};
+use crate::renderer::{MaterialTextures, MeshHandle, Renderer, Texture};
 use crate::{Mesh, Vertex};
 
 #[derive(Default)]
@@ -74,13 +74,53 @@ impl AssetManager {
                 }
 
                 let material = primitive.material();
-                let diffuse = material
-                    .pbr_metallic_roughness()
-                    .base_color_texture()
-                    .unwrap();
-                let diffuse_tex = match diffuse.texture().source().source() {
-                    Source::View { .. } => None,
-                    Source::Uri { uri, .. } => Some(*self.loaded_textures.get(uri).unwrap()),
+                let diffuse_tex = {
+                    if let Some(info) = material.pbr_metallic_roughness().base_color_texture() {
+                        match info.texture().source().source() {
+                            Source::View { .. } => None,
+                            Source::Uri { uri, .. } => {
+                                Some(*self.loaded_textures.get(uri).unwrap())
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                };
+                let normal_tex = {
+                    if let Some(info) = material.normal_texture() {
+                        match info.texture().source().source() {
+                            Source::View { .. } => None,
+                            Source::Uri { uri, .. } => {
+                                Some(*self.loaded_textures.get(uri).unwrap())
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                };
+                let metallic_roughness_tex = {
+                    if let Some(info) = material.pbr_metallic_roughness().metallic_roughness_texture() {
+                        match info.texture().source().source() {
+                            Source::View { .. } => None,
+                            Source::Uri { uri, .. } => {
+                                Some(*self.loaded_textures.get(uri).unwrap())
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                };
+                let emissive_tex = {
+                    if let Some(emissive) = material.emissive_texture() {
+                        match emissive.texture().source().source() {
+                            Source::View { .. } => None,
+                            Source::Uri { uri, .. } => {
+                                Some(*self.loaded_textures.get(uri).unwrap())
+                            }
+                        }
+                    } else {
+                        None
+                    }
                 };
 
                 let mut vertices = Vec::new();
@@ -112,7 +152,13 @@ impl AssetManager {
                 let mesh_handle = renderer.load_mesh(&mesh)?;
                 let model = Model {
                     mesh: mesh_handle,
-                    diffuse_texture: diffuse_tex,
+                    textures: MaterialTextures {
+                        diffuse: diffuse_tex,
+                        emissive: emissive_tex,
+                        normal: normal_tex,
+                        metallic_roughness: metallic_roughness_tex,
+                        ..Default::default()
+                    },
                 };
 
                 models.push(model);
@@ -125,5 +171,5 @@ impl AssetManager {
 
 pub struct Model {
     pub mesh: MeshHandle,
-    pub diffuse_texture: Option<Texture>,
+    pub textures: MaterialTextures,
 }
