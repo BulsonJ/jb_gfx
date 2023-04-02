@@ -674,6 +674,32 @@ impl GraphicsDevice {
             .resource_manager
             .create_image(&render_image_create_info, resource::ImageAspectType::Color);
 
+        // Recreate depth image
+
+        let depth_image_create_info = vk::ImageCreateInfo::builder()
+            .format(self.depth_image_format)
+            .usage(
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
+            )
+            .extent(vk::Extent3D {
+                width: self.surface_resolution.width,
+                height: self.surface_resolution.height,
+                depth: 1,
+            })
+            .image_type(vk::ImageType::TYPE_2D)
+            .array_layers(1u32)
+            .mip_levels(1u32)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL);
+
+        self.resource_manager.destroy_image(self.depth_image);
+
+        self.depth_image = self
+            .resource_manager
+            .create_image(&depth_image_create_info, resource::ImageAspectType::Depth);
+
         info!("Recreating swapchain.");
     }
 

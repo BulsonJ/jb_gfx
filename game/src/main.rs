@@ -27,6 +27,7 @@ fn main() {
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
+    let mut initial_resize = true;
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared => {
@@ -43,6 +44,16 @@ fn main() {
                         },
                     ..
                 } => *control_flow = ControlFlow::Exit,
+                WindowEvent::Resized(physical_size) => {
+                    if initial_resize {
+                        initial_resize = false;
+                    } else {
+                        renderer.resize(*physical_size);
+                    }
+                }
+                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                    renderer.resize(**new_inner_size);
+                }
                 _ => {}
             },
             _ => {}
