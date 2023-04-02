@@ -1,5 +1,4 @@
 use std::ffi::CString;
-use std::mem::size_of;
 use std::{borrow::Cow, ffi::CStr};
 
 use ash::extensions::khr::Synchronization2;
@@ -11,7 +10,6 @@ use ash::vk::{
     self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ObjectType, PipelineStageFlags2,
     SwapchainKHR,
 };
-use image::EncodableLayout;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
@@ -710,7 +708,6 @@ impl GraphicsDevice {
         img_height: u32,
     ) -> Result<ImageHandle, String> {
         let img_size = (img_width * img_height * 4u32) as DeviceSize;
-        //(size_of::<u8>() * img_bytes.len()) as u64;
 
         let staging_buffer_create_info = vk::BufferCreateInfo {
             size: img_size,

@@ -1,10 +1,11 @@
-use crate::renderer::{MaterialTextures, MeshHandle, Renderer, Texture};
-use crate::{Mesh, Vertex};
-use gltf::buffer::Data;
-use gltf::image::Source;
-use gltf::{Gltf, Semantic};
 use std::collections::HashMap;
 
+use gltf::image::Source;
+
+use crate::{Mesh, Vertex};
+use crate::renderer::{MeshHandle, Renderer, Texture};
+
+#[derive(Default)]
 pub struct AssetManager {
     loaded_textures: HashMap<String, Texture>,
 }
@@ -15,13 +16,16 @@ impl AssetManager {
 
         let (gltf, buffers, _) = gltf::import(file).unwrap();
 
-        let (source_folder, asset_name) = file.rsplit_once('/').unwrap();
+        let (source_folder, _asset_name) = file.rsplit_once('/').unwrap();
 
         for image in gltf.images() {
             let location = image.source();
             match location {
                 Source::View { .. } => {}
-                Source::Uri { uri, mime_type } => {
+                Source::Uri {
+                    uri,
+                    mime_type: _mime_type,
+                } => {
                     let image_asset = String::from(source_folder) + "/" + uri;
                     if let Ok(loaded_texture) = renderer.load_texture(&image_asset) {
                         self.loaded_textures.insert(uri.to_string(), loaded_texture);
@@ -112,14 +116,6 @@ impl AssetManager {
         }
 
         models
-    }
-}
-
-impl Default for AssetManager {
-    fn default() -> Self {
-        Self {
-            loaded_textures: Default::default(),
-        }
     }
 }
 

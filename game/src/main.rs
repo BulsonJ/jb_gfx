@@ -1,6 +1,5 @@
 use jb_gfx::asset::AssetManager;
 use jb_gfx::renderer::{Colour, MaterialTextures, Renderer};
-use jb_gfx::Mesh;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
