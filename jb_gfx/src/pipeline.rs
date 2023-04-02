@@ -212,8 +212,8 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
         .line_width(1.0f32);
 
     let mut dynamic_rendering_info = vk::PipelineRenderingCreateInfo::builder()
-        .color_attachment_formats(&build_info.color_attachment_formats);
-    // Ignore depth format for now .depth_attachment_format(build_info.depth_attachment_format);
+        .color_attachment_formats(&build_info.color_attachment_formats)
+        .depth_attachment_format(build_info.depth_attachment_format.unwrap());
 
     let pso_create_info = vk::GraphicsPipelineCreateInfo::builder()
         .push_next(&mut dynamic_rendering_info)

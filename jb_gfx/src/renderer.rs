@@ -3,7 +3,8 @@ use std::mem::size_of;
 
 use ash::vk;
 use ash::vk::{
-    AccessFlags2, DeviceSize, ImageAspectFlags, ImageLayout, IndexType, PipelineStageFlags2,
+    AccessFlags2, ClearDepthStencilValue, DeviceSize, ImageAspectFlags, ImageLayout, IndexType,
+    PipelineStageFlags2,
 };
 use bytemuck::offset_of;
 use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation3, SquareMatrix, Vector3, Zero};
@@ -49,8 +50,8 @@ impl Renderer {
             .vertex_attribute_descriptions(&vertex_input_desc.attributes);
 
         let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-            .depth_test_enable(false)
-            .depth_write_enable(false)
+            .depth_test_enable(true)
+            .depth_write_enable(true)
             .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
             .depth_bounds_test_enable(false)
             .stencil_test_enable(false)
@@ -147,7 +148,7 @@ impl Renderer {
             fragment_shader: "assets/shaders/default.frag".to_string(),
             vertex_input_state: *vertex_input_state,
             color_attachment_formats: vec![device.render_image_format],
-            depth_attachment_format: None,
+            depth_attachment_format: Some(device.depth_image_format),
             depth_stencil_state: *depth_stencil_state,
         };
 
@@ -156,11 +157,11 @@ impl Renderer {
         let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info);
 
         let camera = Camera {
-            position: (0.0, 0.0, -2.0).into(),
+            position: (0.0, -100.0, 0.0).into(),
             aspect: device.size.width as f32 / device.size.height as f32,
             fovy: 90.0,
             znear: 0.1,
-            zfar: 1000.0,
+            zfar: 4000.0,
         };
 
         let mut camera_uniform = CameraUniform::new();
@@ -314,6 +315,12 @@ impl Renderer {
                 float32: [clear_colour.x, clear_colour.y, clear_colour.z, 0.0],
             },
         };
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
 
         // Begin command buffer
 
@@ -398,7 +405,29 @@ impl Renderer {
                 layer_count: 1,
             });
 
-        let image_memory_barriers = [*render_image_attachment_barrier, *present_to_dst_barrier];
+        let depth_image_attachment_barrier = vk::ImageMemoryBarrier2::builder()
+            .src_stage_mask(PipelineStageFlags2::NONE)
+            .src_access_mask(AccessFlags2::NONE)
+            .dst_stage_mask(PipelineStageFlags2::EARLY_FRAGMENT_TESTS)
+            .dst_access_mask(AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE)
+            .old_layout(ImageLayout::UNDEFINED)
+            .new_layout(ImageLayout::ATTACHMENT_OPTIMAL)
+            .image(
+                self.device
+                    .resource_manager
+                    .get_image(&self.device.depth_image)
+                    .unwrap()
+                    .image,
+            )
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: ImageAspectFlags::DEPTH,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+
+        let image_memory_barriers = [*render_image_attachment_barrier, *present_to_dst_barrier, *depth_image_attachment_barrier];
         let graphics_barrier_dependency_info =
             vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
 
@@ -441,11 +470,25 @@ impl Renderer {
             .store_op(vk::AttachmentStoreOp::STORE)
             .clear_value(clear_value);
 
+        let depth_attach_info = vk::RenderingAttachmentInfo::builder()
+            .image_view(
+                self.device
+                    .resource_manager
+                    .get_image(&self.device.depth_image)
+                    .unwrap()
+                    .default_view,
+            )
+            .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .clear_value(depth_clear_value);
+
         let color_attachments = [*color_attach_info];
         let render_info = vk::RenderingInfo::builder()
             .render_area(*scissor)
             .layer_count(1u32)
-            .color_attachments(&color_attachments);
+            .color_attachments(&color_attachments)
+            .depth_attachment(&depth_attach_info);
 
         let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 

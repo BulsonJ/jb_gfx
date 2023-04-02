@@ -35,6 +35,8 @@ pub struct GraphicsDevice {
     pub present_image_views: Vec<vk::ImageView>,
     pub render_image: ImageHandle,
     pub render_image_format: vk::Format,
+    pub depth_image: ImageHandle,
+    pub depth_image_format: vk::Format,
     pub graphics_queue: vk::Queue,
     pub graphics_command_pool: [vk::CommandPool; FRAMES_IN_FLIGHT],
     pub graphics_command_buffer: [vk::CommandBuffer; FRAMES_IN_FLIGHT],
@@ -354,6 +356,27 @@ impl GraphicsDevice {
         let render_image = resource_manager
             .create_image(&render_image_create_info, resource::ImageAspectType::Color);
 
+        let depth_image_create_info = vk::ImageCreateInfo::builder()
+            .format(vk::Format::D32_SFLOAT)
+            .usage(
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_SRC,
+            )
+            .extent(vk::Extent3D {
+                width: surface_resolution.width,
+                height: surface_resolution.height,
+                depth: 1,
+            })
+            .image_type(vk::ImageType::TYPE_2D)
+            .array_layers(1u32)
+            .mip_levels(1u32)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL);
+
+        let depth_image = resource_manager
+            .create_image(&depth_image_create_info, resource::ImageAspectType::Depth);
+
         let default_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::NEAREST)
@@ -392,6 +415,8 @@ impl GraphicsDevice {
             present_image_views,
             render_image,
             render_image_format: render_image_create_info.format,
+            depth_image,
+            depth_image_format: depth_image_create_info.format,
             graphics_queue,
             graphics_command_pool,
             graphics_command_buffer,
