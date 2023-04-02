@@ -816,7 +816,7 @@ impl GraphicsDevice {
                     }
                 }
             },
-        );
+        )?;
 
         info!("Copied to Image.");
 

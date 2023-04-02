@@ -29,7 +29,6 @@ fn main() {
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
-
     let mut initial_resize = true;
     event_loop.run(move |event, _, control_flow| {
         match event {

@@ -153,7 +153,7 @@ impl Renderer {
 
         // TODO : Move more into PipelineManager
         let mut pipeline_manager = PipelineManager::new();
-        let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info);
+        let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info)?;
 
         let camera = Camera {
             position: (0.0, -100.0, 0.0).into(),
@@ -325,7 +325,7 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn reload_shaders(&mut self) {
+    pub fn reload_shaders(&mut self) -> Result<()> {
         self.pipeline_manager.reload_shaders(&mut self.device)
     }
 
@@ -916,7 +916,7 @@ impl Renderer {
                         )
                     }
                 },
-            );
+            )?;
 
             buffer
         };
@@ -989,7 +989,7 @@ impl Renderer {
                                 )
                             }
                         },
-                    );
+                    )?;
 
                     buffer
                 };

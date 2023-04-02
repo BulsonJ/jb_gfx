@@ -2,6 +2,7 @@ use std::ffi::{CStr, CString};
 use std::fs;
 
 use crate::device::GraphicsDevice;
+use anyhow::Result;
 use ash::vk;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
 use slotmap::{new_key_type, SlotMap};
@@ -24,47 +25,43 @@ impl PipelineManager {
         &mut self,
         device: &mut GraphicsDevice,
         build_info: &PipelineCreateInfo,
-    ) -> PipelineHandle {
+    ) -> Result<PipelineHandle> {
         let pso = PipelineManager::create_pipeline_internal(
             &mut self.shader_compiler,
             device,
             build_info.clone(),
-        );
-        self.pipelines.insert(Pipeline {
+        )?;
+        Ok(self.pipelines.insert(Pipeline {
             pso,
             create_info: build_info.clone(),
-        })
+        }))
     }
 
     fn create_pipeline_internal(
         shader_compiler: &mut shaderc::Compiler,
         device: &mut GraphicsDevice,
         build_info: PipelineCreateInfo,
-    ) -> vk::Pipeline {
+    ) -> Result<vk::Pipeline> {
         let vertex_file = fs::read_to_string(&build_info.vertex_shader).unwrap();
         let frag_file = fs::read_to_string(&build_info.fragment_shader).unwrap();
 
-        let vert_binary = shader_compiler
-            .compile_into_spirv(
-                &vertex_file,
-                shaderc::ShaderKind::Vertex,
-                &build_info.vertex_shader,
-                "main",
-                None,
-            )
-            .unwrap();
+        let vert_binary = shader_compiler.compile_into_spirv(
+            &vertex_file,
+            shaderc::ShaderKind::Vertex,
+            &build_info.vertex_shader,
+            "main",
+            None,
+        )?;
 
-        let frag_binary = shader_compiler
-            .compile_into_spirv(
-                &frag_file,
-                shaderc::ShaderKind::Fragment,
-                &build_info.fragment_shader,
-                "main",
-                None,
-            )
-            .unwrap();
+        let frag_binary = shader_compiler.compile_into_spirv(
+            &frag_file,
+            shaderc::ShaderKind::Fragment,
+            &build_info.fragment_shader,
+            "main",
+            None,
+        )?;
 
-        let vertex_shader = load_shader_module(&device.vk_device, vert_binary.as_binary()).unwrap();
+        let vertex_shader = load_shader_module(&device.vk_device, vert_binary.as_binary())?;
 
         let vertex_stage_info = vk::PipelineShaderStageCreateInfo::builder()
             .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") })
@@ -72,8 +69,7 @@ impl PipelineManager {
             .module(vertex_shader)
             .build();
 
-        let fragment_shader =
-            load_shader_module(&device.vk_device, frag_binary.as_binary()).unwrap();
+        let fragment_shader = load_shader_module(&device.vk_device, frag_binary.as_binary())?;
 
         let fragment_stage_info = vk::PipelineShaderStageCreateInfo::builder()
             .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") })
@@ -104,8 +100,7 @@ impl PipelineManager {
         unsafe {
             device
                 .debug_utils_loader
-                .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
-                .expect("Named object");
+                .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)?;
         }
 
         unsafe {
@@ -115,21 +110,22 @@ impl PipelineManager {
                 .destroy_shader_module(fragment_shader, None);
         }
 
-        pipeline
+        Ok(pipeline)
     }
 
     pub fn get_pipeline(&mut self, handle: PipelineHandle) -> vk::Pipeline {
         self.pipelines.get(handle).unwrap().pso
     }
 
-    pub fn reload_shaders(&mut self, device: &mut GraphicsDevice) {
+    pub fn reload_shaders(&mut self, device: &mut GraphicsDevice) -> Result<()> {
         for (_, pipeline) in self.pipelines.iter_mut() {
             pipeline.pso = PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,
                 device,
                 pipeline.create_info.clone(),
-            )
+            )?
         }
+        Ok(())
     }
 
     pub fn deinit(&mut self, device: &mut ash::Device) {
@@ -237,8 +233,8 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
     pipeline_object
 }
 
-pub fn load_shader_module(device: &ash::Device, code: &[u32]) -> Option<vk::ShaderModule> {
+pub fn load_shader_module(device: &ash::Device, code: &[u32]) -> Result<vk::ShaderModule> {
     let create_info = vk::ShaderModuleCreateInfo::builder().code(code);
 
-    Some(unsafe { device.create_shader_module(&create_info, None) }.unwrap())
+    Ok(unsafe { device.create_shader_module(&create_info, None) }?)
 }
