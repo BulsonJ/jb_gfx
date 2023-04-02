@@ -1,11 +1,13 @@
 use std::ffi::{CStr, CString};
 use std::fs;
 
-use crate::device::GraphicsDevice;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
+use log::info;
 use slotmap::{new_key_type, SlotMap};
+
+use crate::device::GraphicsDevice;
 
 pub(crate) struct PipelineManager {
     shader_compiler: shaderc::Compiler,
@@ -42,15 +44,18 @@ impl PipelineManager {
         device: &mut GraphicsDevice,
         build_info: PipelineCreateInfo,
     ) -> Result<vk::Pipeline> {
-        let vertex_file = fs::read_to_string(&build_info.vertex_shader).unwrap();
-        let frag_file = fs::read_to_string(&build_info.fragment_shader).unwrap();
+        let vertex_file = fs::read_to_string(&build_info.vertex_shader)?;
+        let frag_file = fs::read_to_string(&build_info.fragment_shader)?;
+
+        let mut options = shaderc::CompileOptions::new().unwrap();
+        options.set_include_callback(include_resolve_callback);
 
         let vert_binary = shader_compiler.compile_into_spirv(
             &vertex_file,
             shaderc::ShaderKind::Vertex,
             &build_info.vertex_shader,
             "main",
-            None,
+            Some(&options),
         )?;
 
         let frag_binary = shader_compiler.compile_into_spirv(
@@ -58,7 +63,7 @@ impl PipelineManager {
             shaderc::ShaderKind::Fragment,
             &build_info.fragment_shader,
             "main",
-            None,
+            Some(&options),
         )?;
 
         let vertex_shader = load_shader_module(&device.vk_device, vert_binary.as_binary())?;
@@ -237,4 +242,23 @@ pub fn load_shader_module(device: &ash::Device, code: &[u32]) -> Result<vk::Shad
     let create_info = vk::ShaderModuleCreateInfo::builder().code(code);
 
     Ok(unsafe { device.create_shader_module(&create_info, None) }?)
+}
+
+fn include_resolve_callback(
+    requested_file_name: &str,
+    include_type: shaderc::IncludeType,
+    source_file_name: &str,
+    include_depth: usize,
+) -> shaderc::IncludeCallbackResult {
+    info!("Attempting to resolve library: {}", requested_file_name);
+    info!("Include Type: {:?}", include_type);
+    info!("Directive source file: {}", source_file_name);
+    info!("Current library depth: {}", include_depth);
+
+    let content = fs::read_to_string(requested_file_name).unwrap();
+
+    Ok(shaderc::ResolvedInclude {
+        resolved_name: requested_file_name.to_string(),
+        content,
+    })
 }
