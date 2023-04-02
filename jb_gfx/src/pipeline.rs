@@ -1,10 +1,10 @@
 use std::ffi::{CStr, CString};
 use std::fs;
 
+use crate::device::GraphicsDevice;
 use ash::vk;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
 use slotmap::{new_key_type, SlotMap};
-use crate::device::GraphicsDevice;
 
 pub(crate) struct PipelineManager {
     shader_compiler: shaderc::Compiler,
@@ -72,7 +72,8 @@ impl PipelineManager {
             .module(vertex_shader)
             .build();
 
-        let fragment_shader = load_shader_module(&device.vk_device, frag_binary.as_binary()).unwrap();
+        let fragment_shader =
+            load_shader_module(&device.vk_device, frag_binary.as_binary()).unwrap();
 
         let fragment_stage_info = vk::PipelineShaderStageCreateInfo::builder()
             .name(unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") })
@@ -91,18 +92,27 @@ impl PipelineManager {
 
         let pipeline = build_pipeline(&mut device.vk_device, info);
 
-        let object_name_string = String::from(build_info.vertex_shader.rsplit_once('/').unwrap().1) + " " + build_info.fragment_shader.rsplit_once('/').unwrap().1;
+        let object_name_string = String::from(build_info.vertex_shader.rsplit_once('/').unwrap().1)
+            + " "
+            + build_info.fragment_shader.rsplit_once('/').unwrap().1;
         let object_name = CString::new(object_name_string).unwrap();
         let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
             .object_type(ObjectType::PIPELINE)
             .object_handle(pipeline.as_raw())
             .object_name(object_name.as_ref());
 
-        unsafe { device.debug_utils_loader.set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info).expect("Named object"); }
+        unsafe {
+            device
+                .debug_utils_loader
+                .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
+                .expect("Named object");
+        }
 
         unsafe {
             device.vk_device.destroy_shader_module(vertex_shader, None);
-            device.vk_device.destroy_shader_module(fragment_shader, None);
+            device
+                .vk_device
+                .destroy_shader_module(fragment_shader, None);
         }
 
         pipeline

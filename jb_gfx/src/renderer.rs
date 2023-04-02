@@ -16,8 +16,6 @@ use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Mesh, Vertex};
 
-const BINDLESS_BINDING_INDEX: u32 = 1u32;
-
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
 pub struct Renderer {
@@ -30,6 +28,8 @@ pub struct Renderer {
     descriptor_pool: vk::DescriptorPool,
     descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    bindless_descriptor_set_layout: vk::DescriptorSetLayout,
+    bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     bindless_textures: Vec<ImageHandle>,
     bindless_indexes: HashMap<ImageHandle, usize>,
     pub clear_colour: Colour,
@@ -70,7 +70,7 @@ impl Renderer {
         ];
 
         let pool_create_info = vk::DescriptorPoolCreateInfo::builder()
-            .max_sets(2u32)
+            .max_sets(4u32)
             .pool_sizes(&pool_sizes);
 
         let descriptor_pool = unsafe {
@@ -80,31 +80,14 @@ impl Renderer {
         }
         .unwrap();
 
-        let binding_flags = [
-            vk::DescriptorBindingFlags::empty(),
-            vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT
-                | vk::DescriptorBindingFlags::PARTIALLY_BOUND,
-        ];
+        let descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
+            .binding(0u32)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1u32)
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)];
 
-        let mut descriptor_set_binding_flags_create_info =
-            vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder().binding_flags(&binding_flags);
-
-        let descriptor_set_bindings = [
-            *vk::DescriptorSetLayoutBinding::builder()
-                .binding(0u32)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-            *vk::DescriptorSetLayoutBinding::builder()
-                .binding(BINDLESS_BINDING_INDEX)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .descriptor_count(10u32)
-                .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-        ];
-
-        let descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .push_next(&mut descriptor_set_binding_flags_create_info)
-            .bindings(&descriptor_set_bindings);
+        let descriptor_set_layout_create_info =
+            vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
 
         let descriptor_set_layout = unsafe {
             device
@@ -113,12 +96,39 @@ impl Renderer {
         }
         .unwrap();
 
+        // Create bindless set
+
+        let bindless_binding_flags = [vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT
+            | vk::DescriptorBindingFlags::PARTIALLY_BOUND];
+
+        let mut bindless_descriptor_set_binding_flags_create_info =
+            vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
+                .binding_flags(&bindless_binding_flags);
+
+        let bindless_descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
+            .binding(0u32)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(10u32)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+
+        let bindless_descriptor_set_layout_create_info =
+            vk::DescriptorSetLayoutCreateInfo::builder()
+                .push_next(&mut bindless_descriptor_set_binding_flags_create_info)
+                .bindings(&bindless_descriptor_set_bindings);
+
+        let bindless_descriptor_set_layout = unsafe {
+            device
+                .vk_device
+                .create_descriptor_set_layout(&bindless_descriptor_set_layout_create_info, None)
+        }
+        .unwrap();
+
         let push_constant_range = *vk::PushConstantRange::builder()
             .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
             .size(size_of::<PushConstants>() as u32)
             .offset(0u32);
 
-        let layouts = [descriptor_set_layout];
+        let layouts = [bindless_descriptor_set_layout, descriptor_set_layout];
         let push_constant_ranges = [push_constant_range];
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&layouts)
@@ -181,13 +191,8 @@ impl Renderer {
         };
 
         let descriptor_set = {
-            let mut descriptor_set_counts =
-                vk::DescriptorSetVariableDescriptorCountAllocateInfo::builder()
-                    .descriptor_counts(&[10u32]);
-
             let set_layouts = [descriptor_set_layout];
             let create_info = vk::DescriptorSetAllocateInfo::builder()
-                .push_next(&mut descriptor_set_counts)
                 .descriptor_pool(descriptor_pool)
                 .set_layouts(&set_layouts);
 
@@ -247,6 +252,27 @@ impl Renderer {
             };
         }
 
+        let bindless_descriptor_set = {
+            let mut descriptor_set_counts =
+                vk::DescriptorSetVariableDescriptorCountAllocateInfo::builder()
+                    .descriptor_counts(&[10u32]);
+
+            let set_layouts = [bindless_descriptor_set_layout];
+            let create_info = vk::DescriptorSetAllocateInfo::builder()
+                .push_next(&mut descriptor_set_counts)
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&set_layouts);
+
+            let descriptor_sets =
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }.unwrap();
+            let first = *descriptor_sets.get(0).unwrap();
+            let descriptor_sets =
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }.unwrap();
+            let second = *descriptor_sets.get(0).unwrap();
+
+            [first, second]
+        };
+
         let bindless_textures = Vec::new();
         let bindless_indexes = HashMap::new();
 
@@ -260,6 +286,8 @@ impl Renderer {
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
+            bindless_descriptor_set_layout,
+            bindless_descriptor_set,
             bindless_textures,
             bindless_indexes,
             clear_colour: Colour::BLACK,
@@ -274,8 +302,7 @@ impl Renderer {
     }
 
     pub fn reload_shaders(&mut self) {
-        self.pipeline_manager
-            .reload_shaders(&mut self.device)
+        self.pipeline_manager.reload_shaders(&mut self.device)
     }
 
     pub fn render(&mut self) {
@@ -448,6 +475,14 @@ impl Renderer {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.pso_layout,
                 0u32,
+                &[self.bindless_descriptor_set[self.device.buffered_resource_number()]],
+                &[],
+            );
+            self.device.vk_device.cmd_bind_descriptor_sets(
+                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pso_layout,
+                1u32,
                 &[self.descriptor_set[self.device.buffered_resource_number()]],
                 &[],
             );
@@ -710,14 +745,14 @@ impl Renderer {
 
         let image_info = [*bindless_image_info];
         let desc_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.descriptor_set[0])
-            .dst_binding(BINDLESS_BINDING_INDEX)
+            .dst_set(self.bindless_descriptor_set[0])
+            .dst_binding(0u32)
             .dst_array_element(bindless_index as u32 - 1u32)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(&image_info);
         let desc_write_two = vk::WriteDescriptorSet::builder()
-            .dst_set(self.descriptor_set[1])
-            .dst_binding(BINDLESS_BINDING_INDEX)
+            .dst_set(self.bindless_descriptor_set[1])
+            .dst_binding(0u32)
             .dst_array_element(bindless_index as u32 - 1u32)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(&image_info);
@@ -909,6 +944,9 @@ impl Drop for Renderer {
         unsafe {
             self.device.vk_device.device_wait_idle().unwrap();
             self.pipeline_manager.deinit(&mut self.device.vk_device);
+            self.device
+                .vk_device
+                .destroy_descriptor_set_layout(self.bindless_descriptor_set_layout, None);
             self.device
                 .vk_device
                 .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
