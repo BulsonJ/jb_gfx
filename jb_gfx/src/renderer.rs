@@ -9,7 +9,10 @@ use ash::vk::{
     ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::offset_of;
-use cgmath::{Array, Deg, Matrix, Matrix4, Quaternion, Rad, Rotation, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{
+    Array, Deg, Matrix, Matrix4, Quaternion, Rad, Rotation, Rotation3, SquareMatrix, Vector3,
+    Vector4, Zero,
+};
 use image::EncodableLayout;
 use log::error;
 use slotmap::{new_key_type, SlotMap};
@@ -39,7 +42,7 @@ pub struct Renderer {
     pub clear_colour: Colour,
     pipeline_manager: PipelineManager,
     meshes: SlotMap<MeshHandle, RenderMesh>,
-    render_models: Vec<RenderModel>,
+    render_models: SlotMap<RenderModelHandle, RenderModel>,
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     lights: [LightUniform; 4],
 }
@@ -165,7 +168,7 @@ impl Renderer {
         let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info)?;
 
         let camera = Camera {
-            position: (0.0, 0.0, -2.0).into(),
+            position: (0.0, -100.0, -2.0).into(),
             aspect: device.size.width as f32 / device.size.height as f32,
             fovy: 90.0,
             znear: 0.1,
@@ -400,7 +403,7 @@ impl Renderer {
             clear_colour: Colour::BLACK,
             pipeline_manager,
             meshes: SlotMap::default(),
-            render_models: Vec::default(),
+            render_models: SlotMap::default(),
             light_buffer,
             lights,
         })
@@ -608,23 +611,6 @@ impl Renderer {
 
         let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
-        let timed_rotation = Quaternion::from_axis_angle(
-            Vector3::new(0.0f32, 1.0f32, 0.0f32),
-            Deg(frame_number_float * 0.01f32),
-        );
-        let static_rotation = Quaternion::from_axis_angle(
-            Vector3::new(1.0f32, 0.0f32, 0.0f32),
-            Deg(-45f32),
-        );
-        let rotation = timed_rotation;
-
-        let model_matrix = from_transforms(
-            Vector3::new(0.0f32, -50.0f32, 0.0f32),
-            rotation,
-            Vector3::from_value(1f32),
-        );
-        let normal_matrix = model_matrix.invert().unwrap().transpose();
-
         unsafe {
             self.device.vk_device.cmd_begin_rendering(
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -653,7 +639,7 @@ impl Renderer {
             );
         };
 
-        for model in self.render_models.iter() {
+        for model in self.render_models.values() {
             let diffuse_tex = {
                 if let Some(tex) = model.textures.diffuse {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
@@ -694,6 +680,9 @@ impl Renderer {
                 }
             };
 
+            let model_matrix = model.transform;
+            let normal_matrix = model_matrix.invert().unwrap().transpose();
+
             let push_constants = PushConstants {
                 model: model_matrix.into(),
                 normal: normal_matrix.into(),
@@ -705,7 +694,7 @@ impl Renderer {
                     emissive_tex as i32,
                     0,
                     0,
-                    0
+                    0,
                 ],
             };
             unsafe {
@@ -1151,11 +1140,32 @@ impl Renderer {
         }
     }
 
-    pub fn add_render_model(&mut self, handle: MeshHandle, textures: MaterialTextures) {
-        self.render_models.push(RenderModel {
+    pub fn add_render_model(
+        &mut self,
+        handle: MeshHandle,
+        textures: MaterialTextures,
+    ) -> RenderModelHandle {
+        self.render_models.insert(RenderModel {
             mesh_handle: handle,
             textures,
-        });
+            transform: from_transforms(
+                Vector3::from_value(0f32),
+                Quaternion::from_axis_angle(Vector3::new(0.0f32, 1.0f32, 0.0f32), Deg(0f32)),
+                Vector3::from_value(1f32),
+            ),
+        })
+    }
+
+    pub fn set_render_model_transform(
+        &mut self,
+        handle: RenderModelHandle,
+        transform: Matrix4<f32>,
+    ) -> Result<()> {
+        if let Some(model) = self.render_models.get_mut(handle) {
+            Ok(model.transform = transform)
+        } else {
+            Err(anyhow!("Unable to find Render Model!"))
+        }
     }
 }
 
@@ -1224,7 +1234,7 @@ impl Vertex {
     }
 }
 
-new_key_type! {pub struct MeshHandle;}
+new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle;}
 
 // Mesh data stored on the GPU
 struct RenderMesh {
@@ -1359,6 +1369,7 @@ pub struct MaterialTextures {
 struct RenderModel {
     mesh_handle: MeshHandle,
     textures: MaterialTextures,
+    transform: Matrix4<f32>,
 }
 
 #[repr(C)]
