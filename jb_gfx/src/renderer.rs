@@ -9,7 +9,7 @@ use ash::vk::{
     ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::offset_of;
-use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation3, SquareMatrix, Vector3, Zero};
+use cgmath::{Array, Deg, Matrix4, Quaternion, Rad, Rotation, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
 use image::EncodableLayout;
 use log::error;
 use slotmap::{new_key_type, SlotMap};
@@ -165,7 +165,7 @@ impl Renderer {
         let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info)?;
 
         let camera = Camera {
-            position: (0.0, -100.0, 0.0).into(),
+            position: (0.0, 0.0, -2.0).into(),
             aspect: device.size.width as f32 / device.size.height as f32,
             fovy: 90.0,
             znear: 0.1,
@@ -225,20 +225,20 @@ impl Renderer {
 
         let lights = [
             LightUniform::new(
-                Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(0.0f32, 0.0f32, 10.0f32),
+                Vector3::new(100.0f32, 100.0f32, 100.0f32),
             ),
             LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 10.0f32),
                 Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 10.0f32),
                 Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             LightUniform::new(
+                Vector3::new(0.0f32, 0.0f32, 10.0f32),
                 Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
         ];
 
@@ -608,12 +608,17 @@ impl Renderer {
 
         let frame_number_float = self.device.frame_number() as f32;
 
+        let timed_rotation = Quaternion::from_axis_angle(
+            Vector3::new(0.0f32, 1.0f32, 0.0f32),
+            Deg(frame_number_float * 0.01f32),
+        );
+        let static_rotation = Quaternion::from_axis_angle(
+            Vector3::new(1.0f32, 0.0f32, 0.0f32),
+            Deg(45f32),
+        );
         let model_matrix = from_transforms(
             Vector3::new(0.0f32, 0.1f32, 0.0f32),
-            Quaternion::from_axis_angle(
-                Vector3::new(0.0f32, 1.0f32, 0.0f32),
-                Rad(frame_number_float * 0.0001f32),
-            ),
+            static_rotation * timed_rotation,
             Vector3::from_value(1f32),
         );
 
@@ -1218,6 +1223,7 @@ struct RenderMesh {
 struct CameraUniform {
     proj: [[f32; 4]; 4],
     view: [[f32; 4]; 4],
+    position: [f32; 4],
 }
 
 impl CameraUniform {
@@ -1225,12 +1231,14 @@ impl CameraUniform {
         Self {
             proj: Matrix4::identity().into(),
             view: Matrix4::identity().into(),
+            position: Vector4::zero().into(),
         }
     }
 
     fn update_proj(&mut self, camera: &Camera) {
         self.proj = camera.build_projection_matrix().into();
         self.view = camera.build_view_matrix().into();
+        self.position = camera.position.extend(0f32).into();
     }
 }
 

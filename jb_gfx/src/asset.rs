@@ -114,7 +114,7 @@ impl AssetManager {
                     }
                 };
                 let emissive_tex = {
-                    if let Some(emissive) = material.emissive_texture() {
+                    if let Some(emissive) = material.occlusion_texture() {
                         match emissive.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {

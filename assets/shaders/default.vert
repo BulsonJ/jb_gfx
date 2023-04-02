@@ -10,10 +10,12 @@ layout (location = 3) in vec3 vColor;
 layout (location = 0) out vec3 outColor;
 layout (location = 1) out vec2 outTexCoords;
 layout (location = 2) out vec3 outNormal;
+layout (location = 3) out vec3 outWorldPos;
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
 	mat4 view;
+	vec4 cameraPos;
 } cameraData;
 
 layout( push_constant ) uniform constants
@@ -24,8 +26,10 @@ layout( push_constant ) uniform constants
 
 void main()
 {
+	vec3 worldPos = vec3(pushConstants.model * vec4(vPosition, 1.0f));
+	outWorldPos = worldPos;
 	//output the position of each vertex
-	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(vPosition, 1.0f);
+	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(worldPos, 1.0f);
 	outColor = vColor;
 	outTexCoords = vTexCoords;
 	outNormal = vNormal;
