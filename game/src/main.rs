@@ -17,7 +17,7 @@ fn main() {
     renderer.render().unwrap();
     let mut asset_manager = AssetManager::default();
     let models = asset_manager
-        .load_model(&mut renderer, "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf")
+        .load_model(&mut renderer, "assets/models/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf")
         .unwrap();
     for model in models.iter() {
         renderer.add_render_model(model.mesh, model.textures.clone());

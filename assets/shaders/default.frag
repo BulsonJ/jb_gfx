@@ -32,6 +32,23 @@ layout( push_constant ) uniform constants
 	ivec4 textures_two;
 } pushConstants;
 
+vec3 getNormalFromMap()
+{
+	vec3 tangentNormal = SampleBindlessTexture(pushConstants.textures.g, inTexCoords).xyz * 2.0 - 1.0;
+
+	vec3 Q1  = dFdx(inWorldPos);
+	vec3 Q2  = dFdy(inWorldPos);
+	vec2 st1 = dFdx(inTexCoords);
+	vec2 st2 = dFdy(inTexCoords);
+
+	vec3 N   = normalize(inNormal);
+	vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
+	vec3 B  = -normalize(cross(N, T));
+	mat3 TBN = mat3(T, B, N);
+
+	return normalize(TBN * tangentNormal);
+}
+
 void main()
 {
 	vec3 outColour = inColor;
@@ -48,7 +65,7 @@ void main()
 	float ambientFactor = SampleBindlessTexture(pushConstants.textures.a, inTexCoords).r;
 
 	vec3 albedo     = pow(diffuseTexture.rgb, vec3(2.2));
-	vec3 normal     = normalTexture.rgb;
+	vec3 normal     = getNormalFromMap();
 	float metallic  = metallicFactor;
 	float roughness = roughnessFactor;
 	float ao        = ambientFactor;
@@ -93,7 +110,6 @@ void main()
 
 	color = color / (color + vec3(1.0));
 	color = pow(color, vec3(1.0/2.2));
-
 
 	vec4 emissiveTexture = SampleBindlessTexture(pushConstants.textures_two.r, inTexCoords);
 	color += emissiveTexture.rgb;

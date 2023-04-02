@@ -225,7 +225,7 @@ impl Renderer {
 
         let lights = [
             LightUniform::new(
-                Vector3::new(0.0f32, 0.0f32, 10.0f32),
+                Vector3::new(0.0f32, 0.0f32, 0.0f32),
                 Vector3::new(100.0f32, 100.0f32, 100.0f32),
             ),
             LightUniform::new(
@@ -561,6 +561,13 @@ impl Renderer {
             .unwrap()
             .copy_from_slice(&[self.camera_uniform]);
 
+        let frame_number_float = self.device.frame_number() as f32;
+
+        *self.lights.get_mut(0).unwrap() = LightUniform::new(
+            Vector3::new(5.0f32, ((frame_number_float * 0.001f32).sin() * 10.0f32) + 5.0f32, -10.0f32),
+            Vector3::new(100.0f32, 100.0f32, 100.0f32),
+        );
+
         self.device
             .resource_manager
             .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
@@ -606,19 +613,18 @@ impl Renderer {
 
         let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
-        let frame_number_float = self.device.frame_number() as f32;
         let timed_rotation = Quaternion::from_axis_angle(
             Vector3::new(0.0f32, 1.0f32, 0.0f32),
             Deg(frame_number_float * 0.01f32),
         );
         let static_rotation = Quaternion::from_axis_angle(
             Vector3::new(1.0f32, 0.0f32, 0.0f32),
-            Deg(45f32),
+            Deg(-45f32),
         );
         let rotation = static_rotation;
 
         let model_matrix = from_transforms(
-            Vector3::new(0.0f32, 0.0f32, 0.0f32),
+            Vector3::new(0.0f32, 5.0f32, -10.0f32),
             rotation,
             Vector3::from_value(1f32),
         );
