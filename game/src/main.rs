@@ -1,3 +1,4 @@
+use std::time::Instant;
 use jb_gfx::asset::AssetManager;
 use jb_gfx::renderer::{Colour, MaterialTextures, Renderer};
 use winit::dpi::LogicalSize;
@@ -25,10 +26,20 @@ fn main() {
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
     let mut initial_resize = true;
+    let mut frame_start_time = Instant::now();
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared => {
-                renderer.render().unwrap();
+                let delta_time = frame_start_time.elapsed().as_secs_f64();
+                frame_start_time = Instant::now();
+
+                // Check if need to skip frame
+                let frame_skip = delta_time > 0.1f64;
+                if frame_skip {
+                    //warn!("Skipping large time delta");
+                } else {
+                    renderer.render().unwrap();
+                }
             }
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::CloseRequested
