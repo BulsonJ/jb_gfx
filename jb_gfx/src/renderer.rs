@@ -65,7 +65,7 @@ impl Renderer {
                 .descriptor_count(100u32)
                 .ty(vk::DescriptorType::STORAGE_BUFFER),
             *vk::DescriptorPoolSize::builder()
-                .descriptor_count(100u32)
+                .descriptor_count(1000u32)
                 .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
         ];
 
@@ -108,7 +108,7 @@ impl Renderer {
         let bindless_descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
             .binding(0u32)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(10u32)
+            .descriptor_count(100u32)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
 
         let bindless_descriptor_set_layout_create_info =
@@ -255,7 +255,7 @@ impl Renderer {
         let bindless_descriptor_set = {
             let mut descriptor_set_counts =
                 vk::DescriptorSetVariableDescriptorCountAllocateInfo::builder()
-                    .descriptor_counts(&[10u32]);
+                    .descriptor_counts(&[100u32]);
 
             let set_layouts = [bindless_descriptor_set_layout];
             let create_info = vk::DescriptorSetAllocateInfo::builder()
@@ -455,7 +455,7 @@ impl Renderer {
             Vector3::new(0.0f32, 0.1f32, 0.0f32),
             Quaternion::from_axis_angle(
                 Vector3::new(0.0f32, 1.0f32, 0.0f32),
-                Rad(frame_number_float * 0.001f32),
+                Rad(frame_number_float * 0.0001f32),
             ),
             Vector3::from_value(1f32),
         );
