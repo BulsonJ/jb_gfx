@@ -842,6 +842,27 @@ impl Renderer {
             height: img.height(),
         };
 
+        // Debug name image
+        {
+            let object_name = CString::new("Image:".to_string() + file_location.rsplit_once('/').unwrap().1).unwrap();
+            let debug_info = DebugUtilsObjectNameInfoEXT::builder()
+                .object_type(ObjectType::IMAGE)
+                .object_handle(
+                    self.device.resource_manager
+                        .get_image(image)
+                        .unwrap()
+                        .image
+                        .as_raw(),
+                )
+                .object_name(object_name.as_ref());
+
+            unsafe {
+                self.device.debug_utils_loader
+                    .set_debug_utils_object_name(self.device.vk_device.handle(), &debug_info)
+                    .expect("Named object");
+            }
+        }
+
         Ok(texture)
     }
 
