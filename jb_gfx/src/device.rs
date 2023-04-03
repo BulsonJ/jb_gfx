@@ -16,7 +16,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
 
 use crate::resource;
-use crate::resource::{ImageHandle, ResourceManager};
+use crate::resource::{BufferHandle, ImageHandle, ResourceManager};
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 
@@ -49,6 +49,7 @@ pub struct GraphicsDevice {
     pub upload_context: UploadContext,
     pub default_sampler: vk::Sampler,
     frame_number: usize,
+    images_to_upload: Vec<ImageToUpload>,
 }
 
 impl GraphicsDevice {
@@ -468,6 +469,7 @@ impl GraphicsDevice {
             upload_context,
             default_sampler,
             frame_number: 0usize,
+            images_to_upload: Vec::default(),
         })
     }
 
@@ -508,6 +510,96 @@ impl GraphicsDevice {
                 vk::Fence::null(),
             )
         }?;
+
+        // Begin command buffer
+
+        let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+        unsafe {
+            self.vk_device.begin_command_buffer(
+                self.graphics_command_buffer[self.buffered_resource_number()],
+                &cmd_begin_info,
+            )
+        }?;
+
+        // Upload images
+
+        for image in self.images_to_upload.iter() {
+            let range = vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0u32)
+                .level_count(1u32)
+                .base_array_layer(0u32)
+                .layer_count(1u32);
+
+            {
+                let image_barrier_transfer_to = vk::ImageMemoryBarrier2::builder()
+                    .src_stage_mask(PipelineStageFlags2::NONE)
+                    .src_access_mask(vk::AccessFlags2::NONE)
+                    .dst_stage_mask(PipelineStageFlags2::TRANSFER)
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .image(self.resource_manager.get_image(image.image_handle).unwrap().image)
+                    .subresource_range(*range);
+
+                let image_memory_barriers = [*image_barrier_transfer_to];
+                let image_dependency_info =
+                    vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
+
+                unsafe {
+                    self.vk_device.cmd_pipeline_barrier2(self.graphics_command_buffer[self.buffered_resource_number()], &image_dependency_info);
+                }
+            }
+
+            let copy_region = vk::BufferImageCopy::builder()
+                .buffer_offset(0u64)
+                .buffer_row_length(0u32)
+                .buffer_image_height(0u32)
+                .image_subresource(vk::ImageSubresourceLayers {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    mip_level: 0u32,
+                    base_array_layer: 0u32,
+                    layer_count: 1u32,
+                })
+                .image_extent(vk::Extent3D {
+                    width: image.width,
+                    height: image.height,
+                    depth: 1,
+                });
+
+            unsafe {
+                self.vk_device.cmd_copy_buffer_to_image(
+                    self.graphics_command_buffer[self.buffered_resource_number()],
+                    self.resource_manager.get_buffer(image.buffer_handle).unwrap().buffer,
+                    self.resource_manager.get_image(image.image_handle).unwrap().image,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[*copy_region],
+                );
+            }
+
+            {
+                let image_barrier_transfer = vk::ImageMemoryBarrier2::builder()
+                    .src_stage_mask(PipelineStageFlags2::TRANSFER)
+                    .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                    .dst_stage_mask(PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_READ)
+                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image(self.resource_manager.get_image(image.image_handle).unwrap().image)
+                    .subresource_range(*range);
+
+                let image_memory_barriers = [*image_barrier_transfer];
+                let image_dependency_info =
+                    vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
+
+                unsafe {
+                    self.vk_device.cmd_pipeline_barrier2(self.graphics_command_buffer[self.buffered_resource_number()], &image_dependency_info);
+                }
+            }
+        }
+        self.images_to_upload.clear();
 
         Ok(present_index)
     }
@@ -739,86 +831,12 @@ impl GraphicsDevice {
             .resource_manager
             .create_image(&image_create_info, resource::ImageAspectType::Color);
 
-        self.upload_context.immediate_submit(
-            &mut self.vk_device,
-            &mut self.resource_manager,
-            |device, resource_manager, cmd| {
-                let range = vk::ImageSubresourceRange::builder()
-                    .aspect_mask(vk::ImageAspectFlags::COLOR)
-                    .base_mip_level(0u32)
-                    .level_count(1u32)
-                    .base_array_layer(0u32)
-                    .layer_count(1u32);
-
-                {
-                    let image_barrier_transfer_to = vk::ImageMemoryBarrier2::builder()
-                        .src_stage_mask(PipelineStageFlags2::NONE)
-                        .src_access_mask(vk::AccessFlags2::NONE)
-                        .dst_stage_mask(PipelineStageFlags2::TRANSFER)
-                        .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-                        .old_layout(vk::ImageLayout::UNDEFINED)
-                        .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                        .image(resource_manager.get_image(image).unwrap().image)
-                        .subresource_range(*range);
-
-                    let image_memory_barriers = [*image_barrier_transfer_to];
-                    let image_dependency_info =
-                        vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
-
-                    unsafe {
-                        device.cmd_pipeline_barrier2(*cmd, &image_dependency_info);
-                    }
-                }
-
-                let copy_region = vk::BufferImageCopy::builder()
-                    .buffer_offset(0u64)
-                    .buffer_row_length(0u32)
-                    .buffer_image_height(0u32)
-                    .image_subresource(vk::ImageSubresourceLayers {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        mip_level: 0u32,
-                        base_array_layer: 0u32,
-                        layer_count: 1u32,
-                    })
-                    .image_extent(vk::Extent3D {
-                        width: img_width,
-                        height: img_height,
-                        depth: 1,
-                    });
-
-                unsafe {
-                    device.cmd_copy_buffer_to_image(
-                        *cmd,
-                        resource_manager.get_buffer(staging_buffer).unwrap().buffer,
-                        resource_manager.get_image(image).unwrap().image,
-                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        &[*copy_region],
-                    );
-                }
-
-                {
-                    let image_barrier_transfer = vk::ImageMemoryBarrier2::builder()
-                        .src_stage_mask(PipelineStageFlags2::TRANSFER)
-                        .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-                        .dst_stage_mask(PipelineStageFlags2::FRAGMENT_SHADER)
-                        .dst_access_mask(vk::AccessFlags2::SHADER_READ)
-                        .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                        .image(resource_manager.get_image(image).unwrap().image)
-                        .subresource_range(*range);
-
-                    let image_memory_barriers = [*image_barrier_transfer];
-                    let image_dependency_info =
-                        vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
-
-                    unsafe {
-                        device.cmd_pipeline_barrier2(*cmd, &image_dependency_info);
-                    }
-                }
-            },
-        )?;
-
-        info!("Copied to Image.");
+        self.images_to_upload.push(ImageToUpload {
+            buffer_handle: staging_buffer,
+            image_handle: image,
+            width : img_width,
+            height : img_height,
+        });
 
         Ok(image)
     }
@@ -906,6 +924,13 @@ impl UploadContext {
         }?;
         Ok(())
     }
+}
+
+struct ImageToUpload {
+    buffer_handle: BufferHandle,
+    image_handle: ImageHandle,
+    width: u32,
+    height: u32,
 }
 
 unsafe extern "system" fn vulkan_debug_callback(

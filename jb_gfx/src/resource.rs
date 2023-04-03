@@ -58,6 +58,7 @@ impl ResourceManager {
         .unwrap();
         let buffer = Buffer {
             buffer: vk_buffer,
+            size: buffer_create_info.size,
             allocation,
             allocation_info,
         };
@@ -196,8 +197,9 @@ impl From<ImageAspectType> for vk::ImageAspectFlags {
 /// A buffer and it's memory allocation.
 pub struct Buffer {
     pub buffer: vk::Buffer,
-    pub allocation: vk_mem_alloc::Allocation,
-    pub allocation_info: vk_mem_alloc::AllocationInfo,
+    pub size: vk::DeviceSize,
+    allocation: vk_mem_alloc::Allocation,
+    allocation_info: vk_mem_alloc::AllocationInfo,
 }
 
 impl Buffer {

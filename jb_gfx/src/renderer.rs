@@ -302,12 +302,7 @@ impl Renderer {
                         .buffer,
                 )
                 .range(
-                    device
-                        .resource_manager
-                        .get_buffer(*camera_buffer)
-                        .unwrap()
-                        .allocation_info
-                        .size,
+                    size_of::<CameraUniform>() as DeviceSize
                 );
 
             let light_buffer_write = vk::DescriptorBufferInfo::builder()
@@ -323,7 +318,6 @@ impl Renderer {
                         .resource_manager
                         .get_buffer(*light_buffer)
                         .unwrap()
-                        .allocation_info
                         .size,
                 );
 
@@ -433,18 +427,6 @@ impl Renderer {
                 stencil: 0,
             },
         };
-
-        // Begin command buffer
-
-        let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-        unsafe {
-            self.device.vk_device.begin_command_buffer(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                &cmd_begin_info,
-            )
-        }?;
 
         let viewport = vk::Viewport::builder()
             .x(0.0f32)
