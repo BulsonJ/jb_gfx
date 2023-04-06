@@ -356,26 +356,6 @@ impl GraphicsDevice {
                 .create_image(&render_image_create_info, resource::ImageAspectType::Color)
         };
 
-        {
-            let object_name = CString::new("Render Image")?;
-            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(ObjectType::IMAGE)
-                .object_handle(
-                    resource_manager
-                        .get_image(render_image)
-                        .unwrap()
-                        .image()
-                        .as_raw(),
-                )
-                .object_name(object_name.as_ref());
-
-            unsafe {
-                debug_utils_loader
-                    .set_debug_utils_object_name(device.handle(), &pipeline_debug_info)
-                    .expect("Named object");
-            }
-        }
-
         let depth_image_format = vk::Format::D32_SFLOAT;
         let depth_image = {
             let depth_image_create_info = vk::ImageCreateInfo::builder()
@@ -400,26 +380,6 @@ impl GraphicsDevice {
                 .create_image(&depth_image_create_info, resource::ImageAspectType::Depth)
         };
 
-        {
-            let object_name = CString::new("Depth Image").unwrap();
-            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(ObjectType::IMAGE)
-                .object_handle(
-                    resource_manager
-                        .get_image(depth_image)
-                        .unwrap()
-                        .image()
-                        .as_raw(),
-                )
-                .object_name(object_name.as_ref());
-
-            unsafe {
-                debug_utils_loader
-                    .set_debug_utils_object_name(device.handle(), &pipeline_debug_info)
-                    .expect("Named object");
-            }
-        }
-
         let default_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::NEAREST)
@@ -440,7 +400,7 @@ impl GraphicsDevice {
 
         info!("Device created");
 
-        Ok(Self {
+        let mut device = Self {
             instance,
             size,
             surface,
@@ -470,7 +430,29 @@ impl GraphicsDevice {
             default_sampler,
             frame_number: 0usize,
             images_to_upload: Vec::default(),
-        })
+        };
+
+        // Set debug names
+
+        {
+            let render_image_handle = device
+                .resource_manager
+                .get_image(render_image)
+                .unwrap()
+                .image()
+                .as_raw();
+            device.set_vulkan_debug_name(render_image_handle, ObjectType::IMAGE, "Render Image")?;
+
+            let depth_image_handle = device
+                .resource_manager
+                .get_image(device.depth_image)
+                .unwrap()
+                .image()
+                .as_raw();
+            device.set_vulkan_debug_name(depth_image_handle, ObjectType::IMAGE, "Depth Image")?;
+        }
+
+        Ok(device)
     }
 
     pub fn frame_number(&self) -> usize {
@@ -903,6 +885,25 @@ impl GraphicsDevice {
                 vk::CommandPoolResetFlags::RELEASE_RESOURCES,
             )
         }?;
+        Ok(())
+    }
+
+    pub fn set_vulkan_debug_name(
+        &self,
+        object_handle: u64,
+        object_type: ObjectType,
+        debug_name: &str,
+    ) -> Result<()> {
+        let object_name = CString::new(debug_name).unwrap();
+        let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
+            .object_type(object_type)
+            .object_handle(object_handle)
+            .object_name(object_name.as_ref());
+
+        unsafe {
+            self.debug_utils_loader
+                .set_debug_utils_object_name(self.vk_device.handle(), &pipeline_debug_info)?;
+        }
         Ok(())
     }
 }

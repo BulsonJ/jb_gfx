@@ -260,18 +260,11 @@ impl Renderer {
         };
 
         for set in descriptor_set.iter() {
-            let object_name = CString::new("Global Descriptor Set(1)")?;
-            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(ObjectType::DESCRIPTOR_SET)
-                .object_handle(set.as_raw())
-                .object_name(object_name.as_ref());
-
-            unsafe {
-                device
-                    .debug_utils_loader
-                    .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
-                    .expect("Named object");
-            }
+            device.set_vulkan_debug_name(
+                set.as_raw(),
+                ObjectType::DESCRIPTOR_SET,
+                "Global Descriptor Set(1)",
+            )?;
         }
 
         for (i, set) in descriptor_set.iter().enumerate() {
@@ -359,18 +352,11 @@ impl Renderer {
         };
 
         for set in bindless_descriptor_set.iter() {
-            let object_name = CString::new("Bindless Descriptor Set(0)")?;
-            let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(ObjectType::DESCRIPTOR_SET)
-                .object_handle(set.as_raw())
-                .object_name(object_name.as_ref());
-
-            unsafe {
-                device
-                    .debug_utils_loader
-                    .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)
-                    .expect("Named object");
-            }
+            device.set_vulkan_debug_name(
+                set.as_raw(),
+                ObjectType::DESCRIPTOR_SET,
+                "Bindless Descriptor Set(0)",
+            )?;
         }
 
         let bindless_textures = Vec::new();
@@ -946,26 +932,17 @@ impl Renderer {
 
         // Debug name image
         {
-            let object_name =
-                CString::new("Image:".to_string() + file_location.rsplit_once('/').unwrap().1)?;
-            let debug_info = DebugUtilsObjectNameInfoEXT::builder()
-                .object_type(ObjectType::IMAGE)
-                .object_handle(
-                    self.device
-                        .resource_manager
-                        .get_image(image)
-                        .unwrap()
-                        .image()
-                        .as_raw(),
-                )
-                .object_name(object_name.as_ref());
-
-            unsafe {
-                self.device
-                    .debug_utils_loader
-                    .set_debug_utils_object_name(self.device.vk_device.handle(), &debug_info)
-                    .expect("Named object");
-            }
+            let image_name =
+                String::from("Image:".to_string() + file_location.rsplit_once('/').unwrap().1);
+            let image_handle = self
+                .device
+                .resource_manager
+                .get_image(image)
+                .unwrap()
+                .image()
+                .as_raw();
+            self.device
+                .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &image_name)?;
         }
 
         Ok(texture)

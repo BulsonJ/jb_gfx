@@ -11,11 +11,7 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn load_gltf(
-        &mut self,
-        renderer: &mut Renderer,
-        file: &str,
-    ) -> anyhow::Result<Vec<Model>> {
+    pub fn load_gltf(&mut self, renderer: &mut Renderer, file: &str) -> anyhow::Result<Vec<Model>> {
         let mut models = Vec::new();
 
         let (gltf, buffers, _) = gltf::import(file)?;
