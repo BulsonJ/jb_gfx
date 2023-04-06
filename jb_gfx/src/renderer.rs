@@ -19,7 +19,7 @@ use crate::device::{cmd_copy_buffer, GraphicsDevice, FRAMES_IN_FLIGHT};
 use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
-use crate::{Camera, Colour, Mesh, Vertex};
+use crate::{Camera, Colour, MeshData, Vertex};
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -971,7 +971,7 @@ impl Renderer {
         Ok(texture)
     }
 
-    pub fn load_mesh(&mut self, mesh: &Mesh) -> Result<MeshHandle> {
+    pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
         let vertex_buffer = {
             let staging_buffer_create_info = vk::BufferCreateInfo {
                 size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,

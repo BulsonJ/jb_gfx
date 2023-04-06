@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gltf::image::Source;
 
 use crate::renderer::{MaterialInstance, MeshHandle, Renderer, Texture};
-use crate::{Mesh, Vertex};
+use crate::{MeshData, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -162,7 +162,7 @@ impl AssetManager {
                     }
                 };
 
-                let mesh = Mesh { vertices, indices };
+                let mesh = MeshData { vertices, indices };
 
                 let mesh_handle = renderer.load_mesh(&mesh)?;
                 let model = Model {

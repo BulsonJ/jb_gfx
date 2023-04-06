@@ -11,13 +11,13 @@ pub struct Vertex {
     pub color: [f32; 3],
 }
 
-pub struct Mesh {
+pub struct MeshData {
     pub vertices: Vec<Vertex>,
     pub indices: Option<Vec<u32>>,
 }
 
-impl Mesh {
-    pub fn from_file(file: &str) -> Mesh {
+impl MeshData {
+    pub fn from_file(file: &str) -> MeshData {
         let path = Path::new(file);
         let object = Obj::load(path).unwrap();
 
@@ -61,12 +61,12 @@ impl Mesh {
         }
 
         if indices.len() == indexed_vertices.len() {
-            Mesh {
+            MeshData {
                 vertices,
                 indices: None,
             }
         } else {
-            Mesh {
+            MeshData {
                 vertices: indexed_vertices,
                 indices: Some(indices),
             }
