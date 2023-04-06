@@ -618,7 +618,7 @@ impl Renderer {
 
         for model in self.render_models.values() {
             let diffuse_tex = {
-                if let Some(tex) = model.textures.diffuse {
+                if let Some(tex) = model.material_instance.diffuse_texture {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
                 } else {
                     0usize
@@ -626,7 +626,7 @@ impl Renderer {
             };
 
             let normal_tex = {
-                if let Some(tex) = model.textures.normal {
+                if let Some(tex) = model.material_instance.normal_texture {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
                 } else {
                     0usize
@@ -634,7 +634,7 @@ impl Renderer {
             };
 
             let metallic_roughness_tex = {
-                if let Some(tex) = model.textures.metallic_roughness {
+                if let Some(tex) = model.material_instance.metallic_roughness_texture {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
                 } else {
                     0usize
@@ -642,7 +642,7 @@ impl Renderer {
             };
 
             let emissive_tex = {
-                if let Some(tex) = model.textures.emissive {
+                if let Some(tex) = model.material_instance.emissive_texture {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
                 } else {
                     0usize
@@ -650,7 +650,7 @@ impl Renderer {
             };
 
             let occlusion_tex = {
-                if let Some(tex) = model.textures.occlusion_tex {
+                if let Some(tex) = model.material_instance.occlusion_texture {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
                 } else {
                     0usize
@@ -1120,11 +1120,11 @@ impl Renderer {
     pub fn add_render_model(
         &mut self,
         handle: MeshHandle,
-        textures: MaterialTextures,
+        textures: MaterialInstance,
     ) -> RenderModelHandle {
         self.render_models.insert(RenderModel {
             mesh_handle: handle,
-            textures,
+            material_instance: textures,
             transform: from_transforms(
                 Vector3::from_value(0f32),
                 Quaternion::from_axis_angle(Vector3::new(0.0f32, 1.0f32, 0.0f32), Deg(0f32)),
@@ -1336,17 +1336,17 @@ impl From<Texture> for ImageHandle {
 }
 
 #[derive(Clone, Default)]
-pub struct MaterialTextures {
-    pub diffuse: Option<Texture>,
-    pub normal: Option<Texture>,
-    pub metallic_roughness: Option<Texture>,
-    pub emissive: Option<Texture>,
-    pub occlusion_tex: Option<Texture>,
+pub struct MaterialInstance {
+    pub diffuse_texture: Option<Texture>,
+    pub normal_texture: Option<Texture>,
+    pub metallic_roughness_texture: Option<Texture>,
+    pub emissive_texture: Option<Texture>,
+    pub occlusion_texture: Option<Texture>,
 }
 
 struct RenderModel {
     mesh_handle: MeshHandle,
-    textures: MaterialTextures,
+    material_instance: MaterialInstance,
     transform: Matrix4<f32>,
 }
 

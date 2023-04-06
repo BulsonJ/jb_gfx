@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use gltf::image::Source;
 
-use crate::renderer::{MaterialTextures, MeshHandle, Renderer, Texture};
+use crate::renderer::{MaterialInstance, MeshHandle, Renderer, Texture};
 use crate::{Mesh, Vertex};
 
 #[derive(Default)]
@@ -167,12 +167,12 @@ impl AssetManager {
                 let mesh_handle = renderer.load_mesh(&mesh)?;
                 let model = Model {
                     mesh: mesh_handle,
-                    textures: MaterialTextures {
-                        diffuse: diffuse_tex,
-                        emissive: emissive_tex,
-                        normal: normal_tex,
-                        metallic_roughness: metallic_roughness_tex,
-                        occlusion_tex,
+                    material_instance: MaterialInstance {
+                        diffuse_texture: diffuse_tex,
+                        emissive_texture: emissive_tex,
+                        normal_texture: normal_tex,
+                        metallic_roughness_texture: metallic_roughness_tex,
+                        occlusion_texture: occlusion_tex,
                         ..Default::default()
                     },
                 };
@@ -187,5 +187,5 @@ impl AssetManager {
 
 pub struct Model {
     pub mesh: MeshHandle,
-    pub textures: MaterialTextures,
+    pub material_instance: MaterialInstance,
 }

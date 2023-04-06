@@ -25,7 +25,7 @@ fn main() {
             .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
             .unwrap();
         for model in models.iter() {
-            renderer.add_render_model(model.mesh, model.textures.clone());
+            renderer.add_render_model(model.mesh, model.material_instance.clone());
         }
     }
     // Load helmet
@@ -37,7 +37,7 @@ fn main() {
             )
             .unwrap();
         for model in models.iter() {
-            let helmet = renderer.add_render_model(model.mesh, model.textures.clone());
+            let helmet = renderer.add_render_model(model.mesh, model.material_instance.clone());
             renderer
                 .set_render_model_transform(
                     helmet,
