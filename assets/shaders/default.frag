@@ -52,27 +52,21 @@ vec3 getNormalFromMap()
 
 void main()
 {
-	vec3 outColour = inColor;
 	vec4 diffuseTexture = SampleBindlessTexture(pushConstants.textures.r, inTexCoords);
 	if (diffuseTexture.a == 0){
 		discard;
 	}
-	outColour *= diffuseTexture.rgb;
-
-	vec4 normalTexture = SampleBindlessTexture(pushConstants.textures.g, inTexCoords);
+	vec3 normalTexture = SampleBindlessTexture(pushConstants.textures.g, inTexCoords).rgb;
 
 	float metallicFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).b;
 	float roughnessFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).g;
 	float ambientFactor = SampleBindlessTexture(pushConstants.textures.a, inTexCoords).r;
 
-	vec3 albedo     = pow(diffuseTexture.rgb, vec3(2.2));
-	vec3 normal     = getNormalFromMap();
-	float metallic  = metallicFactor;
-	float roughness = roughnessFactor;
-	float ao        = ambientFactor;
+	vec3 emissiveTexture = SampleBindlessTexture(pushConstants.textures_two.r, inTexCoords).rgb;
 
-	vec4 emissiveTexture = SampleBindlessTexture(pushConstants.textures_two.r, inTexCoords);
-	outColour += emissiveTexture.rgb;
+	vec3 outColour = inColor;
+	outColour = diffuseTexture.rgb;
+	outColour += emissiveTexture;
 
 	outFragColor = vec4(outColour,1.0f);
 }
