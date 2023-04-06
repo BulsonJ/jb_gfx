@@ -21,6 +21,7 @@ use crate::device::{GraphicsDevice, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Camera, Colour, Mesh, Vertex};
+use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants};
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -1221,39 +1222,6 @@ struct RenderMesh {
     vertex_count: u32,
 }
 
-/// The Camera Matrix that is given to the GPU.
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    proj: [[f32; 4]; 4],
-    view: [[f32; 4]; 4],
-    position: [f32; 4],
-}
-
-impl CameraUniform {
-    fn new() -> Self {
-        Self {
-            proj: Matrix4::identity().into(),
-            view: Matrix4::identity().into(),
-            position: Vector4::zero().into(),
-        }
-    }
-
-    fn update_proj(&mut self, camera: &Camera) {
-        self.proj = camera.build_projection_matrix().into();
-        self.view = camera.build_view_matrix().into();
-        self.position = camera.position.extend(0f32).into();
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct PushConstants {
-    model: [[f32; 4]; 4],
-    normal: [[f32; 4]; 4],
-    textures: [i32; 8],
-}
-
 fn from_transforms(
     position: Vector3<f32>,
     rotation: Quaternion<f32>,
@@ -1307,23 +1275,4 @@ struct RenderModel {
     mesh_handle: MeshHandle,
     material_instance: MaterialInstance,
     transform: Matrix4<f32>,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct LightUniform {
-    pos: [f32; 4],
-    colour: [f32; 4],
-}
-
-impl LightUniform {
-    fn new(position: Vector3<f32>, colour: Vector3<f32>) -> Self {
-        let position = position.extend(0f32);
-        let colour = colour.extend(0f32);
-
-        Self {
-            pos: position.into(),
-            colour: colour.into(),
-        }
-    }
 }

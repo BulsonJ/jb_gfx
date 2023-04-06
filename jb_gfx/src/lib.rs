@@ -10,3 +10,4 @@ pub mod renderer;
 pub mod resource;
 pub mod colour;
 pub mod camera;
+pub mod gpu_structs;
