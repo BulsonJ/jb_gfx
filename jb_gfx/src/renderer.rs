@@ -20,7 +20,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 use crate::device::{GraphicsDevice, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
-use crate::{Mesh, Vertex};
+use crate::{Colour, Mesh, Vertex};
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -391,7 +391,7 @@ impl Renderer {
             bindless_descriptor_set,
             bindless_textures,
             bindless_indexes,
-            clear_colour: Colour::BLACK,
+            clear_colour: Colour::black(),
             pipeline_manager,
             meshes: SlotMap::default(),
             render_models: SlotMap::default(),
@@ -1261,29 +1261,6 @@ impl Camera {
 
     pub fn build_projection_matrix(&self) -> Matrix4<f32> {
         cgmath::perspective(Deg(self.fovy), self.aspect, self.znear, self.zfar)
-    }
-}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum Colour {
-    RED,
-    BLUE,
-    GREEN,
-    WHITE,
-    BLACK,
-    CUSTOM(f32, f32, f32),
-}
-
-impl From<Colour> for Vector3<f32> {
-    fn from(color: Colour) -> Self {
-        Vector3::from(match color {
-            Colour::RED => [1.0f32, 0.0f32, 0.0f32],
-            Colour::BLUE => [0.0f32, 0.0f32, 1.0f32],
-            Colour::GREEN => [0.0f32, 1.0f32, 0.0f32],
-            Colour::WHITE => [1.0f32, 1.0f32, 1.0f32],
-            Colour::BLACK => [0.0f32, 0.0f32, 0.0f32],
-            Colour::CUSTOM(red, green, blue) => [red, green, blue],
-        })
     }
 }
 

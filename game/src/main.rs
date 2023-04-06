@@ -1,12 +1,12 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Colour, Renderer};
-use std::ops::Mul;
+use jb_gfx::renderer::{Renderer};
 use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+use jb_gfx::Colour;
 
 fn main() {
     let event_loop = EventLoop::new();
@@ -56,7 +56,7 @@ fn main() {
                 .unwrap();
         }
     }
-    renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
+    renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
     let mut initial_resize = true;
     let mut frame_start_time = Instant::now();
