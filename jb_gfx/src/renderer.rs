@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem::size_of;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use ash::vk;
 use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle,
@@ -15,7 +15,7 @@ use log::error;
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::device::{GraphicsDevice, FRAMES_IN_FLIGHT};
+use crate::device::{cmd_copy_buffer, GraphicsDevice, FRAMES_IN_FLIGHT};
 use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
@@ -1014,25 +1014,10 @@ impl Renderer {
                 &vertex_buffer_allocation_create_info,
             );
 
-            self.device.upload_context.immediate_submit(
-                &mut self.device.vk_device,
-                &mut self.device.resource_manager,
-                |vk_device, resource_manager, cmd| {
-                    let buffer_copy_info = vk::BufferCopy::builder()
-                        .size((std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64);
-                    unsafe {
-                        vk_device.cmd_copy_buffer(
-                            *cmd,
-                            resource_manager
-                                .get_buffer(staging_buffer)
-                                .unwrap()
-                                .buffer(),
-                            resource_manager.get_buffer(buffer).unwrap().buffer(),
-                            &[*buffer_copy_info],
-                        )
-                    }
-                },
-            )?;
+            self.device.immediate_submit(|device, cmd| {
+                cmd_copy_buffer(device, cmd, staging_buffer, buffer)?;
+                Ok(())
+            })?;
 
             buffer
         };
@@ -1091,24 +1076,10 @@ impl Renderer {
                         &index_buffer_allocation_create_info,
                     );
 
-                    self.device.upload_context.immediate_submit(
-                        &mut self.device.vk_device,
-                        &mut self.device.resource_manager,
-                        |vk_device, resource_manager, cmd| {
-                            let buffer_copy_info = vk::BufferCopy::builder().size(buffer_size);
-                            unsafe {
-                                vk_device.cmd_copy_buffer(
-                                    *cmd,
-                                    resource_manager
-                                        .get_buffer(staging_buffer)
-                                        .unwrap()
-                                        .buffer(),
-                                    resource_manager.get_buffer(buffer).unwrap().buffer(),
-                                    &[*buffer_copy_info],
-                                )
-                            }
-                        },
-                    )?;
+                    self.device.immediate_submit(|device, cmd| {
+                        cmd_copy_buffer(device, cmd, staging_buffer, buffer)?;
+                        Ok(())
+                    })?;
 
                     buffer
                 };

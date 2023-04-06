@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
     ext::DebugUtils,
@@ -862,6 +862,49 @@ impl GraphicsDevice {
 
         Ok(image)
     }
+
+    pub fn immediate_submit<F: Fn(&mut GraphicsDevice, &mut vk::CommandBuffer) -> Result<()>>(
+        &mut self,
+        function: F,
+    ) -> Result<()> {
+        let mut cmd = self.upload_context.command_buffer;
+
+        let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+
+        unsafe { self.vk_device.begin_command_buffer(cmd, &cmd_begin_info) }?;
+
+        function(self, &mut cmd);
+
+        unsafe { self.vk_device.end_command_buffer(cmd) }?;
+
+        let command_buffers = [cmd];
+        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
+
+        let submits = [*submit_info];
+        unsafe {
+            self.vk_device.queue_submit(
+                self.upload_context.queue,
+                &submits,
+                self.upload_context.fence,
+            )
+        }?;
+
+        unsafe {
+            self.vk_device
+                .wait_for_fences(&[self.upload_context.fence], true, u64::MAX)
+        }?;
+
+        unsafe { self.vk_device.reset_fences(&[self.upload_context.fence]) }?;
+
+        unsafe {
+            self.vk_device.reset_command_pool(
+                self.upload_context.command_pool,
+                vk::CommandPoolResetFlags::RELEASE_RESOURCES,
+            )
+        }?;
+        Ok(())
+    }
 }
 
 impl Drop for GraphicsDevice {
@@ -906,53 +949,34 @@ pub struct UploadContext {
     fence: vk::Fence,
     queue: vk::Queue,
 }
-
-impl UploadContext {
-    // TODO: Could remove passing of ResourceManager and force users to get their buffer references etc beforehand
-    pub fn immediate_submit<
-        F: Fn(&mut ash::Device, &mut ResourceManager, &mut vk::CommandBuffer),
-    >(
-        &mut self,
-        vk_device: &mut ash::Device,
-        resource_manager: &mut ResourceManager,
-        function: F,
-    ) -> Result<()> {
-        let mut cmd = self.command_buffer;
-
-        let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-
-        unsafe { vk_device.begin_command_buffer(cmd, &cmd_begin_info) }?;
-
-        function(vk_device, resource_manager, &mut cmd);
-
-        unsafe { vk_device.end_command_buffer(cmd) }?;
-
-        let command_buffers = [cmd];
-        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
-
-        let submits = [*submit_info];
-        unsafe { vk_device.queue_submit(self.queue, &submits, self.fence) }?;
-
-        unsafe { vk_device.wait_for_fences(&[self.fence], true, u64::MAX) }?;
-
-        unsafe { vk_device.reset_fences(&[self.fence]) }?;
-
-        unsafe {
-            vk_device.reset_command_pool(
-                self.command_pool,
-                vk::CommandPoolResetFlags::RELEASE_RESOURCES,
-            )
-        }?;
-        Ok(())
-    }
-}
-
 struct ImageToUpload {
     buffer_handle: BufferHandle,
     image_handle: ImageHandle,
     width: u32,
     height: u32,
+}
+
+pub(crate) fn cmd_copy_buffer(
+    graphics_device: &GraphicsDevice,
+    cmd: &vk::CommandBuffer,
+    src: BufferHandle,
+    target: BufferHandle,
+) -> Result<()> {
+    let src_buffer = graphics_device.resource_manager.get_buffer(src).unwrap();
+    let target_buffer = graphics_device.resource_manager.get_buffer(target).unwrap();
+
+    ensure!(src_buffer.size() == target_buffer.size());
+
+    let buffer_copy_info = vk::BufferCopy::builder().size(src_buffer.size());
+    unsafe {
+        graphics_device.vk_device.cmd_copy_buffer(
+            *cmd,
+            src_buffer.buffer(),
+            target_buffer.buffer(),
+            &[*buffer_copy_info],
+        )
+    }
+    Ok(())
 }
 
 unsafe extern "system" fn vulkan_debug_callback(
