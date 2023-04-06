@@ -1023,7 +1023,10 @@ impl Renderer {
                     unsafe {
                         vk_device.cmd_copy_buffer(
                             *cmd,
-                            resource_manager.get_buffer(staging_buffer).unwrap().buffer(),
+                            resource_manager
+                                .get_buffer(staging_buffer)
+                                .unwrap()
+                                .buffer(),
                             resource_manager.get_buffer(buffer).unwrap().buffer(),
                             &[*buffer_copy_info],
                         )
@@ -1096,7 +1099,10 @@ impl Renderer {
                             unsafe {
                                 vk_device.cmd_copy_buffer(
                                     *cmd,
-                                    resource_manager.get_buffer(staging_buffer).unwrap().buffer(),
+                                    resource_manager
+                                        .get_buffer(staging_buffer)
+                                        .unwrap()
+                                        .buffer(),
                                     resource_manager.get_buffer(buffer).unwrap().buffer(),
                                     &[*buffer_copy_info],
                                 )

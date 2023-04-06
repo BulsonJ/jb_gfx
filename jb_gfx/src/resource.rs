@@ -237,7 +237,7 @@ pub struct Image {
     allocation_info: vk_mem_alloc::AllocationInfo,
 }
 
-impl Image{
+impl Image {
     pub fn image(&self) -> vk::Image {
         self.image
     }
