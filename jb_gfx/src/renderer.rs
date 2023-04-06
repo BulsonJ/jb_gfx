@@ -10,7 +10,7 @@ use ash::vk::{
 };
 use bytemuck::offset_of;
 use cgmath::{
-    Array, Deg, Matrix, Matrix4, Quaternion, Rad, Rotation, Rotation3, SquareMatrix, Vector3,
+    Array, Deg, Matrix, Matrix4, Quaternion , Rotation3, SquareMatrix, Vector3,
     Vector4, Zero,
 };
 use image::EncodableLayout;
@@ -545,8 +545,6 @@ impl Renderer {
             .mapped_slice::<CameraUniform>()
             .unwrap()
             .copy_from_slice(&[self.camera_uniform]);
-
-        let frame_number_float = self.device.frame_number() as f32;
 
         self.device
             .resource_manager

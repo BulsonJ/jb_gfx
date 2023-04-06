@@ -1,5 +1,5 @@
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Colour, MaterialTextures, Renderer};
+use jb_gfx::renderer::{Colour, Renderer};
 use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
