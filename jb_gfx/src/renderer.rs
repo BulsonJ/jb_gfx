@@ -9,19 +9,17 @@ use ash::vk::{
     ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::offset_of;
-use cgmath::{
-    Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
-};
+use cgmath::{Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Zero};
 use image::EncodableLayout;
 use log::error;
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::device::{GraphicsDevice, FRAMES_IN_FLIGHT};
+use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Camera, Colour, Mesh, Vertex};
-use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants};
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.

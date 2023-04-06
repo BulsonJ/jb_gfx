@@ -1,12 +1,12 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Renderer};
+use jb_gfx::renderer::Renderer;
+use jb_gfx::Colour;
 use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
-use jb_gfx::Colour;
 
 fn main() {
     let event_loop = EventLoop::new();
