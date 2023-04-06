@@ -20,7 +20,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 use crate::device::{GraphicsDevice, FRAMES_IN_FLIGHT};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
-use crate::{Colour, Mesh, Vertex};
+use crate::{Camera, Colour, Mesh, Vertex};
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -1243,24 +1243,6 @@ impl CameraUniform {
         self.proj = camera.build_projection_matrix().into();
         self.view = camera.build_view_matrix().into();
         self.position = camera.position.extend(0f32).into();
-    }
-}
-
-pub struct Camera {
-    pub position: Vector3<f32>,
-    pub aspect: f32,
-    pub fovy: f32,
-    pub znear: f32,
-    pub zfar: f32,
-}
-
-impl Camera {
-    pub fn build_view_matrix(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.position)
-    }
-
-    pub fn build_projection_matrix(&self) -> Matrix4<f32> {
-        cgmath::perspective(Deg(self.fovy), self.aspect, self.znear, self.zfar)
     }
 }
 
