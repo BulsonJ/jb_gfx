@@ -34,5 +34,5 @@ void main()
 	outTexCoords = vTexCoords;
 	outNormal = mat3(pushConstants.normal) * vNormal;
 
-	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(worldPos, 1.0f);
+	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(vPosition, 1.0f);
 }

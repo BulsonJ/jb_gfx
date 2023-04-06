@@ -7,3 +7,4 @@ edition = "2021"
 jb_gfx = { path = "../jb_gfx" }
 winit = "0.28.1"
 anyhow = "1.0.70"
+cgmath = "0.18"

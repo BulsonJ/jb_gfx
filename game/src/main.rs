@@ -1,5 +1,7 @@
+use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
 use jb_gfx::asset::AssetManager;
 use jb_gfx::renderer::{Colour, Renderer};
+use std::ops::Mul;
 use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -17,11 +19,42 @@ fn main() {
     let mut renderer = Renderer::new(&window).unwrap();
     renderer.render().unwrap();
     let mut asset_manager = AssetManager::default();
-    let models = asset_manager
-        .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-        .unwrap();
-    for model in models.iter() {
-        renderer.add_render_model(model.mesh, model.textures.clone());
+    // Load sponza
+    {
+        let models = asset_manager
+            .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+            .unwrap();
+        for model in models.iter() {
+            renderer.add_render_model(model.mesh, model.textures.clone());
+        }
+    }
+    // Load helmet
+    {
+        let models = asset_manager
+            .load_model(
+                &mut renderer,
+                "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
+            )
+            .unwrap();
+        for model in models.iter() {
+            let helmet = renderer.add_render_model(model.mesh, model.textures.clone());
+            renderer
+                .set_render_model_transform(
+                    helmet,
+                    from_transforms(
+                        Vector3::new(0f32, 100f32, -4.0f32),
+                        Quaternion::from_axis_angle(
+                            Vector3::new(1f32, 0f32, 0.0f32).normalize(),
+                            Deg(100f32),
+                        ) * Quaternion::from_axis_angle(
+                            Vector3::new(0f32, 0f32, 1.0f32).normalize(),
+                            Deg(20f32),
+                        ),
+                        Vector3::from_value(2f32),
+                    ),
+                )
+                .unwrap();
+        }
     }
     renderer.clear_colour = Colour::CUSTOM(0.0, 0.1, 0.3);
 
@@ -67,4 +100,16 @@ fn main() {
             _ => {}
         };
     });
+}
+
+fn from_transforms(
+    position: Vector3<f32>,
+    rotation: Quaternion<f32>,
+    size: Vector3<f32>,
+) -> Matrix4<f32> {
+    let translation = Matrix4::from_translation(position);
+    let rotation = Matrix4::from(rotation);
+    let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
+
+    translation * rotation * scale
 }

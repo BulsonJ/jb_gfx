@@ -541,7 +541,12 @@ impl GraphicsDevice {
                     .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
                     .old_layout(vk::ImageLayout::UNDEFINED)
                     .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .image(self.resource_manager.get_image(image.image_handle).unwrap().image)
+                    .image(
+                        self.resource_manager
+                            .get_image(image.image_handle)
+                            .unwrap()
+                            .image,
+                    )
                     .subresource_range(*range);
 
                 let image_memory_barriers = [*image_barrier_transfer_to];
@@ -549,7 +554,10 @@ impl GraphicsDevice {
                     vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
 
                 unsafe {
-                    self.vk_device.cmd_pipeline_barrier2(self.graphics_command_buffer[self.buffered_resource_number()], &image_dependency_info);
+                    self.vk_device.cmd_pipeline_barrier2(
+                        self.graphics_command_buffer[self.buffered_resource_number()],
+                        &image_dependency_info,
+                    );
                 }
             }
 
@@ -572,8 +580,14 @@ impl GraphicsDevice {
             unsafe {
                 self.vk_device.cmd_copy_buffer_to_image(
                     self.graphics_command_buffer[self.buffered_resource_number()],
-                    self.resource_manager.get_buffer(image.buffer_handle).unwrap().buffer,
-                    self.resource_manager.get_image(image.image_handle).unwrap().image,
+                    self.resource_manager
+                        .get_buffer(image.buffer_handle)
+                        .unwrap()
+                        .buffer,
+                    self.resource_manager
+                        .get_image(image.image_handle)
+                        .unwrap()
+                        .image,
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &[*copy_region],
                 );
@@ -587,7 +601,12 @@ impl GraphicsDevice {
                     .dst_access_mask(vk::AccessFlags2::SHADER_READ)
                     .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(self.resource_manager.get_image(image.image_handle).unwrap().image)
+                    .image(
+                        self.resource_manager
+                            .get_image(image.image_handle)
+                            .unwrap()
+                            .image,
+                    )
                     .subresource_range(*range);
 
                 let image_memory_barriers = [*image_barrier_transfer];
@@ -595,7 +614,10 @@ impl GraphicsDevice {
                     vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
 
                 unsafe {
-                    self.vk_device.cmd_pipeline_barrier2(self.graphics_command_buffer[self.buffered_resource_number()], &image_dependency_info);
+                    self.vk_device.cmd_pipeline_barrier2(
+                        self.graphics_command_buffer[self.buffered_resource_number()],
+                        &image_dependency_info,
+                    );
                 }
             }
         }
@@ -834,8 +856,8 @@ impl GraphicsDevice {
         self.images_to_upload.push(ImageToUpload {
             buffer_handle: staging_buffer,
             image_handle: image,
-            width : img_width,
-            height : img_height,
+            width: img_width,
+            height: img_height,
         });
 
         Ok(image)

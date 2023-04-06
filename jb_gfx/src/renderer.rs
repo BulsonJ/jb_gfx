@@ -10,8 +10,7 @@ use ash::vk::{
 };
 use bytemuck::offset_of;
 use cgmath::{
-    Array, Deg, Matrix, Matrix4, Quaternion , Rotation3, SquareMatrix, Vector3,
-    Vector4, Zero,
+    Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
 use image::EncodableLayout;
 use log::error;
@@ -301,9 +300,7 @@ impl Renderer {
                         .unwrap()
                         .buffer,
                 )
-                .range(
-                    size_of::<CameraUniform>() as DeviceSize
-                );
+                .range(size_of::<CameraUniform>() as DeviceSize);
 
             let light_buffer_write = vk::DescriptorBufferInfo::builder()
                 .buffer(
@@ -1142,7 +1139,8 @@ impl Renderer {
         transform: Matrix4<f32>,
     ) -> Result<()> {
         if let Some(model) = self.render_models.get_mut(handle) {
-            Ok(model.transform = transform)
+            model.transform = transform;
+            Ok(())
         } else {
             Err(anyhow!("Unable to find Render Model!"))
         }
