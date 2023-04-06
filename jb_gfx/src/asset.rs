@@ -11,7 +11,7 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn load_model(
+    pub fn load_gltf(
         &mut self,
         renderer: &mut Renderer,
         file: &str,

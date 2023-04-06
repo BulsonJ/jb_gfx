@@ -22,7 +22,7 @@ fn main() {
     // Load sponza
     {
         let models = asset_manager
-            .load_model(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+            .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
             .unwrap();
         for model in models.iter() {
             renderer.add_render_model(model.mesh, model.material_instance.clone());
@@ -31,7 +31,7 @@ fn main() {
     // Load helmet
     {
         let models = asset_manager
-            .load_model(
+            .load_gltf(
                 &mut renderer,
                 "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
             )
