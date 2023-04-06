@@ -364,7 +364,7 @@ impl GraphicsDevice {
                     resource_manager
                         .get_image(render_image)
                         .unwrap()
-                        .image
+                        .image()
                         .as_raw(),
                 )
                 .object_name(object_name.as_ref());
@@ -408,7 +408,7 @@ impl GraphicsDevice {
                     resource_manager
                         .get_image(depth_image)
                         .unwrap()
-                        .image
+                        .image()
                         .as_raw(),
                 )
                 .object_name(object_name.as_ref());
@@ -545,7 +545,7 @@ impl GraphicsDevice {
                         self.resource_manager
                             .get_image(image.image_handle)
                             .unwrap()
-                            .image,
+                            .image(),
                     )
                     .subresource_range(*range);
 
@@ -583,11 +583,11 @@ impl GraphicsDevice {
                     self.resource_manager
                         .get_buffer(image.buffer_handle)
                         .unwrap()
-                        .buffer,
+                        .buffer(),
                     self.resource_manager
                         .get_image(image.image_handle)
                         .unwrap()
-                        .image,
+                        .image(),
                     vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     &[*copy_region],
                 );
@@ -605,7 +605,7 @@ impl GraphicsDevice {
                         self.resource_manager
                             .get_image(image.image_handle)
                             .unwrap()
-                            .image,
+                            .image(),
                     )
                     .subresource_range(*range);
 

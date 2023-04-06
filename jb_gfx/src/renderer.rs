@@ -297,7 +297,7 @@ impl Renderer {
                         .resource_manager
                         .get_buffer(*camera_buffer)
                         .unwrap()
-                        .buffer,
+                        .buffer(),
                 )
                 .range(size_of::<CameraUniform>() as DeviceSize);
 
@@ -307,14 +307,14 @@ impl Renderer {
                         .resource_manager
                         .get_buffer(*light_buffer)
                         .unwrap()
-                        .buffer,
+                        .buffer(),
                 )
                 .range(
                     device
                         .resource_manager
                         .get_buffer(*light_buffer)
                         .unwrap()
-                        .size,
+                        .size(),
                 );
 
             let desc_set_writes = [
@@ -484,7 +484,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(self.device.render_image)
                     .unwrap()
-                    .image,
+                    .image(),
             )
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: ImageAspectFlags::COLOR,
@@ -506,7 +506,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(self.device.depth_image)
                     .unwrap()
-                    .image,
+                    .image(),
             )
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: ImageAspectFlags::DEPTH,
@@ -558,7 +558,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(self.device.render_image)
                     .unwrap()
-                    .default_view,
+                    .image_view(),
             )
             .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
             .load_op(vk::AttachmentLoadOp::CLEAR)
@@ -571,7 +571,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(self.device.depth_image)
                     .unwrap()
-                    .default_view,
+                    .image_view(),
             )
             .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
             .load_op(vk::AttachmentLoadOp::CLEAR)
@@ -689,13 +689,13 @@ impl Renderer {
                     .resource_manager
                     .get_buffer(display_mesh.vertex_buffer)
                     .unwrap()
-                    .buffer;
+                    .buffer();
                 let index_buffer = self
                     .device
                     .resource_manager
                     .get_buffer(display_mesh.index_buffer.unwrap())
                     .unwrap()
-                    .buffer;
+                    .buffer();
 
                 unsafe {
                     self.device.vk_device.cmd_bind_vertex_buffers(
@@ -742,7 +742,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(self.device.render_image)
                     .unwrap()
-                    .image,
+                    .image(),
             )
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: ImageAspectFlags::COLOR,
@@ -801,7 +801,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(self.device.render_image)
                     .unwrap()
-                    .image,
+                    .image(),
                 ImageLayout::TRANSFER_SRC_OPTIMAL,
                 self.device.present_images[present_index as usize],
                 ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -914,7 +914,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(image)
                     .unwrap()
-                    .default_view,
+                    .image_view(),
             )
             .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL);
 
@@ -955,7 +955,7 @@ impl Renderer {
                         .resource_manager
                         .get_image(image)
                         .unwrap()
-                        .image
+                        .image()
                         .as_raw(),
                 )
                 .object_name(object_name.as_ref());
@@ -1023,8 +1023,8 @@ impl Renderer {
                     unsafe {
                         vk_device.cmd_copy_buffer(
                             *cmd,
-                            resource_manager.get_buffer(staging_buffer).unwrap().buffer,
-                            resource_manager.get_buffer(buffer).unwrap().buffer,
+                            resource_manager.get_buffer(staging_buffer).unwrap().buffer(),
+                            resource_manager.get_buffer(buffer).unwrap().buffer(),
                             &[*buffer_copy_info],
                         )
                     }
@@ -1096,8 +1096,8 @@ impl Renderer {
                             unsafe {
                                 vk_device.cmd_copy_buffer(
                                     *cmd,
-                                    resource_manager.get_buffer(staging_buffer).unwrap().buffer,
-                                    resource_manager.get_buffer(buffer).unwrap().buffer,
+                                    resource_manager.get_buffer(staging_buffer).unwrap().buffer(),
+                                    resource_manager.get_buffer(buffer).unwrap().buffer(),
                                     &[*buffer_copy_info],
                                 )
                             }

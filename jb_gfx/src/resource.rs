@@ -140,7 +140,7 @@ impl ResourceManager {
         };
 
         let image = Image {
-            default_view,
+            image_view: default_view,
             image: vk_image,
             allocation,
             allocation_info,
@@ -161,7 +161,7 @@ impl ResourceManager {
     pub fn destroy_image(&mut self, handle: ImageHandle) {
         let image = self.images.remove(handle).unwrap();
         unsafe {
-            self.device.destroy_image_view(image.default_view, None);
+            self.device.destroy_image_view(image.image_view, None);
             vk_mem_alloc::destroy_image(self.allocator, image.image, image.allocation)
         };
     }
@@ -171,7 +171,7 @@ impl ResourceManager {
                 vk_mem_alloc::destroy_buffer(self.allocator, buffer.1.buffer, buffer.1.allocation);
             }
             for image in self.images.iter_mut() {
-                self.device.destroy_image_view(image.1.default_view, None);
+                self.device.destroy_image_view(image.1.image_view, None);
                 vk_mem_alloc::destroy_image(self.allocator, image.1.image, image.1.allocation);
             }
 
@@ -196,13 +196,21 @@ impl From<ImageAspectType> for vk::ImageAspectFlags {
 
 /// A buffer and it's memory allocation.
 pub struct Buffer {
-    pub buffer: vk::Buffer,
-    pub size: vk::DeviceSize,
+    buffer: vk::Buffer,
+    size: vk::DeviceSize,
     allocation: vk_mem_alloc::Allocation,
     allocation_info: vk_mem_alloc::AllocationInfo,
 }
 
 impl Buffer {
+    pub fn buffer(&self) -> vk::Buffer {
+        self.buffer
+    }
+
+    pub fn size(&self) -> vk::DeviceSize {
+        self.size
+    }
+
     /// Obtain a slice to the mapped memory of this buffer.
     /// # Errors
     /// Fails if this buffer is not mappable (not `HOST_VISIBLE`).
@@ -223,10 +231,20 @@ impl Buffer {
 
 /// A image and it's memory allocation.
 pub struct Image {
-    pub image: vk::Image,
-    pub default_view: vk::ImageView,
-    pub allocation: vk_mem_alloc::Allocation,
-    pub allocation_info: vk_mem_alloc::AllocationInfo,
+    image: vk::Image,
+    image_view: vk::ImageView,
+    allocation: vk_mem_alloc::Allocation,
+    allocation_info: vk_mem_alloc::AllocationInfo,
+}
+
+impl Image{
+    pub fn image(&self) -> vk::Image {
+        self.image
+    }
+
+    pub fn image_view(&self) -> vk::ImageView {
+        self.image_view
+    }
 }
 
 new_key_type! {
