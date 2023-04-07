@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::mem::size_of;
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{anyhow, Result};
 use ash::vk;
 use ash::vk::{
-    AccessFlags2, ClearDepthStencilValue, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle,
-    ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
+    AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageAspectFlags, ImageLayout,
+    IndexType, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::{offset_of, Zeroable};
 use cgmath::{Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Zero};
@@ -16,7 +15,7 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::device::{cmd_copy_buffer, GraphicsDevice, FRAMES_IN_FLIGHT};
-use crate::gpu_structs::{CameraUniform, LightUniform, TransformSSBO, PushConstants};
+use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants, TransformSSBO};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Camera, Colour, MeshData, Vertex};
@@ -329,7 +328,10 @@ impl Renderer {
                 .range(size_of::<CameraUniform>() as DeviceSize);
 
             let transform_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(*transform_buffer).unwrap();
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(*transform_buffer)
+                    .unwrap();
 
                 vk::DescriptorBufferInfo::builder()
                     .buffer(buffer.buffer())
