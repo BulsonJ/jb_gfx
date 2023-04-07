@@ -8,7 +8,7 @@ use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle,
     ImageAspectFlags, ImageLayout, IndexType, ObjectType, PipelineStageFlags2,
 };
-use bytemuck::offset_of;
+use bytemuck::{offset_of, Zeroable};
 use cgmath::{Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Zero};
 use image::EncodableLayout;
 use log::error;
@@ -16,10 +16,12 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::device::{cmd_copy_buffer, GraphicsDevice, FRAMES_IN_FLIGHT};
-use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants};
+use crate::gpu_structs::{CameraUniform, LightUniform, TransformSSBO, PushConstants};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Camera, Colour, MeshData, Vertex};
+
+const MAX_OBJECTS: u64 = 1000u64;
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -43,6 +45,7 @@ pub struct Renderer {
     render_models: SlotMap<RenderModelHandle, RenderModel>,
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     lights: [LightUniform; 4],
+    transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
 }
 
 impl Renderer {
@@ -95,6 +98,11 @@ impl Renderer {
             *vk::DescriptorSetLayoutBinding::builder()
                 .binding(1u32)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .descriptor_count(1u32)
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(2u32)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1u32)
                 .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
         ];
@@ -200,6 +208,30 @@ impl Renderer {
             ]
         };
 
+        let transform_buffer = {
+            let buffer_create_info = vk::BufferCreateInfo {
+                size: size_of::<TransformSSBO>() as u64 * MAX_OBJECTS,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                ..Default::default()
+            };
+
+            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
+                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
+                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
+                usage: vk_mem_alloc::MemoryUsage::AUTO,
+                ..Default::default()
+            };
+
+            [
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+            ]
+        };
+
         let light_buffer = {
             let buffer_create_info = vk::BufferCreateInfo {
                 size: size_of::<LightUniform>() as u64 * 4,
@@ -269,6 +301,9 @@ impl Renderer {
 
         for (i, set) in descriptor_set.iter().enumerate() {
             let camera_buffer = camera_buffer.get(i).unwrap();
+            let light_buffer = light_buffer.get(i).unwrap();
+            let transform_buffer = transform_buffer.get(i).unwrap();
+
             device
                 .resource_manager
                 .get_buffer_mut(*camera_buffer)
@@ -276,7 +311,6 @@ impl Renderer {
                 .mapped_slice::<CameraUniform>()?
                 .copy_from_slice(&[camera_uniform]);
 
-            let light_buffer = light_buffer.get(i).unwrap();
             device
                 .resource_manager
                 .get_buffer_mut(*light_buffer)
@@ -294,21 +328,21 @@ impl Renderer {
                 )
                 .range(size_of::<CameraUniform>() as DeviceSize);
 
-            let light_buffer_write = vk::DescriptorBufferInfo::builder()
-                .buffer(
-                    device
-                        .resource_manager
-                        .get_buffer(*light_buffer)
-                        .unwrap()
-                        .buffer(),
-                )
-                .range(
-                    device
-                        .resource_manager
-                        .get_buffer(*light_buffer)
-                        .unwrap()
-                        .size(),
-                );
+            let transform_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(*transform_buffer).unwrap();
+
+                vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())
+            };
+
+            let light_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(*light_buffer).unwrap();
+
+                vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())
+            };
 
             let desc_set_writes = [
                 *vk::WriteDescriptorSet::builder()
@@ -321,6 +355,11 @@ impl Renderer {
                     .dst_binding(1)
                     .dst_set(*set)
                     .buffer_info(&[*light_buffer_write]),
+                *vk::WriteDescriptorSet::builder()
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .dst_binding(2)
+                    .dst_set(*set)
+                    .buffer_info(&[*transform_buffer_write]),
             ];
 
             unsafe {
@@ -382,6 +421,7 @@ impl Renderer {
             render_models: SlotMap::default(),
             light_buffer,
             lights,
+            transform_buffer,
         })
     }
 
@@ -536,6 +576,25 @@ impl Renderer {
             .unwrap()
             .copy_from_slice(&self.lights);
 
+        // Copy objects model matrix
+
+        let mut transform_matrices = Vec::new();
+        for model in self.render_models.values() {
+            let transform = TransformSSBO {
+                model: model.transform.into(),
+                normal: model.transform.invert().unwrap().transpose().into(),
+            };
+            transform_matrices.push(transform);
+        }
+        transform_matrices.resize(MAX_OBJECTS as usize, TransformSSBO::zeroed());
+
+        self.device
+            .resource_manager
+            .get_buffer_mut(self.transform_buffer[self.device.buffered_resource_number()])
+            .unwrap()
+            .mapped_slice::<TransformSSBO>()?
+            .copy_from_slice(&transform_matrices);
+
         // Start dynamic rendering
 
         let color_attach_info = vk::RenderingAttachmentInfo::builder()
@@ -601,7 +660,7 @@ impl Renderer {
             );
         };
 
-        for model in self.render_models.values() {
+        for (i, model) in self.render_models.values().enumerate() {
             let diffuse_tex = {
                 if let Some(tex) = model.material_instance.diffuse_texture {
                     *self.bindless_indexes.get(&tex.image_handle).unwrap()
@@ -646,8 +705,7 @@ impl Renderer {
             let normal_matrix = model_matrix.invert().unwrap().transpose();
 
             let push_constants = PushConstants {
-                model: model_matrix.into(),
-                normal: normal_matrix.into(),
+                handles: [i as i32, 0, 0, 0],
                 textures: [
                     diffuse_tex as i32,
                     normal_tex as i32,

@@ -5,9 +5,15 @@ use crate::Camera;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct PushConstants {
+    pub handles: [i32; 4],
+    pub textures: [i32; 8],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct TransformSSBO {
     pub model: [[f32; 4]; 4],
     pub normal: [[f32; 4]; 4],
-    pub textures: [i32; 8],
 }
 
 /// The Camera Matrix that is given to the GPU.

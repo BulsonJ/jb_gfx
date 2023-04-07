@@ -27,8 +27,7 @@ layout(std140,set = 1, binding = 1) uniform LightBuffer{
 
 layout( push_constant ) uniform constants
 {
-	mat4 model;
-	mat4 normal;
+	ivec4 handles;
 	ivec4 textures;
 	ivec4 textures_two;
 } pushConstants;

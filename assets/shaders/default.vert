@@ -18,21 +18,31 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	vec4 cameraPos;
 } cameraData;
 
-layout( push_constant ) uniform constants
-{
+struct ModelMatrix{
 	mat4 model;
 	mat4 normal;
+};
+
+layout(std140,set = 1, binding = 2) readonly buffer ModelBuffer{
+	ModelMatrix models[];
+} modelData;
+
+layout( push_constant ) uniform constants
+{
+	ivec4 handles;
 	ivec4 textures;
 	ivec4 textures_two;
 } pushConstants;
 
 void main()
 {
-	vec3 worldPos = vec3(pushConstants.model * vec4(vPosition, 1.0f));
+	mat4 modelMatrix = modelData.models[pushConstants.handles.x].model;
+	mat4 normalMatrix = modelData.models[pushConstants.handles.x].normal;
+	vec3 worldPos = vec3(modelMatrix * vec4(vPosition, 1.0f));
 	outWorldPos = worldPos;
 	outColor = vColor;
 	outTexCoords = vTexCoords;
-	outNormal = mat3(pushConstants.normal) * vNormal;
+	outNormal = mat3(normalMatrix) * vNormal;
 
-	gl_Position = cameraData.proj * cameraData.view * pushConstants.model * vec4(vPosition, 1.0f);
+	gl_Position = cameraData.proj * cameraData.view * modelMatrix * vec4(vPosition, 1.0f);
 }
