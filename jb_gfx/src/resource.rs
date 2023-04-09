@@ -215,16 +215,17 @@ impl Buffer {
         !self.allocation_info.mapped_data.is_null()
     }
 
-    pub fn view<T>(&self) -> BufferView<T> {
+    pub fn view<T>(&mut self) -> BufferView<T> {
+        let size = self.size;
         BufferView {
             buffer: self,
             offset: 0,
-            size: self.size,
+            size,
             data_type: std::marker::PhantomData::default(),
         }
     }
 
-    pub fn view_custom<T>(&self, offset: usize, count: usize) -> Result<BufferView<T>> {
+    pub fn view_custom<T>(&mut self, offset: usize, count: usize) -> Result<BufferView<T>> {
         let type_size = std::mem::size_of::<T>();
         let offset = offset * type_size;
         let size = count * type_size;
@@ -252,7 +253,7 @@ impl Buffer {
 }
 
 pub struct BufferView<'a, T> {
-    buffer: &'a Buffer,
+    buffer: &'a mut Buffer,
     offset: vk::DeviceSize,
     size: vk::DeviceSize,
     data_type: std::marker::PhantomData<T>,
