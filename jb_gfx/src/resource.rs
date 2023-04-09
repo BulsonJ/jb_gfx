@@ -1,6 +1,5 @@
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
-use ash::vk::DeviceSize;
 use log::info;
 use slotmap::{self, new_key_type, SlotMap};
 
@@ -227,26 +226,26 @@ impl Buffer {
 
     pub fn view_custom<T>(&self, offset: usize, count: usize) -> Result<BufferView<T>> {
         let type_size = std::mem::size_of::<T>();
-        let start = offset * type_size;
+        let offset = offset * type_size;
         let size = count * type_size;
 
         ensure!(
             size <= self.size as usize,
-            anyhow!("Size of View exceeded size of buffer!")
+            anyhow!("Size of View[{}] exceeded size of buffer[{}]!", size, self.size)
         );
         ensure!(
-            start <= self.size as usize,
-            anyhow!("Offset of View exceeded size of buffer!")
+            offset <= self.size as usize,
+            anyhow!("Offset of View[{}] exceeded size of buffer[{}]!", offset, self.size)
         );
         ensure!(
-            start + size <= self.size as usize,
-            anyhow!("BufferView would go past end of buffer!")
+            offset + size <= self.size as usize,
+            anyhow!("BufferView[{} + {}] would go past end of buffer[{}]!", offset, size, self.size)
         );
 
         Ok(BufferView {
             buffer: self,
-            offset: start as DeviceSize,
-            size: size as DeviceSize,
+            offset: offset as vk::DeviceSize,
+            size: size as vk::DeviceSize,
             data_type: std::marker::PhantomData::default(),
         })
     }
