@@ -815,7 +815,7 @@ impl GraphicsDevice {
             .get_buffer_mut(staging_buffer)
             .unwrap()
             .view()
-            .mapped_slice::<u8>()?
+            .mapped_slice()?
             .copy_from_slice(img_bytes);
 
         let image_create_info = vk::ImageCreateInfo::builder()

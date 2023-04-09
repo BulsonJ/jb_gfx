@@ -216,7 +216,7 @@ impl Buffer {
         !self.allocation_info.mapped_data.is_null()
     }
 
-    pub fn view_custom<T>(&self, offset: usize, count: usize) -> BufferView {
+    pub fn view_custom<T>(&self, offset: usize, count: usize) -> BufferView<T> {
         let type_size = std::mem::size_of::<T>();
         let start = offset * type_size;
         let size = count * type_size;
@@ -225,25 +225,28 @@ impl Buffer {
             buffer: self,
             offset: start as DeviceSize,
             size: size as DeviceSize,
+            data_type: std::marker::PhantomData::default(),
         }
     }
 
-    pub fn view(&self) -> BufferView {
+    pub fn view<T>(&self) -> BufferView<T> {
         BufferView {
             buffer: self,
             offset: 0,
             size: self.size,
+            data_type: std::marker::PhantomData::default(),
         }
     }
 }
 
-pub struct BufferView<'a> {
+pub struct BufferView<'a, T> {
     buffer: &'a Buffer,
     offset: vk::DeviceSize,
     size: vk::DeviceSize,
+    data_type: std::marker::PhantomData<T>,
 }
 
-impl<'a> BufferView<'a> {
+impl<'a, T> BufferView<'a, T> {
     pub fn buffer(&self) -> vk::Buffer {
         self.buffer.buffer
     }
@@ -255,7 +258,7 @@ impl<'a> BufferView<'a> {
     /// Obtain a slice to the mapped memory of this buffer.
     /// # Errors
     /// Fails if this buffer is not mappable (not `HOST_VISIBLE`).
-    pub fn mapped_slice<T>(&mut self) -> Result<&mut [T]> {
+    pub fn mapped_slice(&mut self) -> Result<&mut [T]> {
         ensure!(self.buffer.is_mapped(), anyhow!("Not mapped!"));
 
         let pointer = self.buffer.allocation_info.mapped_data;

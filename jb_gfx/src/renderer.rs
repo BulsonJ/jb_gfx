@@ -341,7 +341,7 @@ impl Renderer {
                 .get_buffer_mut(*camera_buffer)
                 .unwrap()
                 .view()
-                .mapped_slice::<CameraUniform>()?
+                .mapped_slice()?
                 .copy_from_slice(&[camera_uniform]);
 
             device
@@ -349,7 +349,7 @@ impl Renderer {
                 .get_buffer_mut(*light_buffer)
                 .unwrap()
                 .view()
-                .mapped_slice::<LightUniform>()?
+                .mapped_slice()?
                 .copy_from_slice(&lights);
 
             let camera_buffer_write = vk::DescriptorBufferInfo::builder()
@@ -619,8 +619,7 @@ impl Renderer {
             .get_buffer_mut(self.camera_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view()
-            .mapped_slice::<CameraUniform>()
-            .unwrap()
+            .mapped_slice()?
             .copy_from_slice(&[self.camera_uniform]);
 
         self.device
@@ -628,8 +627,7 @@ impl Renderer {
             .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view()
-            .mapped_slice::<LightUniform>()
-            .unwrap()
+            .mapped_slice()?
             .copy_from_slice(&self.lights);
 
         // Copy objects model matrix
@@ -648,7 +646,7 @@ impl Renderer {
             .get_buffer_mut(self.transform_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view_custom::<TransformSSBO>(0, transform_matrices.len())
-            .mapped_slice::<TransformSSBO>()?
+            .mapped_slice()?
             .copy_from_slice(&transform_matrices);
 
         let mut materials = Vec::new();
@@ -661,7 +659,7 @@ impl Renderer {
             .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view_custom::<MaterialParamSSBO>(0, materials.len())
-            .mapped_slice::<MaterialParamSSBO>()?
+            .mapped_slice()?
             .copy_from_slice(&materials);
 
         // Start dynamic rendering
@@ -1047,7 +1045,7 @@ impl Renderer {
                 .get_buffer_mut(staging_buffer)
                 .unwrap()
                 .view()
-                .mapped_slice::<Vertex>()?
+                .mapped_slice()?
                 .copy_from_slice(mesh.vertices.as_slice());
 
             let vertex_buffer_create_info = vk::BufferCreateInfo {
@@ -1109,7 +1107,7 @@ impl Renderer {
                         .get_buffer_mut(staging_buffer)
                         .unwrap()
                         .view()
-                        .mapped_slice::<u32>()?
+                        .mapped_slice()?
                         .copy_from_slice(indices.as_slice());
 
                     let index_buffer_create_info = vk::BufferCreateInfo {
