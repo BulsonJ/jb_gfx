@@ -25,43 +25,34 @@ layout(std140,set = 1, binding = 1) uniform LightBuffer{
 	Light lights[4];
 } lightData;
 
+struct MaterialParameters {
+	ivec4 textures;
+	ivec4 textures_two;
+};
+
+layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
+	MaterialParameters materials[];
+} materialData;
+
 layout( push_constant ) uniform constants
 {
 	ivec4 handles;
-	ivec4 textures;
-	ivec4 textures_two;
 } pushConstants;
-
-vec3 getNormalFromMap()
-{
-	vec3 tangentNormal = SampleBindlessTexture(pushConstants.textures.g, inTexCoords).xyz * 2.0 - 1.0;
-
-	vec3 Q1  = dFdx(inWorldPos);
-	vec3 Q2  = dFdy(inWorldPos);
-	vec2 st1 = dFdx(inTexCoords);
-	vec2 st2 = dFdy(inTexCoords);
-
-	vec3 N   = normalize(inNormal);
-	vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
-	vec3 B  = -normalize(cross(N, T));
-	mat3 TBN = mat3(T, B, N);
-
-	return normalize(TBN * tangentNormal);
-}
 
 void main()
 {
-	vec4 diffuseTexture = SampleBindlessTexture(pushConstants.textures.r, inTexCoords);
+	MaterialParameters material = materialData.materials[pushConstants.handles.g];
+	vec4 diffuseTexture = SampleBindlessTexture(material.textures.r, inTexCoords);
 	if (diffuseTexture.a == 0){
 		discard;
 	}
-	vec3 normalTexture = SampleBindlessTexture(pushConstants.textures.g, inTexCoords).rgb;
+	vec3 normalTexture = SampleBindlessTexture(material.textures.g, inTexCoords).rgb;
 
-	float metallicFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).b;
-	float roughnessFactor = SampleBindlessTexture(pushConstants.textures.b, inTexCoords).g;
-	float ambientFactor = SampleBindlessTexture(pushConstants.textures.a, inTexCoords).r;
+	float metallicFactor = SampleBindlessTexture(material.textures.b, inTexCoords).b;
+	float roughnessFactor = SampleBindlessTexture(material.textures.b, inTexCoords).g;
+	float ambientFactor = SampleBindlessTexture(material.textures.a, inTexCoords).r;
 
-	vec3 emissiveTexture = SampleBindlessTexture(pushConstants.textures_two.r, inTexCoords).rgb;
+	vec3 emissiveTexture = SampleBindlessTexture(material.textures_two.r, inTexCoords).rgb;
 
 	vec3 outColour = inColor;
 	outColour = diffuseTexture.rgb;

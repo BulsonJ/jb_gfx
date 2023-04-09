@@ -23,15 +23,22 @@ struct ModelMatrix{
 	mat4 normal;
 };
 
+struct MaterialParameters {
+	ivec4 textures;
+	ivec4 textures_two;
+};
+
 layout(std140,set = 1, binding = 2) readonly buffer ModelBuffer{
 	ModelMatrix models[];
 } modelData;
 
+layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
+	MaterialParameters materials[];
+} materialData;
+
 layout( push_constant ) uniform constants
 {
 	ivec4 handles;
-	ivec4 textures;
-	ivec4 textures_two;
 } pushConstants;
 
 void main()
@@ -43,6 +50,5 @@ void main()
 	outColor = vColor;
 	outTexCoords = vTexCoords;
 	outNormal = mat3(normalMatrix) * vNormal;
-
 	gl_Position = cameraData.proj * cameraData.view * modelMatrix * vec4(vPosition, 1.0f);
 }

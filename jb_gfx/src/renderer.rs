@@ -15,7 +15,9 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::device::{cmd_copy_buffer, GraphicsDevice, FRAMES_IN_FLIGHT};
-use crate::gpu_structs::{CameraUniform, LightUniform, PushConstants, TransformSSBO};
+use crate::gpu_structs::{
+    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
+};
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferHandle, ImageHandle};
 use crate::{Camera, Colour, MeshData, Vertex};
@@ -45,6 +47,7 @@ pub struct Renderer {
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     lights: [LightUniform; 4],
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
 }
 
 impl Renderer {
@@ -101,6 +104,11 @@ impl Renderer {
                 .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
             *vk::DescriptorSetLayoutBinding::builder()
                 .binding(2u32)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1u32)
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(3u32)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1u32)
                 .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
@@ -231,6 +239,30 @@ impl Renderer {
             ]
         };
 
+        let material_buffer = {
+            let buffer_create_info = vk::BufferCreateInfo {
+                size: size_of::<MaterialParamSSBO>() as u64 * MAX_OBJECTS,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                ..Default::default()
+            };
+
+            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
+                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
+                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
+                usage: vk_mem_alloc::MemoryUsage::AUTO,
+                ..Default::default()
+            };
+
+            [
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device
+                    .resource_manager
+                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+            ]
+        };
+
         let light_buffer = {
             let buffer_create_info = vk::BufferCreateInfo {
                 size: size_of::<LightUniform>() as u64 * 4,
@@ -302,6 +334,7 @@ impl Renderer {
             let camera_buffer = camera_buffer.get(i).unwrap();
             let light_buffer = light_buffer.get(i).unwrap();
             let transform_buffer = transform_buffer.get(i).unwrap();
+            let material_buffer = material_buffer.get(i).unwrap();
 
             device
                 .resource_manager
@@ -338,6 +371,17 @@ impl Renderer {
                     .range(buffer.size())
             };
 
+            let material_buffer_write = {
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(*material_buffer)
+                    .unwrap();
+
+                vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())
+            };
+
             let light_buffer_write = {
                 let buffer = device.resource_manager.get_buffer(*light_buffer).unwrap();
 
@@ -362,6 +406,11 @@ impl Renderer {
                     .dst_binding(2)
                     .dst_set(*set)
                     .buffer_info(&[*transform_buffer_write]),
+                *vk::WriteDescriptorSet::builder()
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .dst_binding(3)
+                    .dst_set(*set)
+                    .buffer_info(&[*material_buffer_write]),
             ];
 
             unsafe {
@@ -424,6 +473,7 @@ impl Renderer {
             light_buffer,
             lights,
             transform_buffer,
+            material_buffer,
         })
     }
 
@@ -597,6 +647,71 @@ impl Renderer {
             .mapped_slice::<TransformSSBO>()?
             .copy_from_slice(&transform_matrices);
 
+        let mut materials = Vec::new();
+        for model in self.render_models.values() {
+            let diffuse_tex = {
+                if let Some(tex) = model.material_instance.diffuse_texture {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let normal_tex = {
+                if let Some(tex) = model.material_instance.normal_texture {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let metallic_roughness_tex = {
+                if let Some(tex) = model.material_instance.metallic_roughness_texture {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let emissive_tex = {
+                if let Some(tex) = model.material_instance.emissive_texture {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let occlusion_tex = {
+                if let Some(tex) = model.material_instance.occlusion_texture {
+                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
+                } else {
+                    0usize
+                }
+            };
+
+            let material_params = MaterialParamSSBO {
+                textures: [
+                    diffuse_tex as i32,
+                    normal_tex as i32,
+                    metallic_roughness_tex as i32,
+                    occlusion_tex as i32,
+                    emissive_tex as i32,
+                    0,
+                    0,
+                    0,
+                ],
+            };
+
+            materials.push(material_params);
+        }
+        materials.resize(MAX_OBJECTS as usize, MaterialParamSSBO::zeroed());
+        self.device
+            .resource_manager
+            .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
+            .unwrap()
+            .mapped_slice::<MaterialParamSSBO>()?
+            .copy_from_slice(&materials);
+
         // Start dynamic rendering
 
         let color_attach_info = vk::RenderingAttachmentInfo::builder()
@@ -663,61 +778,8 @@ impl Renderer {
         };
 
         for (i, model) in self.render_models.values().enumerate() {
-            let diffuse_tex = {
-                if let Some(tex) = model.material_instance.diffuse_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let normal_tex = {
-                if let Some(tex) = model.material_instance.normal_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let metallic_roughness_tex = {
-                if let Some(tex) = model.material_instance.metallic_roughness_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let emissive_tex = {
-                if let Some(tex) = model.material_instance.emissive_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let occlusion_tex = {
-                if let Some(tex) = model.material_instance.occlusion_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let model_matrix = model.transform;
-            let normal_matrix = model_matrix.invert().unwrap().transpose();
-
             let push_constants = PushConstants {
-                handles: [i as i32, 0, 0, 0],
-                textures: [
-                    diffuse_tex as i32,
-                    normal_tex as i32,
-                    metallic_roughness_tex as i32,
-                    occlusion_tex as i32,
-                    emissive_tex as i32,
-                    0,
-                    0,
-                    0,
-                ],
+                handles: [i as i32, i as i32, 0, 0],
             };
             unsafe {
                 self.device.vk_device.cmd_push_constants(
