@@ -814,6 +814,7 @@ impl GraphicsDevice {
         self.resource_manager
             .get_buffer_mut(staging_buffer)
             .unwrap()
+            .view()
             .mapped_slice::<u8>()?
             .copy_from_slice(img_bytes);
 

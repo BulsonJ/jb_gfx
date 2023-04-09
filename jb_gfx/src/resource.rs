@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use ash::vk;
 use log::info;
 use slotmap::{self, new_key_type, SlotMap};
@@ -211,19 +211,46 @@ impl Buffer {
         self.size
     }
 
+    pub fn is_mapped(&self) -> bool {
+        !self.allocation_info.mapped_data.is_null()
+    }
+
+    pub fn view(&self) -> BufferView {
+        BufferView {
+            buffer: self,
+            offset: 0,
+            size: self.size,
+        }
+    }
+}
+
+pub struct BufferView<'a> {
+    buffer: &'a Buffer,
+    offset: vk::DeviceSize,
+    size: vk::DeviceSize,
+}
+
+impl<'a> BufferView<'a> {
+    pub fn buffer(&self) -> vk::Buffer {
+        self.buffer.buffer
+    }
+
+    pub fn size(&self) -> vk::DeviceSize {
+        self.buffer.size
+    }
+
     /// Obtain a slice to the mapped memory of this buffer.
     /// # Errors
     /// Fails if this buffer is not mappable (not `HOST_VISIBLE`).
     pub fn mapped_slice<T>(&mut self) -> Result<&mut [T]> {
-        if self.allocation_info.mapped_data.is_null() {
-            return Err(anyhow!("Not mapped!"));
-        }
+        ensure!(self.buffer.is_mapped(), anyhow!("Not mapped!"));
 
-        let pointer = self.allocation_info.mapped_data;
+        let pointer = self.buffer.allocation_info.mapped_data;
+        let offset_pointer = unsafe { pointer.offset(self.offset as isize) };
         Ok(unsafe {
             std::slice::from_raw_parts_mut(
-                pointer.cast::<T>(),
-                self.allocation_info.size as usize / std::mem::size_of::<T>(),
+                offset_pointer.cast::<T>(),
+                self.size as usize / std::mem::size_of::<T>(),
             )
         })
     }

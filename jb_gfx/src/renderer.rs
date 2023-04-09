@@ -340,6 +340,7 @@ impl Renderer {
                 .resource_manager
                 .get_buffer_mut(*camera_buffer)
                 .unwrap()
+                .view()
                 .mapped_slice::<CameraUniform>()?
                 .copy_from_slice(&[camera_uniform]);
 
@@ -347,6 +348,7 @@ impl Renderer {
                 .resource_manager
                 .get_buffer_mut(*light_buffer)
                 .unwrap()
+                .view()
                 .mapped_slice::<LightUniform>()?
                 .copy_from_slice(&lights);
 
@@ -616,6 +618,7 @@ impl Renderer {
             .resource_manager
             .get_buffer_mut(self.camera_buffer[self.device.buffered_resource_number()])
             .unwrap()
+            .view()
             .mapped_slice::<CameraUniform>()
             .unwrap()
             .copy_from_slice(&[self.camera_uniform]);
@@ -624,6 +627,7 @@ impl Renderer {
             .resource_manager
             .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
             .unwrap()
+            .view()
             .mapped_slice::<LightUniform>()
             .unwrap()
             .copy_from_slice(&self.lights);
@@ -644,6 +648,7 @@ impl Renderer {
             .resource_manager
             .get_buffer_mut(self.transform_buffer[self.device.buffered_resource_number()])
             .unwrap()
+            .view()
             .mapped_slice::<TransformSSBO>()?
             .copy_from_slice(&transform_matrices);
 
@@ -657,6 +662,7 @@ impl Renderer {
             .resource_manager
             .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
             .unwrap()
+            .view()
             .mapped_slice::<MaterialParamSSBO>()?
             .copy_from_slice(&materials);
 
@@ -1042,6 +1048,7 @@ impl Renderer {
                 .resource_manager
                 .get_buffer_mut(staging_buffer)
                 .unwrap()
+                .view()
                 .mapped_slice::<Vertex>()?
                 .copy_from_slice(mesh.vertices.as_slice());
 
@@ -1103,6 +1110,7 @@ impl Renderer {
                         .resource_manager
                         .get_buffer_mut(staging_buffer)
                         .unwrap()
+                        .view()
                         .mapped_slice::<u32>()?
                         .copy_from_slice(indices.as_slice());
 
