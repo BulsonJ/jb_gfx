@@ -16,7 +16,9 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
 
 use crate::resource;
-use crate::resource::{BufferHandle, ImageHandle, ResourceManager};
+use crate::resource::{
+    BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
+};
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 
@@ -794,23 +796,15 @@ impl GraphicsDevice {
     ) -> Result<ImageHandle> {
         let img_size = (img_width * img_height * 4u32) as DeviceSize;
 
-        let staging_buffer_create_info = vk::BufferCreateInfo {
-            size: img_size,
+        let staging_buffer_create_info = BufferCreateInfo {
+            size: img_size as usize,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
-            ..Default::default()
+            storage_type: BufferStorageType::HostLocal,
         };
 
-        let staging_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-            flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-            usage: vk_mem_alloc::MemoryUsage::AUTO,
-            ..Default::default()
-        };
-
-        let staging_buffer = self.resource_manager.create_buffer(
-            &staging_buffer_create_info,
-            &staging_buffer_allocation_create_info,
-        );
+        let staging_buffer = self
+            .resource_manager
+            .create_buffer(&staging_buffer_create_info);
 
         self.resource_manager
             .get_buffer_mut(staging_buffer)

@@ -15,6 +15,46 @@ pub struct ResourceManager {
     images: SlotMap<ImageHandle, Image>,
 }
 
+#[derive(Copy, Clone)]
+pub enum BufferStorageType {
+    Device,
+    HostLocal,
+}
+
+#[derive(Copy, Clone)]
+pub struct BufferCreateInfo {
+    pub size: usize,
+    pub usage: vk::BufferUsageFlags,
+    pub storage_type: BufferStorageType,
+}
+
+impl From<BufferCreateInfo> for vk::BufferCreateInfo {
+    fn from(value: BufferCreateInfo) -> Self {
+        Self {
+            size: value.size as vk::DeviceSize,
+            usage: value.usage,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<BufferCreateInfo> for vk_mem_alloc::AllocationCreateInfo {
+    fn from(value: BufferCreateInfo) -> Self {
+        let flags = match value.storage_type {
+            BufferStorageType::Device => vk_mem_alloc::AllocationCreateFlags::NONE,
+            BufferStorageType::HostLocal => {
+                vk_mem_alloc::AllocationCreateFlags::MAPPED
+                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE
+            }
+        };
+        Self {
+            flags,
+            usage: vk_mem_alloc::MemoryUsage::AUTO,
+            ..Default::default()
+        }
+    }
+}
+
 impl ResourceManager {
     pub fn new(
         instance: &ash::Instance,
@@ -46,19 +86,18 @@ impl ResourceManager {
     /// ```
     ///
     /// ```
-    pub fn create_buffer(
-        &mut self,
-        buffer_create_info: &vk::BufferCreateInfo,
-        alloc_create_info: &vk_mem_alloc::AllocationCreateInfo,
-    ) -> BufferHandle {
+    pub fn create_buffer(&mut self, buffer_create_info: &BufferCreateInfo) -> BufferHandle {
+        let create_info: vk::BufferCreateInfo = buffer_create_info.clone().into();
+        let alloc_info: vk_mem_alloc::AllocationCreateInfo = buffer_create_info.clone().into();
+
         // Create the buffer
-        let (vk_buffer, allocation, allocation_info) = unsafe {
-            vk_mem_alloc::create_buffer(self.allocator, buffer_create_info, alloc_create_info)
-        }
-        .unwrap();
+        let (vk_buffer, allocation, allocation_info) =
+            unsafe { vk_mem_alloc::create_buffer(self.allocator, &create_info, &alloc_info) }
+                .unwrap();
+
         let buffer = Buffer {
             buffer: vk_buffer,
-            size: buffer_create_info.size,
+            size: buffer_create_info.size as vk::DeviceSize,
             allocation,
             allocation_info,
         };
@@ -232,15 +271,28 @@ impl Buffer {
 
         ensure!(
             size <= self.size as usize,
-            anyhow!("Size of View[{}] exceeded size of buffer[{}]!", size, self.size)
+            anyhow!(
+                "Size of View[{}] exceeded size of buffer[{}]!",
+                size,
+                self.size
+            )
         );
         ensure!(
             offset <= self.size as usize,
-            anyhow!("Offset of View[{}] exceeded size of buffer[{}]!", offset, self.size)
+            anyhow!(
+                "Offset of View[{}] exceeded size of buffer[{}]!",
+                offset,
+                self.size
+            )
         );
         ensure!(
             offset + size <= self.size as usize,
-            anyhow!("BufferView[{} + {}] would go past end of buffer[{}]!", offset, size, self.size)
+            anyhow!(
+                "BufferView[{} + {}] would go past end of buffer[{}]!",
+                offset,
+                size,
+                self.size
+            )
         );
 
         Ok(BufferView {

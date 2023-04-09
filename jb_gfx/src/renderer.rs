@@ -19,7 +19,7 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
-use crate::resource::{BufferHandle, ImageHandle};
+use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
@@ -192,98 +192,54 @@ impl Renderer {
         camera_uniform.update_proj(&camera);
 
         let camera_buffer = {
-            let buffer_create_info = vk::BufferCreateInfo {
-                size: size_of::<CameraUniform>() as u64,
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<CameraUniform>(),
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-                ..Default::default()
-            };
-
-            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-                usage: vk_mem_alloc::MemoryUsage::AUTO,
-                ..Default::default()
+                storage_type: BufferStorageType::HostLocal,
             };
 
             [
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
             ]
         };
 
         let transform_buffer = {
-            let buffer_create_info = vk::BufferCreateInfo {
-                size: size_of::<TransformSSBO>() as u64 * MAX_OBJECTS,
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<TransformSSBO>() * MAX_OBJECTS as usize,
                 usage: vk::BufferUsageFlags::STORAGE_BUFFER,
-                ..Default::default()
-            };
-
-            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-                usage: vk_mem_alloc::MemoryUsage::AUTO,
-                ..Default::default()
+                storage_type: BufferStorageType::HostLocal,
             };
 
             [
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
             ]
         };
 
         let material_buffer = {
-            let buffer_create_info = vk::BufferCreateInfo {
-                size: size_of::<MaterialParamSSBO>() as u64 * MAX_OBJECTS,
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<MaterialParamSSBO>() * MAX_OBJECTS as usize,
                 usage: vk::BufferUsageFlags::STORAGE_BUFFER,
-                ..Default::default()
-            };
-
-            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-                usage: vk_mem_alloc::MemoryUsage::AUTO,
-                ..Default::default()
+                storage_type: BufferStorageType::HostLocal,
             };
 
             [
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
             ]
         };
 
         let light_buffer = {
-            let buffer_create_info = vk::BufferCreateInfo {
-                size: size_of::<LightUniform>() as u64 * 4,
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<LightUniform>() * 4usize,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-                ..Default::default()
-            };
-
-            let buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-                usage: vk_mem_alloc::MemoryUsage::AUTO,
-                ..Default::default()
+                storage_type: BufferStorageType::HostLocal,
             };
 
             [
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
-                device
-                    .resource_manager
-                    .create_buffer(&buffer_create_info, &buffer_allocation_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
             ]
         };
 
@@ -1022,23 +978,16 @@ impl Renderer {
 
     pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
         let vertex_buffer = {
-            let staging_buffer_create_info = vk::BufferCreateInfo {
-                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
+            let staging_buffer_create_info = BufferCreateInfo {
+                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()),
                 usage: vk::BufferUsageFlags::TRANSFER_SRC,
-                ..Default::default()
+                storage_type: BufferStorageType::HostLocal,
             };
 
-            let staging_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-                usage: vk_mem_alloc::MemoryUsage::AUTO,
-                ..Default::default()
-            };
-
-            let staging_buffer = self.device.resource_manager.create_buffer(
-                &staging_buffer_create_info,
-                &staging_buffer_allocation_create_info,
-            );
+            let staging_buffer = self
+                .device
+                .resource_manager
+                .create_buffer(&staging_buffer_create_info);
 
             self.device
                 .resource_manager
@@ -1048,21 +997,16 @@ impl Renderer {
                 .mapped_slice()?
                 .copy_from_slice(mesh.vertices.as_slice());
 
-            let vertex_buffer_create_info = vk::BufferCreateInfo {
-                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()) as u64,
+            let vertex_buffer_create_info = BufferCreateInfo {
+                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()),
                 usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-                ..Default::default()
+                storage_type: BufferStorageType::Device,
             };
 
-            let vertex_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                usage: vk_mem_alloc::MemoryUsage::AUTO,
-                ..Default::default()
-            };
-
-            let buffer = self.device.resource_manager.create_buffer(
-                &vertex_buffer_create_info,
-                &vertex_buffer_allocation_create_info,
-            );
+            let buffer = self
+                .device
+                .resource_manager
+                .create_buffer(&vertex_buffer_create_info);
 
             self.device.immediate_submit(|device, cmd| {
                 cmd_copy_buffer(device, cmd, staging_buffer, buffer)?;
@@ -1082,25 +1026,17 @@ impl Renderer {
             }
             Some(indices) => {
                 let index_buffer = {
-                    let buffer_size = (std::mem::size_of::<u32>() * indices.len()) as u64;
-                    let staging_buffer_create_info = vk::BufferCreateInfo {
+                    let buffer_size = size_of::<u32>() * indices.len();
+                    let staging_buffer_create_info = BufferCreateInfo {
                         size: buffer_size,
                         usage: vk::BufferUsageFlags::TRANSFER_SRC,
-                        ..Default::default()
+                        storage_type: BufferStorageType::HostLocal,
                     };
 
-                    let staging_buffer_allocation_create_info =
-                        vk_mem_alloc::AllocationCreateInfo {
-                            flags: vk_mem_alloc::AllocationCreateFlags::MAPPED
-                                | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE,
-                            usage: vk_mem_alloc::MemoryUsage::AUTO,
-                            ..Default::default()
-                        };
-
-                    let staging_buffer = self.device.resource_manager.create_buffer(
-                        &staging_buffer_create_info,
-                        &staging_buffer_allocation_create_info,
-                    );
+                    let staging_buffer = self
+                        .device
+                        .resource_manager
+                        .create_buffer(&staging_buffer_create_info);
 
                     self.device
                         .resource_manager
@@ -1110,22 +1046,17 @@ impl Renderer {
                         .mapped_slice()?
                         .copy_from_slice(indices.as_slice());
 
-                    let index_buffer_create_info = vk::BufferCreateInfo {
+                    let index_buffer_create_info = BufferCreateInfo {
                         size: buffer_size,
                         usage: vk::BufferUsageFlags::TRANSFER_DST
                             | vk::BufferUsageFlags::INDEX_BUFFER,
-                        ..Default::default()
+                        storage_type: BufferStorageType::Device,
                     };
 
-                    let index_buffer_allocation_create_info = vk_mem_alloc::AllocationCreateInfo {
-                        usage: vk_mem_alloc::MemoryUsage::AUTO,
-                        ..Default::default()
-                    };
-
-                    let buffer = self.device.resource_manager.create_buffer(
-                        &index_buffer_create_info,
-                        &index_buffer_allocation_create_info,
-                    );
+                    let buffer = self
+                        .device
+                        .resource_manager
+                        .create_buffer(&index_buffer_create_info);
 
                     self.device.immediate_submit(|device, cmd| {
                         cmd_copy_buffer(device, cmd, staging_buffer, buffer)?;
