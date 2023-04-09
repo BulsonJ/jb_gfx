@@ -1,5 +1,6 @@
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
+use ash::vk::DeviceSize;
 use log::info;
 use slotmap::{self, new_key_type, SlotMap};
 
@@ -213,6 +214,18 @@ impl Buffer {
 
     pub fn is_mapped(&self) -> bool {
         !self.allocation_info.mapped_data.is_null()
+    }
+
+    pub fn view_custom<T>(&self, offset: usize, count: usize) -> BufferView {
+        let type_size = std::mem::size_of::<T>();
+        let start = offset * type_size;
+        let size = count * type_size;
+
+        BufferView {
+            buffer: self,
+            offset: start as DeviceSize,
+            size: size as DeviceSize,
+        }
     }
 
     pub fn view(&self) -> BufferView {

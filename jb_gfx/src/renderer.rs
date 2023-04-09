@@ -642,13 +642,12 @@ impl Renderer {
             };
             transform_matrices.push(transform);
         }
-        transform_matrices.resize(MAX_OBJECTS as usize, TransformSSBO::zeroed());
 
         self.device
             .resource_manager
             .get_buffer_mut(self.transform_buffer[self.device.buffered_resource_number()])
             .unwrap()
-            .view()
+            .view_custom::<TransformSSBO>(0, transform_matrices.len())
             .mapped_slice::<TransformSSBO>()?
             .copy_from_slice(&transform_matrices);
 
@@ -657,12 +656,11 @@ impl Renderer {
             let material_params = self.get_material_ssbo_from_instance(&model.material_instance);
             materials.push(material_params);
         }
-        materials.resize(MAX_OBJECTS as usize, MaterialParamSSBO::zeroed());
         self.device
             .resource_manager
             .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
             .unwrap()
-            .view()
+            .view_custom::<MaterialParamSSBO>(0, materials.len())
             .mapped_slice::<MaterialParamSSBO>()?
             .copy_from_slice(&materials);
 
