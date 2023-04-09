@@ -649,59 +649,7 @@ impl Renderer {
 
         let mut materials = Vec::new();
         for model in self.render_models.values() {
-            let diffuse_tex = {
-                if let Some(tex) = model.material_instance.diffuse_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let normal_tex = {
-                if let Some(tex) = model.material_instance.normal_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let metallic_roughness_tex = {
-                if let Some(tex) = model.material_instance.metallic_roughness_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let emissive_tex = {
-                if let Some(tex) = model.material_instance.emissive_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let occlusion_tex = {
-                if let Some(tex) = model.material_instance.occlusion_texture {
-                    *self.bindless_indexes.get(&tex.image_handle).unwrap()
-                } else {
-                    0usize
-                }
-            };
-
-            let material_params = MaterialParamSSBO {
-                textures: [
-                    diffuse_tex as i32,
-                    normal_tex as i32,
-                    metallic_roughness_tex as i32,
-                    occlusion_tex as i32,
-                    emissive_tex as i32,
-                    0,
-                    0,
-                    0,
-                ],
-            };
-
+            let material_params = self.get_material_ssbo_from_instance(&model.material_instance);
             materials.push(material_params);
         }
         materials.resize(MAX_OBJECTS as usize, MaterialParamSSBO::zeroed());
@@ -1189,6 +1137,61 @@ impl Renderer {
                 };
                 Ok(self.meshes.insert(render_mesh))
             }
+        }
+    }
+
+    fn get_material_ssbo_from_instance(&self, instance: &MaterialInstance) -> MaterialParamSSBO {
+        let diffuse_tex = {
+            if let Some(tex) = instance.diffuse_texture {
+                *self.bindless_indexes.get(&tex.image_handle).unwrap()
+            } else {
+                0usize
+            }
+        };
+
+        let normal_tex = {
+            if let Some(tex) = instance.normal_texture {
+                *self.bindless_indexes.get(&tex.image_handle).unwrap()
+            } else {
+                0usize
+            }
+        };
+
+        let metallic_roughness_tex = {
+            if let Some(tex) = instance.metallic_roughness_texture {
+                *self.bindless_indexes.get(&tex.image_handle).unwrap()
+            } else {
+                0usize
+            }
+        };
+
+        let emissive_tex = {
+            if let Some(tex) = instance.emissive_texture {
+                *self.bindless_indexes.get(&tex.image_handle).unwrap()
+            } else {
+                0usize
+            }
+        };
+
+        let occlusion_tex = {
+            if let Some(tex) = instance.occlusion_texture {
+                *self.bindless_indexes.get(&tex.image_handle).unwrap()
+            } else {
+                0usize
+            }
+        };
+
+        MaterialParamSSBO {
+            textures: [
+                diffuse_tex as i32,
+                normal_tex as i32,
+                metallic_roughness_tex as i32,
+                occlusion_tex as i32,
+                emissive_tex as i32,
+                0,
+                0,
+                0,
+            ],
         }
     }
 
