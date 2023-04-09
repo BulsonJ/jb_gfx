@@ -506,7 +506,8 @@ impl GraphicsDevice {
         }?;
 
         // Upload images
-
+        // TODO: Remove buffers once upload has completed. Could use status enum so when fences are called, updates images that were submitted to being done.
+        // Can then clear done images from vec.
         for image in self.images_to_upload.iter() {
             let range = vk::ImageSubresourceRange::builder()
                 .aspect_mask(vk::ImageAspectFlags::COLOR)
