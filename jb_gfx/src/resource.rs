@@ -216,19 +216,6 @@ impl Buffer {
         !self.allocation_info.mapped_data.is_null()
     }
 
-    pub fn view_custom<T>(&self, offset: usize, count: usize) -> BufferView<T> {
-        let type_size = std::mem::size_of::<T>();
-        let start = offset * type_size;
-        let size = count * type_size;
-
-        BufferView {
-            buffer: self,
-            offset: start as DeviceSize,
-            size: size as DeviceSize,
-            data_type: std::marker::PhantomData::default(),
-        }
-    }
-
     pub fn view<T>(&self) -> BufferView<T> {
         BufferView {
             buffer: self,
@@ -236,6 +223,32 @@ impl Buffer {
             size: self.size,
             data_type: std::marker::PhantomData::default(),
         }
+    }
+
+    pub fn view_custom<T>(&self, offset: usize, count: usize) -> Result<BufferView<T>> {
+        let type_size = std::mem::size_of::<T>();
+        let start = offset * type_size;
+        let size = count * type_size;
+
+        ensure!(
+            size <= self.size as usize,
+            anyhow!("Size of View exceeded size of buffer!")
+        );
+        ensure!(
+            start <= self.size as usize,
+            anyhow!("Offset of View exceeded size of buffer!")
+        );
+        ensure!(
+            start + size <= self.size as usize,
+            anyhow!("BufferView would go past end of buffer!")
+        );
+
+        Ok(BufferView {
+            buffer: self,
+            offset: start as DeviceSize,
+            size: size as DeviceSize,
+            data_type: std::marker::PhantomData::default(),
+        })
     }
 }
 

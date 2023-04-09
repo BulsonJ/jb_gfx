@@ -645,7 +645,7 @@ impl Renderer {
             .resource_manager
             .get_buffer_mut(self.transform_buffer[self.device.buffered_resource_number()])
             .unwrap()
-            .view_custom::<TransformSSBO>(0, transform_matrices.len())
+            .view_custom(0, transform_matrices.len())?
             .mapped_slice()?
             .copy_from_slice(&transform_matrices);
 
@@ -658,7 +658,7 @@ impl Renderer {
             .resource_manager
             .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
             .unwrap()
-            .view_custom::<MaterialParamSSBO>(0, materials.len())
+            .view_custom(0, materials.len())?
             .mapped_slice()?
             .copy_from_slice(&materials);
 
