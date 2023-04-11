@@ -1280,6 +1280,12 @@ impl Vertex {
                     format: vk::Format::R32G32B32_SFLOAT,
                     offset: offset_of!(Vertex, color) as u32,
                 },
+                vk::VertexInputAttributeDescription {
+                    location: 4,
+                    binding: 0,
+                    format: vk::Format::R32G32B32A32_SFLOAT,
+                    offset: offset_of!(Vertex, tangent) as u32,
+                },
             ],
         }
     }

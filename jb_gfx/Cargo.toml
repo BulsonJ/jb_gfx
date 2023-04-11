@@ -18,6 +18,7 @@ shaderc = "0.8.2"
 log = "0.4.17"
 obj = "0.10.2"
 anyhow = "1.0.70"
+mikktspace = "0.3.0"
 
 [dependencies.ash]
 version = "0.37.1"

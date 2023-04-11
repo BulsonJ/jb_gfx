@@ -6,11 +6,13 @@ layout (location = 0) in vec3 vPosition;
 layout (location = 1) in vec2 vTexCoords;
 layout (location = 2) in vec3 vNormal;
 layout (location = 3) in vec3 vColor;
+layout (location = 4) in vec4 vTangent;
 
 layout (location = 0) out vec3 outColor;
 layout (location = 1) out vec2 outTexCoords;
 layout (location = 2) out vec3 outNormal;
 layout (location = 3) out vec3 outWorldPos;
+layout (location = 4) out mat3 outTBN;
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
@@ -51,5 +53,14 @@ void main()
 	outColor = vColor;
 	outTexCoords = vTexCoords;
 	outNormal = mat3(normalMatrix) * vNormal;
+
+	vec3 T = normalize(vec3(modelMatrix * vec4(vNormal, 0.0)));
+	vec3 N = normalize(vec3(modelMatrix * vec4(vTangent.xyz, 0.0)));
+	// re-orthogonalize T with respect to N
+	T = normalize(T - dot(T, N) * N);
+	// then retrieve perpendicular vector B with the cross product of T and N
+	vec3 B = cross(N, T) * vTangent.w;
+	outTBN = mat3(T, B, N);
+
 	gl_Position = cameraData.proj * cameraData.view * modelMatrix * vec4(vPosition, 1.0f);
 }

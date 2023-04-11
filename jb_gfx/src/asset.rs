@@ -40,6 +40,7 @@ impl AssetManager {
                 let mut tex_coords = Vec::new();
                 let mut normals = Vec::new();
                 let mut colors = Vec::new();
+                let mut tangents = Vec::new();
                 let mut possible_indices = Vec::new();
 
                 let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
@@ -66,6 +67,11 @@ impl AssetManager {
                 if let Some(iter) = reader.read_indices() {
                     for index in iter.into_u32() {
                         possible_indices.push(index);
+                    }
+                }
+                if let Some(iter) = reader.read_tangents() {
+                    for tangent in iter {
+                        tangents.push(tangent);
                     }
                 }
 
@@ -139,13 +145,28 @@ impl AssetManager {
                     let position = *positions.get(i).unwrap();
                     let tex_coords = *tex_coords.get(i).unwrap();
                     let normal = *normals.get(i).unwrap();
+                    let tangent = {
+                        if let Some(tang) = tangents.get(i) {
+                            *tang
+                        } else {
+                            [0f32, 0f32, 0f32, 0f32]
+                        }
+                    };
+                    let color = {
+                        if let Some(colour) = colors.get(i) {
+                            *colour
+                        } else {
+                            [1f32, 1f32, 1f32]
+                        }
+                    };
                     //let color = colors.get(i).unwrap().clone();
 
                     let vertex = Vertex {
                         position,
                         tex_coords,
                         normal,
-                        color: [1f32, 1f32, 1f32],
+                        color,
+                        tangent,
                     };
                     vertices.push(vertex);
                 }

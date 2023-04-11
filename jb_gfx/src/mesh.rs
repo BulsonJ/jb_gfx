@@ -9,67 +9,10 @@ pub struct Vertex {
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
     pub color: [f32; 3],
+    pub tangent: [f32; 4],
 }
 
 pub struct MeshData {
     pub vertices: Vec<Vertex>,
     pub indices: Option<Vec<u32>>,
-}
-
-impl MeshData {
-    pub fn from_file(file: &str) -> MeshData {
-        let path = Path::new(file);
-        let object = Obj::load(path).unwrap();
-
-        let mut vertices = Vec::<Vertex>::new();
-
-        let mut indexed_vertices = Vec::<Vertex>::new();
-        let mut indices = Vec::<u32>::new();
-        for obj in object.data.objects.iter() {
-            for group in obj.groups.iter() {
-                for poly in group.polys.iter() {
-                    for tuple in poly.0.iter() {
-                        let position = object.data.position[tuple.0];
-                        let tex_coords = match tuple.1 {
-                            Some(tex_coord_index) => object.data.texture[tex_coord_index],
-                            None => [0.0f32, 0.0f32],
-                        };
-                        let normal = match tuple.2 {
-                            Some(normal_index) => object.data.normal[normal_index],
-                            None => [0.0f32, 0.0f32, 0.0f32],
-                        };
-                        let color = [1.0f32, 1.0f32, 1.0f32];
-
-                        let vertex = Vertex {
-                            position,
-                            tex_coords,
-                            normal,
-                            color,
-                        };
-
-                        vertices.push(vertex);
-
-                        if !indexed_vertices.contains(&vertex) {
-                            indexed_vertices.push(vertex);
-                        }
-                        let vertex_index =
-                            indexed_vertices.iter().position(|&x| x == vertex).unwrap() as u32;
-                        indices.push(vertex_index);
-                    }
-                }
-            }
-        }
-
-        if indices.len() == indexed_vertices.len() {
-            MeshData {
-                vertices,
-                indices: None,
-            }
-        } else {
-            MeshData {
-                vertices: indexed_vertices,
-                indices: Some(indices),
-            }
-        }
-    }
 }

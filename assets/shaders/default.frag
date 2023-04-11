@@ -7,6 +7,7 @@ layout (location = 0) in vec3 inColor;
 layout (location = 1) in vec2 inTexCoords;
 layout (location = 2) in vec3 inNormal;
 layout (location = 3) in vec3 inWorldPos;
+layout (location = 4) in mat3 inTBN;
 
 layout (location = 0) out vec4 outFragColor;
 
@@ -65,7 +66,12 @@ void main()
 	for (int i = 0; i < 4; i++){
 		// Diffuse
 		Light currentLight = lightData.lights[i];
-		vec3 norm = normalize(inNormal);
+
+		// For normal texture
+		vec3 norm = normalize(normalTexture);
+		norm = norm * 2.0 - 1.0;
+		norm = normalize(inTBN * norm);
+
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
 
 		float diff = max(dot(norm, lightDir), 0.0);
