@@ -1214,7 +1214,7 @@ impl Vertex {
                 vk::VertexInputAttributeDescription {
                     location: 2,
                     binding: 0,
-                    format: vk::Format::R8G8B8_UNORM,
+                    format: vk::Format::R32G32B32_SFLOAT,
                     offset: offset_of!(Vertex, normal) as u32,
                 },
                 vk::VertexInputAttributeDescription {
