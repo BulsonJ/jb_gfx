@@ -250,19 +250,19 @@ impl Renderer {
         let lights = [
             Light::new(
                 Vector3::new(5.0f32, 95.0f32, -4.0f32),
-                Vector3::new(1.0f32, 0.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             Light::new(
                 Vector3::new(-5.0f32, 105.0f32, -4.0f32),
-                Vector3::new(0.0f32, 1.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             Light::new(
                 Vector3::new(5.0f32, 105.0f32, -4.0f32),
-                Vector3::new(0.0f32, 0.0f32, 1.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             Light::new(
                 Vector3::new(-5.0f32, 95.0f32, -4.0f32),
-                Vector3::new(0.0f32, 1.0f32, 1.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
         ];
 
@@ -586,6 +586,12 @@ impl Renderer {
             .view()
             .mapped_slice()?
             .copy_from_slice(&[self.camera_uniform]);
+
+        let frame_number = self.device.frame_number() as f32;
+        for (i,light) in self.lights.iter_mut().enumerate() {
+            let position = (i as f32 + 0.001f32 * frame_number).sin() * 10f32;
+            light.position.z = position;
+        }
 
         let uniforms = self.lights.map(|light| LightUniform::from(light));
 

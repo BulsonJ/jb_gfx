@@ -68,22 +68,21 @@ void main()
 		Light currentLight = lightData.lights[i];
 
 		// For normal texture
-		vec3 norm = normalize(normalTexture);
-		norm = norm * 2.0 - 1.0;
+		vec3 norm = normalize(normalTexture * 2.0 - 1.0);
 		norm = normalize(inTBN * norm);
+		norm = inNormal;
 
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
-
 		float diff = max(dot(norm, lightDir), 0.0);
 		diffuse += diff * currentLight.colour.rgb;
 
 		// Specular
-		float specularStrength = 0.5;
+		float specularStrength = 0.2;
 		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
 		vec3 reflectDir = reflect(-lightDir, norm);
-
-		float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-		specular += specularStrength * spec * currentLight.colour.rgb;
+		vec3 halfwayDir = normalize(lightDir + viewDir);
+		float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
+		specular += vec3(0.2) * spec;
 	}
 
 	vec3 result = (ambient + diffuse + specular) * objectColour;
