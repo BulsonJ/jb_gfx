@@ -249,20 +249,20 @@ impl Renderer {
 
         let lights = [
             Light::new(
-                Vector3::new(5.0f32, 100.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(5.0f32, 95.0f32, -4.0f32),
+                Vector3::new(1.0f32, 0.0f32, 0.0f32),
             ),
             Light::new(
-                Vector3::new(-5.0f32, 100.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(-5.0f32, 105.0f32, -4.0f32),
+                Vector3::new(0.0f32, 1.0f32, 0.0f32),
             ),
             Light::new(
-                Vector3::new(5.0f32, 105.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(5.0f32, 105.0f32, -4.0f32),
+                Vector3::new(0.0f32, 0.0f32, 1.0f32),
             ),
             Light::new(
-                Vector3::new(-5.0f32, 95.0f32, 0.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(-5.0f32, 95.0f32, -4.0f32),
+                Vector3::new(0.0f32, 1.0f32, 1.0f32),
             ),
         ];
 
@@ -640,6 +640,32 @@ impl Renderer {
             .mapped_slice()?
             .copy_from_slice(&materials);
 
+        // Fill draw commands
+        let mut draw_commands: Vec<DrawCommand> = Vec::new();
+        for (i, model) in self.render_models.keys().enumerate() {
+            draw_commands.push(DrawCommand {
+                render_model: model,
+                transform_index: i,
+                material_index: i,
+            });
+        }
+        if let Some(light_model) = self.light_mesh {
+            for (i, light) in self.lights.iter().enumerate() {
+                let i = i + self.render_models.len();
+                let material_instance = self
+                    .render_models
+                    .keys()
+                    .position(|model| model == light_model)
+                    .unwrap();
+
+                draw_commands.push(DrawCommand {
+                    render_model: light_model,
+                    transform_index: i,
+                    material_index: material_instance,
+                });
+            }
+        }
+
         // Start dynamic rendering
 
         let color_attach_info = vk::RenderingAttachmentInfo::builder()
@@ -705,126 +731,66 @@ impl Renderer {
             );
         };
 
-        /* TODO : Should not iterate through models and draw. Should iterate through a Vec<RenderCommands>,
-        which avoids having to duplicate this code for each type of thing we want to draw.
-        */
-        for (i, model) in self.render_models.values().enumerate() {
-            let push_constants = PushConstants {
-                handles: [i as i32, i as i32, 0, 0],
-            };
-            unsafe {
-                self.device.vk_device.cmd_push_constants(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    self.pso_layout,
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0u32,
-                    bytemuck::cast_slice(&[push_constants]),
-                )
-            };
+        // Draw commands
 
-            if let Some(display_mesh) = self.meshes.get(model.mesh_handle) {
-                let vertex_buffer = self
-                    .device
-                    .resource_manager
-                    .get_buffer(display_mesh.vertex_buffer)
-                    .unwrap()
-                    .buffer();
-                let index_buffer = self
-                    .device
-                    .resource_manager
-                    .get_buffer(display_mesh.index_buffer.unwrap())
-                    .unwrap()
-                    .buffer();
-
+        for command in draw_commands.iter() {
+            if let Some(render_model) = self.render_models.get(command.render_model) {
+                let push_constants = PushConstants {
+                    handles: [
+                        command.transform_index as i32,
+                        command.material_index as i32,
+                        0,
+                        0,
+                    ],
+                };
                 unsafe {
-                    self.device.vk_device.cmd_bind_vertex_buffers(
+                    self.device.vk_device.cmd_push_constants(
                         self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        self.pso_layout,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                         0u32,
-                        &[vertex_buffer],
-                        &[0u64],
-                    );
-                    self.device.vk_device.cmd_bind_index_buffer(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        index_buffer,
-                        DeviceSize::zero(),
-                        IndexType::UINT32,
-                    );
-                    self.device.vk_device.cmd_draw_indexed(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        display_mesh.vertex_count,
-                        1u32,
-                        0u32,
-                        0i32,
-                        0u32,
-                    );
-                }
-            }
-        }
+                        bytemuck::cast_slice(&[push_constants]),
+                    )
+                };
 
-        // Draw lights
-        if let Some(light_mesh) = self.light_mesh {
-            if let Some(display_model) = self.render_models.get(light_mesh) {
-                for (i, light) in self.lights.iter().enumerate() {
-                    let i = i + self.render_models.len();
-                    let material = self
-                        .render_models
-                        .values()
-                        .position(|model| model == display_model)
-                        .unwrap();
+                if let Some(display_mesh) = self.meshes.get(render_model.mesh_handle) {
+                    let vertex_buffer = self
+                        .device
+                        .resource_manager
+                        .get_buffer(display_mesh.vertex_buffer)
+                        .unwrap()
+                        .buffer();
+                    let index_buffer = self
+                        .device
+                        .resource_manager
+                        .get_buffer(display_mesh.index_buffer.unwrap())
+                        .unwrap()
+                        .buffer();
 
-                    let push_constants = PushConstants {
-                        handles: [i as i32, material as i32, 0, 0],
-                    };
                     unsafe {
-                        self.device.vk_device.cmd_push_constants(
+                        self.device.vk_device.cmd_bind_vertex_buffers(
                             self.device.graphics_command_buffer
                                 [self.device.buffered_resource_number()],
-                            self.pso_layout,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                             0u32,
-                            bytemuck::cast_slice(&[push_constants]),
-                        )
-                    };
-
-                    if let Some(display_mesh) = self.meshes.get(display_model.mesh_handle) {
-                        let vertex_buffer = self
-                            .device
-                            .resource_manager
-                            .get_buffer(display_mesh.vertex_buffer)
-                            .unwrap()
-                            .buffer();
-                        let index_buffer = self
-                            .device
-                            .resource_manager
-                            .get_buffer(display_mesh.index_buffer.unwrap())
-                            .unwrap()
-                            .buffer();
-
-                        unsafe {
-                            self.device.vk_device.cmd_bind_vertex_buffers(
-                                self.device.graphics_command_buffer
-                                    [self.device.buffered_resource_number()],
-                                0u32,
-                                &[vertex_buffer],
-                                &[0u64],
-                            );
-                            self.device.vk_device.cmd_bind_index_buffer(
-                                self.device.graphics_command_buffer
-                                    [self.device.buffered_resource_number()],
-                                index_buffer,
-                                DeviceSize::zero(),
-                                IndexType::UINT32,
-                            );
-                            self.device.vk_device.cmd_draw_indexed(
-                                self.device.graphics_command_buffer
-                                    [self.device.buffered_resource_number()],
-                                display_mesh.vertex_count,
-                                1u32,
-                                0u32,
-                                0i32,
-                                0u32,
-                            );
-                        }
+                            &[vertex_buffer],
+                            &[0u64],
+                        );
+                        self.device.vk_device.cmd_bind_index_buffer(
+                            self.device.graphics_command_buffer
+                                [self.device.buffered_resource_number()],
+                            index_buffer,
+                            DeviceSize::zero(),
+                            IndexType::UINT32,
+                        );
+                        self.device.vk_device.cmd_draw_indexed(
+                            self.device.graphics_command_buffer
+                                [self.device.buffered_resource_number()],
+                            display_mesh.vertex_count,
+                            1u32,
+                            0u32,
+                            0i32,
+                            0u32,
+                        );
                     }
                 }
             }
@@ -1368,7 +1334,7 @@ impl From<Texture> for ImageHandle {
     }
 }
 
-#[derive(Clone, Default, Eq, PartialEq)]
+#[derive(Clone, Default)]
 pub struct MaterialInstance {
     pub diffuse_texture: Option<Texture>,
     pub normal_texture: Option<Texture>,
@@ -1377,7 +1343,6 @@ pub struct MaterialInstance {
     pub occlusion_texture: Option<Texture>,
 }
 
-#[derive(PartialEq)]
 struct RenderModel {
     mesh_handle: MeshHandle,
     material_instance: MaterialInstance,
@@ -1394,4 +1359,10 @@ impl Light {
     pub fn new(position: Vector3<f32>, colour: Vector3<f32>) -> Self {
         Self { position, colour }
     }
+}
+
+struct DrawCommand {
+    render_model: RenderModelHandle,
+    transform_index: usize,
+    material_index: usize,
 }
