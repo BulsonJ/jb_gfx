@@ -19,6 +19,17 @@ fn main() {
     let mut renderer = Renderer::new(&window).unwrap();
     renderer.render().unwrap();
     let mut asset_manager = AssetManager::default();
+    // Load cube
+    {
+        let models = asset_manager
+            .load_gltf(&mut renderer, "assets/models/Cube/glTF/Cube.gltf")
+            .unwrap();
+        for model in models.iter() {
+            let render_model =
+                renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer.light_mesh = Some(render_model);
+        }
+    }
     // Load sponza
     {
         let models = asset_manager

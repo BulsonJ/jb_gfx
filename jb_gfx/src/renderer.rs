@@ -47,9 +47,10 @@ pub struct Renderer {
     meshes: SlotMap<MeshHandle, RenderMesh>,
     render_models: SlotMap<RenderModelHandle, RenderModel>,
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    lights: [LightUniform; 4],
+    lights: [Light; 4],
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    pub light_mesh: Option<RenderModelHandle>,
 }
 
 impl Renderer {
@@ -247,20 +248,20 @@ impl Renderer {
         };
 
         let lights = [
-            LightUniform::new(
-                Vector3::new(0.0f32, 0.0f32, 0.0f32),
+            Light::new(
+                Vector3::new(5.0f32, 100.0f32, 0.0f32),
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
-            LightUniform::new(
-                Vector3::new(10.0f32, 0.0f32, 0.0f32),
+            Light::new(
+                Vector3::new(-5.0f32, 100.0f32, 0.0f32),
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
-            LightUniform::new(
-                Vector3::new(0.0f32, 10.0f32, 0.0f32),
+            Light::new(
+                Vector3::new(5.0f32, 105.0f32, 0.0f32),
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
-            LightUniform::new(
-                Vector3::new(10.0f32, 10.0f32, 0.0f32),
+            Light::new(
+                Vector3::new(-5.0f32, 95.0f32, 0.0f32),
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
         ];
@@ -303,13 +304,17 @@ impl Renderer {
                 .mapped_slice()?
                 .copy_from_slice(&[camera_uniform]);
 
+            let uniforms: Vec<LightUniform> = lights
+                .iter()
+                .map(|light| LightUniform::from(*light))
+                .collect();
             device
                 .resource_manager
                 .get_buffer_mut(*light_buffer)
                 .unwrap()
                 .view()
                 .mapped_slice()?
-                .copy_from_slice(&lights);
+                .copy_from_slice(&uniforms);
 
             let camera_buffer_write = vk::DescriptorBufferInfo::builder()
                 .buffer(
@@ -435,6 +440,7 @@ impl Renderer {
             lights,
             transform_buffer,
             material_buffer,
+            light_mesh: None,
         })
     }
 
@@ -581,13 +587,15 @@ impl Renderer {
             .mapped_slice()?
             .copy_from_slice(&[self.camera_uniform]);
 
+        let uniforms = self.lights.map(|light| LightUniform::from(light));
+
         self.device
             .resource_manager
             .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
             .unwrap()
-            .view()
+            .view::<LightUniform>()
             .mapped_slice()?
-            .copy_from_slice(&self.lights);
+            .copy_from_slice(&uniforms);
 
         // Copy objects model matrix
 
@@ -596,6 +604,17 @@ impl Renderer {
             let transform = TransformSSBO {
                 model: model.transform.into(),
                 normal: model.transform.invert().unwrap().transpose().into(),
+            };
+            transform_matrices.push(transform);
+        }
+        for light in self.lights.iter() {
+            let transform = TransformSSBO {
+                model: Matrix4::from_translation(light.position).into(),
+                normal: Matrix4::from_translation(light.position)
+                    .invert()
+                    .unwrap()
+                    .transpose()
+                    .into(),
             };
             transform_matrices.push(transform);
         }
@@ -686,6 +705,9 @@ impl Renderer {
             );
         };
 
+        /* TODO : Should not iterate through models and draw. Should iterate through a Vec<RenderCommands>,
+        which avoids having to duplicate this code for each type of thing we want to draw.
+        */
         for (i, model) in self.render_models.values().enumerate() {
             let push_constants = PushConstants {
                 handles: [i as i32, i as i32, 0, 0],
@@ -735,6 +757,75 @@ impl Renderer {
                         0i32,
                         0u32,
                     );
+                }
+            }
+        }
+
+        // Draw lights
+        if let Some(light_mesh) = self.light_mesh {
+            if let Some(display_model) = self.render_models.get(light_mesh) {
+                for (i, light) in self.lights.iter().enumerate() {
+                    let i = i + self.render_models.len();
+                    let material = self
+                        .render_models
+                        .values()
+                        .position(|model| model == display_model)
+                        .unwrap();
+
+                    let push_constants = PushConstants {
+                        handles: [i as i32, material as i32, 0, 0],
+                    };
+                    unsafe {
+                        self.device.vk_device.cmd_push_constants(
+                            self.device.graphics_command_buffer
+                                [self.device.buffered_resource_number()],
+                            self.pso_layout,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                            0u32,
+                            bytemuck::cast_slice(&[push_constants]),
+                        )
+                    };
+
+                    if let Some(display_mesh) = self.meshes.get(display_model.mesh_handle) {
+                        let vertex_buffer = self
+                            .device
+                            .resource_manager
+                            .get_buffer(display_mesh.vertex_buffer)
+                            .unwrap()
+                            .buffer();
+                        let index_buffer = self
+                            .device
+                            .resource_manager
+                            .get_buffer(display_mesh.index_buffer.unwrap())
+                            .unwrap()
+                            .buffer();
+
+                        unsafe {
+                            self.device.vk_device.cmd_bind_vertex_buffers(
+                                self.device.graphics_command_buffer
+                                    [self.device.buffered_resource_number()],
+                                0u32,
+                                &[vertex_buffer],
+                                &[0u64],
+                            );
+                            self.device.vk_device.cmd_bind_index_buffer(
+                                self.device.graphics_command_buffer
+                                    [self.device.buffered_resource_number()],
+                                index_buffer,
+                                DeviceSize::zero(),
+                                IndexType::UINT32,
+                            );
+                            self.device.vk_device.cmd_draw_indexed(
+                                self.device.graphics_command_buffer
+                                    [self.device.buffered_resource_number()],
+                                display_mesh.vertex_count,
+                                1u32,
+                                0u32,
+                                0i32,
+                                0u32,
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -1254,7 +1345,7 @@ fn from_transforms(
 }
 
 /// Texture, stored on the GPU.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Texture {
     image_handle: ImageHandle,
     width: u32,
@@ -1277,7 +1368,7 @@ impl From<Texture> for ImageHandle {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct MaterialInstance {
     pub diffuse_texture: Option<Texture>,
     pub normal_texture: Option<Texture>,
@@ -1286,8 +1377,21 @@ pub struct MaterialInstance {
     pub occlusion_texture: Option<Texture>,
 }
 
+#[derive(PartialEq)]
 struct RenderModel {
     mesh_handle: MeshHandle,
     material_instance: MaterialInstance,
     transform: Matrix4<f32>,
+}
+
+#[derive(Copy, Clone)]
+pub struct Light {
+    pub position: Vector3<f32>,
+    pub colour: Vector3<f32>,
+}
+
+impl Light {
+    pub fn new(position: Vector3<f32>, colour: Vector3<f32>) -> Self {
+        Self { position, colour }
+    }
 }

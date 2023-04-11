@@ -1,6 +1,6 @@
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4, Zero};
 
-use crate::renderer::MaterialInstance;
+use crate::renderer::{Light, MaterialInstance};
 use crate::Camera;
 
 #[repr(C)]
@@ -65,5 +65,11 @@ impl LightUniform {
             pos: position.into(),
             colour: colour.into(),
         }
+    }
+}
+
+impl From<Light> for LightUniform {
+    fn from(value: Light) -> Self {
+        LightUniform::new(value.position, value.colour)
     }
 }
