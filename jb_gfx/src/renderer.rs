@@ -249,19 +249,19 @@ impl Renderer {
         let lights = [
             LightUniform::new(
                 Vector3::new(0.0f32, 0.0f32, 0.0f32),
-                Vector3::new(100.0f32, 100.0f32, 100.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             LightUniform::new(
-                Vector3::new(0.0f32, 0.0f32, 10.0f32),
-                Vector3::new(100.0f32, 100.0f32, 100.0f32),
+                Vector3::new(10.0f32, 0.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             LightUniform::new(
-                Vector3::new(0.0f32, 0.0f32, 10.0f32),
-                Vector3::new(100.0f32, 100.0f32, 100.0f32),
+                Vector3::new(0.0f32, 10.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             LightUniform::new(
-                Vector3::new(0.0f32, 0.0f32, 10.0f32),
-                Vector3::new(100.0f32, 100.0f32, 100.0f32),
+                Vector3::new(10.0f32, 10.0f32, 0.0f32),
+                Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
         ];
 

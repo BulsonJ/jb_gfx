@@ -55,9 +55,30 @@ void main()
 
 	vec3 emissiveTexture = SampleBindlessTexture(material.textures_two.r, inTexCoords).rgb;
 
+	// Ambient
 	vec3 objectColour = inColor * diffuseTexture.rgb;
 	vec3 ambient = cameraData.ambientLight.w * cameraData.ambientLight.rgb;
-	vec3 outColour = ambient * objectColour;
 
-	outFragColor = vec4(outColour,1.0f);
+	// Point lights
+	vec3 diffuse = vec3(0);
+	vec3 specular = vec3(0);
+	for (int i = 0; i < 4; i++){
+		Light currentLight = lightData.lights[i];
+		vec3 norm = normalize(inNormal);
+		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
+
+		float diff = max(dot(norm, lightDir), 0.0);
+		diffuse += diff * currentLight.colour.rgb;
+
+		// Specular
+		float specularStrength = 0.5;
+		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
+		vec3 reflectDir = reflect(-lightDir, norm);
+
+		float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+		specular += specularStrength * spec * currentLight.colour.rgb;
+	}
+
+	vec3 result = (ambient + diffuse + specular) * objectColour;
+	outFragColor = vec4(result,1.0f);
 }
