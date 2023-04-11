@@ -53,13 +53,13 @@ fn main() {
                 .set_render_model_transform(
                     helmet,
                     from_transforms(
-                        Vector3::new(0f32, 100f32, -4.0f32),
+                        Vector3::new(5f32, 100f32, 0.0f32),
                         Quaternion::from_axis_angle(
                             Vector3::new(1f32, 0f32, 0.0f32).normalize(),
                             Deg(100f32),
                         ) * Quaternion::from_axis_angle(
                             Vector3::new(0f32, 0f32, 1.0f32).normalize(),
-                            Deg(20f32),
+                            Deg(60f32),
                         ),
                         Vector3::from_value(2f32),
                     ),

@@ -185,6 +185,7 @@ impl Renderer {
 
         let camera = Camera {
             position: (0.0, -100.0, -2.0).into(),
+            rotation: 90f32,
             aspect: device.size.width as f32 / device.size.height as f32,
             fovy: 90.0,
             znear: 0.1,
@@ -253,7 +254,7 @@ impl Renderer {
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             Light::new(
-                Vector3::new(-5.0f32, 105.0f32, -4.0f32),
+                Vector3::new(-5.0f32, 105.0f32, 4.0f32),
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             Light::new(
@@ -261,7 +262,7 @@ impl Renderer {
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
             Light::new(
-                Vector3::new(-5.0f32, 95.0f32, -4.0f32),
+                Vector3::new(-5.0f32, 95.0f32, 4.0f32),
                 Vector3::new(1.0f32, 1.0f32, 1.0f32),
             ),
         ];
@@ -590,7 +591,7 @@ impl Renderer {
         let frame_number = self.device.frame_number() as f32;
         for (i,light) in self.lights.iter_mut().enumerate() {
             let position = (i as f32 + 0.001f32 * frame_number).sin() * 10f32;
-            light.position.z = position;
+            light.position.x = 10f32 + position;
         }
 
         let uniforms = self.lights.map(|light| LightUniform::from(light));
