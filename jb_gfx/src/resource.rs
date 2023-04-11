@@ -87,8 +87,8 @@ impl ResourceManager {
     ///
     /// ```
     pub fn create_buffer(&mut self, buffer_create_info: &BufferCreateInfo) -> BufferHandle {
-        let create_info: vk::BufferCreateInfo = buffer_create_info.clone().into();
-        let alloc_info: vk_mem_alloc::AllocationCreateInfo = buffer_create_info.clone().into();
+        let create_info: vk::BufferCreateInfo = (*buffer_create_info).into();
+        let alloc_info: vk_mem_alloc::AllocationCreateInfo = (*buffer_create_info).into();
 
         // Create the buffer
         let (vk_buffer, allocation, allocation_info) =

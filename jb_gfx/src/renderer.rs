@@ -1031,8 +1031,7 @@ impl Renderer {
 
         // Debug name image
         {
-            let image_name =
-                String::from("Image:".to_string() + file_location.rsplit_once('/').unwrap().1);
+            let image_name = "Image:".to_string() + file_location.rsplit_once('/').unwrap().1;
             let image_handle = self
                 .device
                 .resource_manager

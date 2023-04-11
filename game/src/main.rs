@@ -1,4 +1,5 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3};
+use env_logger::{Builder, Target};
 use jb_gfx::asset::AssetManager;
 use jb_gfx::renderer::Renderer;
 use jb_gfx::Colour;
@@ -9,6 +10,11 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
 fn main() {
+    // Enable logging
+    let mut builder = Builder::from_default_env();
+    builder.target(Target::Stdout);
+    builder.init();
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_inner_size(LogicalSize::new(1920, 1080))
