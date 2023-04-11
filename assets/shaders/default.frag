@@ -63,6 +63,7 @@ void main()
 	vec3 diffuse = vec3(0);
 	vec3 specular = vec3(0);
 	for (int i = 0; i < 4; i++){
+		// Diffuse
 		Light currentLight = lightData.lights[i];
 		vec3 norm = normalize(inNormal);
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
@@ -80,5 +81,6 @@ void main()
 	}
 
 	vec3 result = (ambient + diffuse + specular) * objectColour;
+	result += emissiveTexture;
 	outFragColor = vec4(result,1.0f);
 }
