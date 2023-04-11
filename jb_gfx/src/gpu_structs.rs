@@ -29,6 +29,7 @@ pub(crate) struct CameraUniform {
     pub proj: [[f32; 4]; 4],
     pub view: [[f32; 4]; 4],
     pub position: [f32; 4],
+    pub ambient_light: [f32; 4],
 }
 
 impl CameraUniform {
@@ -37,6 +38,7 @@ impl CameraUniform {
             proj: Matrix4::identity().into(),
             view: Matrix4::identity().into(),
             position: Vector4::zero().into(),
+            ambient_light: Vector4::zero().into(),
         }
     }
 

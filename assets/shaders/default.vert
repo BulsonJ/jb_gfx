@@ -16,6 +16,7 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
 	mat4 view;
 	vec4 cameraPos;
+	vec4 ambientLight;
 } cameraData;
 
 struct ModelMatrix{

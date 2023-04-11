@@ -19,6 +19,7 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
 	mat4 view;
 	vec4 cameraPos;
+	vec4 ambientLight;
 } cameraData;
 
 layout(std140,set = 1, binding = 1) uniform LightBuffer{
@@ -54,9 +55,9 @@ void main()
 
 	vec3 emissiveTexture = SampleBindlessTexture(material.textures_two.r, inTexCoords).rgb;
 
-	vec3 outColour = inColor;
-	outColour = diffuseTexture.rgb;
-	outColour += emissiveTexture;
+	vec3 objectColour = inColor * diffuseTexture.rgb;
+	vec3 ambient = cameraData.ambientLight.w * cameraData.ambientLight.rgb;
+	vec3 outColour = ambient * objectColour;
 
 	outFragColor = vec4(outColour,1.0f);
 }
