@@ -27,6 +27,8 @@ struct ModelMatrix{
 };
 
 struct MaterialParameters {
+	vec4 diffuse;
+	vec4 emissive;
 	ivec4 textures;
 	ivec4 textures_two;
 };

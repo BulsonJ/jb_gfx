@@ -1,6 +1,6 @@
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4, Zero};
 
-use crate::renderer::{Light, MaterialInstance};
+use crate::renderer::Light;
 use crate::Camera;
 
 #[repr(C)]
@@ -19,6 +19,8 @@ pub(crate) struct TransformSSBO {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct MaterialParamSSBO {
+    pub diffuse: [f32; 4],
+    pub emissive: [f32; 4],
     pub textures: [i32; 8],
 }
 

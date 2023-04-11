@@ -7,7 +7,7 @@ use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageAspectFlags, ImageLayout,
     IndexType, ObjectType, PipelineStageFlags2,
 };
-use bytemuck::{offset_of, Zeroable};
+use bytemuck::offset_of;
 use cgmath::{
     Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
@@ -251,15 +251,15 @@ impl Renderer {
         let lights = [
             Light::new(
                 Vector3::new(5.0f32, 95.0f32, -4.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(1.0f32, 0.0f32, 0.0f32),
             ),
             Light::new(
                 Vector3::new(-5.0f32, 105.0f32, 4.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(0.0f32, 1.0f32, 0.0f32),
             ),
             Light::new(
                 Vector3::new(5.0f32, 105.0f32, -4.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                Vector3::new(0.0f32, 0.0f32, 1.0f32),
             ),
             Light::new(
                 Vector3::new(-5.0f32, 95.0f32, 4.0f32),
@@ -589,12 +589,12 @@ impl Renderer {
             .copy_from_slice(&[self.camera_uniform]);
 
         let frame_number = self.device.frame_number() as f32;
-        for (i,light) in self.lights.iter_mut().enumerate() {
-            let position = (i as f32 + 0.001f32 * frame_number).sin() * 10f32;
+        for (i, light) in self.lights.iter_mut().enumerate() {
+            let position = (i as f32 + 0.001f32 * frame_number).sin() * 5f32;
             light.position.x = 10f32 + position;
         }
 
-        let uniforms = self.lights.map(|light| LightUniform::from(light));
+        let uniforms = self.lights.map(LightUniform::from);
 
         self.device
             .resource_manager
@@ -639,6 +639,15 @@ impl Renderer {
             let material_params = self.get_material_ssbo_from_instance(&model.material_instance);
             materials.push(material_params);
         }
+        // Push light materials
+        for light in self.lights.iter() {
+            materials.push(self.get_material_ssbo_from_instance(&MaterialInstance {
+                diffuse: Vector3::zero(),
+                emissive: light.colour,
+                ..Default::default()
+            }));
+        }
+
         self.device
             .resource_manager
             .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
@@ -657,18 +666,13 @@ impl Renderer {
             });
         }
         if let Some(light_model) = self.light_mesh {
-            for (i, light) in self.lights.iter().enumerate() {
+            for i in 0..self.lights.len() {
                 let i = i + self.render_models.len();
-                let material_instance = self
-                    .render_models
-                    .keys()
-                    .position(|model| model == light_model)
-                    .unwrap();
 
                 draw_commands.push(DrawCommand {
                     render_model: light_model,
                     transform_index: i,
-                    material_index: material_instance,
+                    material_index: i,
                 });
             }
         }
@@ -1046,7 +1050,7 @@ impl Renderer {
     pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
         let vertex_buffer = {
             let staging_buffer_create_info = BufferCreateInfo {
-                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()),
+                size: (size_of::<Vertex>() * mesh.vertices.len()),
                 usage: vk::BufferUsageFlags::TRANSFER_SRC,
                 storage_type: BufferStorageType::HostLocal,
             };
@@ -1065,7 +1069,7 @@ impl Renderer {
                 .copy_from_slice(mesh.vertices.as_slice());
 
             let vertex_buffer_create_info = BufferCreateInfo {
-                size: (std::mem::size_of::<Vertex>() * mesh.vertices.len()),
+                size: (size_of::<Vertex>() * mesh.vertices.len()),
                 usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
                 storage_type: BufferStorageType::Device,
             };
@@ -1184,6 +1188,8 @@ impl Renderer {
         };
 
         MaterialParamSSBO {
+            diffuse: instance.diffuse.extend(0f32).into(),
+            emissive: instance.emissive.extend(0f32).into(),
             textures: [
                 diffuse_tex as i32,
                 normal_tex as i32,
@@ -1347,13 +1353,30 @@ impl From<Texture> for ImageHandle {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MaterialInstance {
+    pub diffuse: Vector3<f32>,
+    pub emissive: Vector3<f32>,
+
     pub diffuse_texture: Option<Texture>,
     pub normal_texture: Option<Texture>,
     pub metallic_roughness_texture: Option<Texture>,
     pub emissive_texture: Option<Texture>,
     pub occlusion_texture: Option<Texture>,
+}
+
+impl Default for MaterialInstance {
+    fn default() -> Self {
+        Self {
+            diffuse: Vector3::from_value(1.0f32),
+            emissive: Vector3::from_value(0.0f32),
+            diffuse_texture: None,
+            normal_texture: None,
+            metallic_roughness_texture: None,
+            emissive_texture: None,
+            occlusion_texture: None,
+        }
+    }
 }
 
 struct RenderModel {

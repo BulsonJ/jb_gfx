@@ -28,6 +28,8 @@ layout(std140,set = 1, binding = 1) uniform LightBuffer{
 } lightData;
 
 struct MaterialParameters {
+	vec4 diffuse;
+	vec4 emissive;
 	ivec4 textures;
 	ivec4 textures_two;
 };
@@ -44,20 +46,24 @@ layout( push_constant ) uniform constants
 void main()
 {
 	MaterialParameters material = materialData.materials[pushConstants.handles.g];
-	vec4 diffuseTexture = SampleBindlessTexture(material.textures.r, inTexCoords);
-	if (diffuseTexture.a == 0){
-		discard;
-	}
-	vec3 normalTexture = SampleBindlessTexture(material.textures.g, inTexCoords).rgb;
+	int diffuseTexIndex = material.textures.r;
+	int normalTexIndex = material.textures.g;
+	int emissiveTexIndex = material.textures_two.r;
 
-	float metallicFactor = SampleBindlessTexture(material.textures.b, inTexCoords).b;
-	float roughnessFactor = SampleBindlessTexture(material.textures.b, inTexCoords).g;
-	float ambientFactor = SampleBindlessTexture(material.textures.a, inTexCoords).r;
-
-	vec3 emissiveTexture = SampleBindlessTexture(material.textures_two.r, inTexCoords).rgb;
+	vec4 diffuseTexture = SampleBindlessTexture(diffuseTexIndex, inTexCoords);
+	vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
+	vec3 emissiveTexture = SampleBindlessTexture(emissiveTexIndex, inTexCoords).rgb;
 
 	// Ambient
-	vec3 objectColour = inColor * diffuseTexture.rgb;
+	vec3 objectColour = inColor;
+	if (diffuseTexIndex > 0) {
+		if (diffuseTexture.a == 0){
+			discard;
+		}
+		objectColour *= diffuseTexture.rgb;
+	} else {
+		objectColour *= material.diffuse.rgb;
+	}
 	vec3 ambient = cameraData.ambientLight.w * cameraData.ambientLight.rgb;
 
 	// Point lights
@@ -68,10 +74,12 @@ void main()
 		Light currentLight = lightData.lights[i];
 
 		// For normal texture
-		vec3 norm = normalize(normalTexture * 2.0 - 1.0);
-		norm = normalize(inTBN * norm);
-		norm = inNormal;
-
+		vec3 norm = normalize(inNormal);
+		if (normalTexIndex > 0){
+			norm = normalize(normalTexture * 2.0 - 1.0);
+			norm = normalize(inTBN * norm);
+			norm = inNormal;
+		}
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
 		float diff = max(dot(norm, lightDir), 0.0);
 		diffuse += diff * currentLight.colour.rgb;
@@ -86,6 +94,13 @@ void main()
 	}
 
 	vec3 result = (ambient + diffuse + specular) * objectColour;
-	result += emissiveTexture;
+
+	// Emissive
+	if (emissiveTexIndex > 0){
+		result += emissiveTexture;
+	} else {
+		result += material.emissive.rgb;
+	}
+
 	outFragColor = vec4(result,1.0f);
 }

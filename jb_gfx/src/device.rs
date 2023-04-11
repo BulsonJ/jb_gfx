@@ -852,7 +852,7 @@ impl GraphicsDevice {
 
         unsafe { self.vk_device.begin_command_buffer(cmd, &cmd_begin_info) }?;
 
-        function(self, &mut cmd);
+        function(self, &mut cmd)?;
 
         unsafe { self.vk_device.end_command_buffer(cmd) }?;
 
