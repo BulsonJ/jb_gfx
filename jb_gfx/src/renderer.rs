@@ -7,12 +7,12 @@ use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageAspectFlags, ImageLayout,
     IndexType, ObjectType, PipelineStageFlags2,
 };
-use bytemuck::offset_of;
+use bytemuck::{offset_of, Zeroable};
 use cgmath::{
     Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
 use image::EncodableLayout;
-use log::error;
+use log::{error, warn};
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -47,10 +47,10 @@ pub struct Renderer {
     meshes: SlotMap<MeshHandle, RenderMesh>,
     render_models: SlotMap<RenderModelHandle, RenderModel>,
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    lights: [Light; 4],
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     pub light_mesh: Option<RenderModelHandle>,
+    stored_lights: SlotMap<LightHandle, Light>,
 }
 
 impl Renderer {
@@ -248,25 +248,6 @@ impl Renderer {
             ]
         };
 
-        let lights = [
-            Light::new(
-                Vector3::new(5.0f32, 95.0f32, -4.0f32),
-                Vector3::new(1.0f32, 0.0f32, 0.0f32),
-            ),
-            Light::new(
-                Vector3::new(-5.0f32, 105.0f32, 4.0f32),
-                Vector3::new(0.0f32, 1.0f32, 0.0f32),
-            ),
-            Light::new(
-                Vector3::new(5.0f32, 105.0f32, -4.0f32),
-                Vector3::new(0.0f32, 0.0f32, 1.0f32),
-            ),
-            Light::new(
-                Vector3::new(-5.0f32, 95.0f32, 4.0f32),
-                Vector3::new(1.0f32, 1.0f32, 1.0f32),
-            ),
-        ];
-
         let descriptor_set = {
             let set_layouts = [descriptor_set_layout];
             let create_info = vk::DescriptorSetAllocateInfo::builder()
@@ -305,10 +286,13 @@ impl Renderer {
                 .mapped_slice()?
                 .copy_from_slice(&[camera_uniform]);
 
-            let uniforms: Vec<LightUniform> = lights
-                .iter()
-                .map(|light| LightUniform::from(*light))
-                .collect();
+            let uniforms: Vec<LightUniform> = vec![
+                LightUniform::zeroed(),
+                LightUniform::zeroed(),
+                LightUniform::zeroed(),
+                LightUniform::zeroed(),
+            ];
+
             device
                 .resource_manager
                 .get_buffer_mut(*light_buffer)
@@ -438,10 +422,10 @@ impl Renderer {
             meshes: SlotMap::default(),
             render_models: SlotMap::default(),
             light_buffer,
-            lights,
             transform_buffer,
             material_buffer,
             light_mesh: None,
+            stored_lights: SlotMap::default(),
         })
     }
 
@@ -588,19 +572,14 @@ impl Renderer {
             .mapped_slice()?
             .copy_from_slice(&[self.camera_uniform]);
 
-        let frame_number = self.device.frame_number() as f32;
-        for (i, light) in self.lights.iter_mut().enumerate() {
-            let position = (i as f32 + 0.001f32 * frame_number).sin() * 5f32;
-            light.position.x = 10f32 + position;
-        }
-
-        let uniforms = self.lights.map(LightUniform::from);
+        let test = self.stored_lights.values();
+        let uniforms: Vec<LightUniform> = test.map(|&light| LightUniform::from(light)).collect();
 
         self.device
             .resource_manager
             .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
             .unwrap()
-            .view::<LightUniform>()
+            .view_custom::<LightUniform>(0, uniforms.len())?
             .mapped_slice()?
             .copy_from_slice(&uniforms);
 
@@ -614,7 +593,7 @@ impl Renderer {
             };
             transform_matrices.push(transform);
         }
-        for light in self.lights.iter() {
+        for light in self.stored_lights.values() {
             let transform = TransformSSBO {
                 model: Matrix4::from_translation(light.position).into(),
                 normal: Matrix4::from_translation(light.position)
@@ -640,7 +619,7 @@ impl Renderer {
             materials.push(material_params);
         }
         // Push light materials
-        for light in self.lights.iter() {
+        for light in self.stored_lights.values() {
             materials.push(self.get_material_ssbo_from_instance(&MaterialInstance {
                 diffuse: Vector3::zero(),
                 emissive: light.colour,
@@ -666,7 +645,7 @@ impl Renderer {
             });
         }
         if let Some(light_model) = self.light_mesh {
-            for i in 0..self.lights.len() {
+            for i in 0..self.stored_lights.len() {
                 let i = i + self.render_models.len();
 
                 draw_commands.push(DrawCommand {
@@ -1230,6 +1209,24 @@ impl Renderer {
             Err(anyhow!("Unable to find Render Model!"))
         }
     }
+
+    pub fn create_light(&mut self, light: &Light) -> Option<LightHandle> {
+        if self.stored_lights.len() >= 4 {
+            warn!("Tried to create light, but reached max limit of 4.");
+            return None;
+        }
+
+        let handle = self.stored_lights.insert(*light);
+        Some(handle)
+    }
+
+    pub fn set_light(&mut self, light_handle: LightHandle, light: &Light) -> Result<()> {
+        if let Some(modified_light) = self.stored_lights.get_mut(light_handle) {
+            let _old = std::mem::replace(modified_light, *light);
+            return Ok(());
+        }
+        Err(anyhow!("No light exists"))
+    }
 }
 
 impl Drop for Renderer {
@@ -1303,7 +1300,7 @@ impl Vertex {
     }
 }
 
-new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle;}
+new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle; pub struct LightHandle;}
 
 // Mesh data stored on the GPU
 struct RenderMesh {

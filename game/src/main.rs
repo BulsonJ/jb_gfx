@@ -1,7 +1,7 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3};
 use env_logger::{Builder, Target};
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::Renderer;
+use jb_gfx::renderer::{Light, LightHandle, Renderer};
 use jb_gfx::Colour;
 use std::time::Instant;
 use winit::dpi::LogicalSize;
@@ -75,13 +75,74 @@ fn main() {
     }
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
+    let initial_lights = vec![
+        Light::new(
+            Vector3::new(5.0f32, 95.0f32, -4.0f32),
+            Vector3::new(1.0f32, 0.0f32, 0.0f32),
+        ),
+        Light::new(
+            Vector3::new(-5.0f32, 105.0f32, 4.0f32),
+            Vector3::new(0.0f32, 1.0f32, 0.0f32),
+        ),
+        Light::new(
+            Vector3::new(5.0f32, 105.0f32, -4.0f32),
+            Vector3::new(0.0f32, 0.0f32, 1.0f32),
+        ),
+        Light::new(
+            Vector3::new(-5.0f32, 95.0f32, 4.0f32),
+            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+        ),
+    ];
+
+    let mut lights = vec![
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(0).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(0).unwrap(),
+        },
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(1).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(1).unwrap(),
+        },
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(2).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(2).unwrap(),
+        },
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(3).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(3).unwrap(),
+        },
+    ];
+
     let mut initial_resize = true;
     let mut frame_start_time = Instant::now();
+    let mut time_passed = 0f64;
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared => {
                 let delta_time = frame_start_time.elapsed().as_secs_f64();
                 frame_start_time = Instant::now();
+                time_passed += delta_time;
+
+                // Update lights
+                for (i, component) in lights.iter_mut().enumerate() {
+                    let position = 10f32 + ((i as f32 + 3f32 * time_passed as f32).sin() * 5f32);
+                    component.light.position = Vector3::new(
+                        position,
+                        component.light.position.y,
+                        component.light.position.z,
+                    );
+                    renderer
+                        .set_light(component.handle, &component.light)
+                        .unwrap();
+                }
 
                 // Check if need to skip frame
                 let frame_skip = delta_time > 0.1f64;
@@ -129,4 +190,10 @@ fn from_transforms(
     let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     translation * rotation * scale
+}
+
+#[derive(Copy, Clone)]
+struct LightComponent {
+    handle: LightHandle,
+    pub light: Light,
 }
