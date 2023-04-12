@@ -51,7 +51,6 @@ void main()
 	int emissiveTexIndex = material.textures_two.r;
 
 	vec4 diffuseTexture = SampleBindlessTexture(diffuseTexIndex, inTexCoords);
-	vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
 	vec3 emissiveTexture = SampleBindlessTexture(emissiveTexIndex, inTexCoords).rgb;
 
 	// Ambient
@@ -67,19 +66,21 @@ void main()
 	vec3 ambient = cameraData.ambientLight.w * cameraData.ambientLight.rgb;
 
 	// Point lights
-	vec3 diffuse = vec3(0);
-	vec3 specular = vec3(0);
+	vec3 diffuseResult = vec3(0);
+	vec3 specularResult = vec3(0);
+
 	for (int i = 0; i < 4; i++){
 		// Diffuse
 		Light currentLight = lightData.lights[i];
+		vec3 diffuse = vec3(0);
+		vec3 specular = vec3(0);
 
 		// For normal texture
 		vec3 norm = normalize(inNormal);
-		if (normalTexIndex > 0){
-			norm = normalize(normalTexture * 2.0 - 1.0);
-			norm = normalize(inTBN * norm);
-			norm = inNormal;
-		}
+		//if (normalTexIndex > 0){
+		//	vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
+		//	norm = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
+		//}
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
 		float diff = max(dot(norm, lightDir), 0.0);
 		diffuse += diff * currentLight.colour.rgb;
@@ -91,9 +92,22 @@ void main()
 		vec3 halfwayDir = normalize(lightDir + viewDir);
 		float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
 		specular += vec3(0.2) * spec;
+
+		// attenuation
+		float distance    = length(currentLight.position.xyz - inWorldPos);
+		float lightConstant = 1.0;
+		float lightLinear = 0.045;
+		float lightQuadratic = 0.0075;
+		float attenuation = 1.0 / (lightConstant + lightLinear * distance + lightQuadratic * (distance * distance));
+
+		diffuse *= attenuation;
+		specular *= attenuation;
+
+		diffuseResult += diffuse;
+		specularResult += specular;
 	}
 
-	vec3 result = (ambient + diffuse + specular) * objectColour;
+	vec3 result = (ambient + diffuseResult + specularResult) * objectColour;
 
 	// Emissive
 	if (emissiveTexIndex > 0){

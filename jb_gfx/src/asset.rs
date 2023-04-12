@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use gltf::image::Source;
 
+use crate::device::ImageFormatType;
 use crate::renderer::{MaterialInstance, MeshHandle, Renderer, Texture};
 use crate::{Face, MeshData, Vertex};
 
@@ -27,7 +28,8 @@ impl AssetManager {
                     mime_type: _mime_type,
                 } => {
                     let image_asset = String::from(source_folder) + "/" + uri;
-                    if let Ok(loaded_texture) = renderer.load_texture(&image_asset) {
+                    let format_type = ImageFormatType::Default;
+                    if let Ok(loaded_texture) = renderer.load_texture(&image_asset, &format_type) {
                         self.loaded_textures.insert(uri.to_string(), loaded_texture);
                     }
                 }

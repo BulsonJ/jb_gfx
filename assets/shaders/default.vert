@@ -49,15 +49,15 @@ layout( push_constant ) uniform constants
 void main()
 {
 	mat4 modelMatrix = modelData.models[pushConstants.handles.x].model;
-	mat4 normalMatrix = modelData.models[pushConstants.handles.x].normal;
+	mat3 normalMatrix = mat3(modelData.models[pushConstants.handles.x].normal);
 	vec3 worldPos = vec3(modelMatrix * vec4(vPosition, 1.0f));
 	outWorldPos = worldPos;
 	outColor = vColor;
 	outTexCoords = vTexCoords;
-	outNormal = mat3(normalMatrix) * vNormal;
+	outNormal = normalMatrix * vNormal;
 
-	vec3 T = normalize(vec3(modelMatrix * vec4(vNormal, 0.0)));
-	vec3 N = normalize(vec3(modelMatrix * vec4(vTangent.xyz, 0.0)));
+	vec3 T = normalize(vec3(normalMatrix * vec3(vNormal)));
+	vec3 N = normalize(vec3(normalMatrix * vec3(vTangent.xyz)));
 	// re-orthogonalize T with respect to N
 	T = normalize(T - dot(T, N) * N);
 	// then retrieve perpendicular vector B with the cross product of T and N

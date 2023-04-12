@@ -793,6 +793,7 @@ impl GraphicsDevice {
         img_bytes: &[u8],
         img_width: u32,
         img_height: u32,
+        image_type: &ImageFormatType,
     ) -> Result<ImageHandle> {
         let img_size = (img_width * img_height * 4u32) as DeviceSize;
 
@@ -813,8 +814,15 @@ impl GraphicsDevice {
             .mapped_slice()?
             .copy_from_slice(img_bytes);
 
+        let format = {
+            match image_type {
+                ImageFormatType::Default => vk::Format::R8G8B8A8_SRGB,
+                ImageFormatType::Normal => vk::Format::R8G8B8A8_UNORM,
+            }
+        };
+
         let image_create_info = vk::ImageCreateInfo::builder()
-            .format(vk::Format::R8G8B8A8_SRGB)
+            .format(format)
             .usage(vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST)
             .extent(vk::Extent3D {
                 width: img_width,
@@ -1007,4 +1015,9 @@ unsafe extern "system" fn vulkan_debug_callback(
     );
 
     vk::FALSE
+}
+
+pub enum ImageFormatType {
+    Default,
+    Normal,
 }

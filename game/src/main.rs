@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3};
+use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -50,7 +50,20 @@ fn main() {
             .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
             .unwrap();
         for model in models.iter() {
-            renderer.add_render_model(model.mesh, model.material_instance.clone());
+            let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer
+                .set_render_model_transform(
+                    handle,
+                    from_transforms(
+                        Vector3::new(0f32, 80f32, 0.0f32),
+                        Quaternion::from_axis_angle(
+                            Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+                            Deg(180f32),
+                        ),
+                        Vector3::from_value(0.1f32),
+                    ),
+                )
+                .unwrap();
         }
     }
     // Load helmet
@@ -85,19 +98,19 @@ fn main() {
 
     let initial_lights = vec![
         Light::new(
-            Vector3::new(5.0f32, 95.0f32, -4.0f32),
-            Vector3::new(1.0f32, 0.0f32, 0.0f32),
+            Vector3::new(10.0f32, 95.0f32, -8.0f32),
+            Vector3::new(3.0f32, 0.0f32, 0.0f32),
         ),
         Light::new(
-            Vector3::new(-5.0f32, 105.0f32, 4.0f32),
-            Vector3::new(0.0f32, 1.0f32, 0.0f32),
+            Vector3::new(-10.0f32, 105.0f32, 8.0f32),
+            Vector3::new(0.0f32, 3.0f32, 0.0f32),
         ),
         Light::new(
-            Vector3::new(5.0f32, 105.0f32, -4.0f32),
-            Vector3::new(0.0f32, 0.0f32, 1.0f32),
+            Vector3::new(10.0f32, 105.0f32, -8.0f32),
+            Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
         Light::new(
-            Vector3::new(-5.0f32, 95.0f32, 4.0f32),
+            Vector3::new(-10.0f32, 95.0f32, 8.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
     ];
@@ -131,7 +144,7 @@ fn main() {
 
     let mut camera_component = {
         let camera = Camera {
-            position: (0.0, -100.0, -2.0).into(),
+            position: (0.0, -100.0, -8.0).into(),
             rotation: 90f32,
             aspect: screen_width as f32 / screen_height as f32,
             fovy: 90.0,

@@ -16,7 +16,7 @@ use log::{error, warn};
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::device::{cmd_copy_buffer, GraphicsDevice, FRAMES_IN_FLIGHT};
+use crate::device::{cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT};
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
 };
@@ -196,7 +196,7 @@ impl Renderer {
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_proj(&camera);
-        camera_uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.1).into();
+        camera_uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
 
         let camera_buffer = {
             let buffer_create_info = BufferCreateInfo {
@@ -966,7 +966,11 @@ impl Renderer {
     /// ```
     ///
     /// ```
-    pub fn load_texture(&mut self, file_location: &str) -> Result<Texture> {
+    pub fn load_texture(
+        &mut self,
+        file_location: &str,
+        image_type: &ImageFormatType,
+    ) -> Result<Texture> {
         let img = image::open(file_location);
 
         if let Err(error) = img {
@@ -978,7 +982,7 @@ impl Renderer {
         let img_bytes = rgba_img.as_bytes();
         let image = self
             .device
-            .load_image(img_bytes, img.width(), img.height())?;
+            .load_image(img_bytes, img.width(), img.height(), image_type)?;
 
         self.bindless_textures.push(image);
         let bindless_index = self.bindless_textures.len();
