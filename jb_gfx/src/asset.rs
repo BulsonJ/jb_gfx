@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use gltf::image::Source;
 
 use crate::renderer::{MaterialInstance, MeshHandle, Renderer, Texture};
-use crate::{MeshData, Vertex};
+use crate::{Face, MeshData, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -171,6 +171,19 @@ impl AssetManager {
                     vertices.push(vertex);
                 }
 
+                let faces = {
+                    let mut faces = Vec::new();
+                    for i in 0..possible_indices.len() / 3 {
+                        let index = i * 3;
+                        faces.push([
+                            possible_indices[index],
+                            possible_indices[index + 1],
+                            possible_indices[index + 2],
+                        ]);
+                    }
+                    faces
+                };
+
                 let indices = {
                     if possible_indices.is_empty() {
                         None
@@ -179,7 +192,14 @@ impl AssetManager {
                     }
                 };
 
-                let mesh = MeshData { vertices, indices };
+                let mut mesh = MeshData {
+                    vertices,
+                    indices,
+                    faces,
+                };
+                if tangents.is_empty() {
+                    let ret = mikktspace::generate_tangents(&mut mesh);
+                }
 
                 let mesh_handle = renderer.load_mesh(&mesh)?;
                 let model = Model {

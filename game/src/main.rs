@@ -45,14 +45,14 @@ fn main() {
         }
     }
     // Load sponza
-    //{
-    //    let models = asset_manager
-    //        .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-    //        .unwrap();
-    //    for model in models.iter() {
-    //        renderer.add_render_model(model.mesh, model.material_instance.clone());
-    //    }
-    //}
+    {
+        let models = asset_manager
+            .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+            .unwrap();
+        for model in models.iter() {
+            renderer.add_render_model(model.mesh, model.material_instance.clone());
+        }
+    }
     // Load helmet
     {
         let models = asset_manager
