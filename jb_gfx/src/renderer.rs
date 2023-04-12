@@ -34,7 +34,7 @@ pub struct Renderer {
     pso: PipelineHandle,
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     camera_uniform: CameraUniform,
-    camera: Camera,
+    default_camera: Camera,
     descriptor_pool: vk::DescriptorPool,
     descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
@@ -51,6 +51,8 @@ pub struct Renderer {
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     pub light_mesh: Option<RenderModelHandle>,
     stored_lights: SlotMap<LightHandle, Light>,
+    stored_cameras: SlotMap<CameraHandle, Camera>,
+    pub active_camera: Option<CameraHandle>,
 }
 
 impl Renderer {
@@ -409,7 +411,7 @@ impl Renderer {
             pso,
             camera_buffer,
             camera_uniform,
-            camera,
+            default_camera: camera,
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
@@ -426,6 +428,8 @@ impl Renderer {
             material_buffer,
             light_mesh: None,
             stored_lights: SlotMap::default(),
+            stored_cameras: SlotMap::default(),
+            active_camera: None,
         })
     }
 
@@ -562,7 +566,16 @@ impl Renderer {
         };
 
         // Copy camera
-        self.camera_uniform.update_proj(&self.camera);
+        if let Some(camera) = self.active_camera {
+            if let Some(found_camera) = self.stored_cameras.get(camera) {
+                self.camera_uniform.update_proj(found_camera);
+            } else {
+                self.active_camera = None;
+                error!("Unable to find stored camera, resetting to default")
+            }
+        } else {
+            self.camera_uniform.update_proj(&self.default_camera);
+        }
 
         self.device
             .resource_manager
@@ -1227,6 +1240,19 @@ impl Renderer {
         }
         Err(anyhow!("No light exists"))
     }
+
+    pub fn create_camera(&mut self, camera: &Camera) -> CameraHandle {
+        let handle = self.stored_cameras.insert(*camera);
+        handle
+    }
+
+    pub fn set_camera(&mut self, handle: CameraHandle, camera: &Camera) -> Result<()> {
+        if let Some(modified_camera) = self.stored_cameras.get_mut(handle) {
+            let _old = std::mem::replace(modified_camera, *camera);
+            return Ok(());
+        }
+        Err(anyhow!("No camera exists"))
+    }
 }
 
 impl Drop for Renderer {
@@ -1300,7 +1326,7 @@ impl Vertex {
     }
 }
 
-new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle; pub struct LightHandle;}
+new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle; pub struct LightHandle; pub struct CameraHandle;}
 
 // Mesh data stored on the GPU
 struct RenderMesh {

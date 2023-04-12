@@ -1,5 +1,6 @@
 use cgmath::{Deg, Matrix4, Vector3};
 
+#[derive(Copy, Clone)]
 pub struct Camera {
     pub position: Vector3<f32>,
     pub rotation: f32,

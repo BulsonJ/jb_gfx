@@ -1,13 +1,19 @@
+use std::time::Instant;
+
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3};
 use env_logger::{Builder, Target};
-use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Light, LightHandle, Renderer};
-use jb_gfx::Colour;
-use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
+
+use jb_gfx::asset::AssetManager;
+use jb_gfx::renderer::{Light, Renderer};
+use jb_gfx::{Camera, Colour};
+
+use crate::components::{CameraComponent, LightComponent};
+
+mod components;
 
 fn main() {
     // Enable logging
@@ -15,9 +21,11 @@ fn main() {
     builder.target(Target::Stdout);
     builder.init();
 
+    let (screen_width, screen_height) = (1920, 1080);
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
-        .with_inner_size(LogicalSize::new(1920, 1080))
+        .with_inner_size(LogicalSize::new(screen_width, screen_height))
         .with_title("Rust Renderer")
         .build(&event_loop)
         .unwrap();
@@ -94,7 +102,7 @@ fn main() {
         ),
     ];
 
-    let mut lights = vec![
+    let mut light_components = vec![
         LightComponent {
             handle: renderer
                 .create_light(initial_lights.get(0).unwrap())
@@ -121,31 +129,50 @@ fn main() {
         },
     ];
 
+    let mut camera_component = {
+        let camera = Camera {
+            position: (0.0, -100.0, -2.0).into(),
+            rotation: 90f32,
+            aspect: screen_width as f32 / screen_height as f32,
+            fovy: 90.0,
+            znear: 0.1,
+            zfar: 4000.0,
+        };
+        CameraComponent {
+            handle: renderer.create_camera(&camera),
+            camera,
+        }
+    };
+    renderer.active_camera = Some(camera_component.handle);
+
     let mut initial_resize = true;
     let mut frame_start_time = Instant::now();
-    let mut time_passed = 0f64;
+    let mut time_passed = 0f32;
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared => {
-                let delta_time = frame_start_time.elapsed().as_secs_f64();
+                let delta_time = frame_start_time.elapsed().as_secs_f32();
                 frame_start_time = Instant::now();
                 time_passed += delta_time;
 
                 // Update lights
-                for (i, component) in lights.iter_mut().enumerate() {
-                    let position = 10f32 + ((i as f32 + 3f32 * time_passed as f32).sin() * 5f32);
-                    component.light.position = Vector3::new(
-                        position,
-                        component.light.position.y,
-                        component.light.position.z,
-                    );
+                for (i, component) in light_components.iter_mut().enumerate() {
+                    let position = 10f32 + ((i as f32 + 3f32 * time_passed).sin() * 5f32);
+                    component.light.position.x = position;
+                }
+
+                // Update render objects
+                for component in light_components.iter_mut() {
                     renderer
                         .set_light(component.handle, &component.light)
                         .unwrap();
                 }
+                renderer
+                    .set_camera(camera_component.handle, &camera_component.camera)
+                    .unwrap();
 
                 // Check if need to skip frame
-                let frame_skip = delta_time > 0.1f64;
+                let frame_skip = delta_time > 0.1f32;
                 if frame_skip {
                     //warn!("Skipping large time delta");
                 } else {
@@ -190,10 +217,4 @@ fn from_transforms(
     let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     translation * rotation * scale
-}
-
-#[derive(Copy, Clone)]
-struct LightComponent {
-    handle: LightHandle,
-    pub light: Light,
 }
