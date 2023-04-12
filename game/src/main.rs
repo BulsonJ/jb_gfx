@@ -162,14 +162,7 @@ fn main() {
                 }
 
                 // Update render objects
-                for component in light_components.iter_mut() {
-                    renderer
-                        .set_light(component.handle, &component.light)
-                        .unwrap();
-                }
-                renderer
-                    .set_camera(camera_component.handle, &camera_component.camera)
-                    .unwrap();
+                update_renderer_object_states(&mut renderer, &light_components, &camera_component);
 
                 // Check if need to skip frame
                 let frame_skip = delta_time > 0.1f32;
@@ -205,6 +198,21 @@ fn main() {
             _ => {}
         };
     });
+}
+
+fn update_renderer_object_states(
+    renderer: &mut Renderer,
+    light_components: &[LightComponent],
+    camera_component: &CameraComponent,
+) {
+    for component in light_components.iter() {
+        renderer
+            .set_light(component.handle, &component.light)
+            .unwrap();
+    }
+    renderer
+        .set_camera(camera_component.handle, &camera_component.camera)
+        .unwrap();
 }
 
 fn from_transforms(
