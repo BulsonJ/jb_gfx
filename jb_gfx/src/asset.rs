@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use anyhow::anyhow;
 
 use gltf::image::Source;
 
@@ -12,6 +13,17 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
+    pub fn load_texture(&mut self, renderer: &mut Renderer, file: &str, format: &ImageFormatType) -> anyhow::Result<Texture>{
+        if let Some(texture) = self.loaded_textures.get(file) {
+            Ok(*texture)
+        } else if let Ok(loaded_texture) = renderer.load_texture(file, format) {
+            self.loaded_textures.insert(file.to_string(), loaded_texture);
+            Ok(loaded_texture)
+        } else {
+            Err(anyhow!("Cant load texture or find it!"))
+        }
+    }
+
     pub fn load_gltf(&mut self, renderer: &mut Renderer, file: &str) -> anyhow::Result<Vec<Model>> {
         let mut models = Vec::new();
 
@@ -19,6 +31,7 @@ impl AssetManager {
 
         let (source_folder, _asset_name) = file.rsplit_once('/').unwrap();
 
+        // TODO : Add image load to vec when iterating through materials, then for normal maps upload them as normal
         for image in gltf.images() {
             let location = image.source();
             match location {
@@ -27,11 +40,7 @@ impl AssetManager {
                     uri,
                     mime_type: _mime_type,
                 } => {
-                    let image_asset = String::from(source_folder) + "/" + uri;
-                    let format_type = ImageFormatType::Default;
-                    if let Ok(loaded_texture) = renderer.load_texture(&image_asset, &format_type) {
-                        self.loaded_textures.insert(uri.to_string(), loaded_texture);
-                    }
+
                 }
             };
         }
@@ -83,7 +92,8 @@ impl AssetManager {
                         match info.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
-                                Some(*self.loaded_textures.get(uri).unwrap())
+                                let image_asset = String::from(source_folder) + "/" + uri;
+                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
                             }
                         }
                     } else {
@@ -95,7 +105,8 @@ impl AssetManager {
                         match info.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
-                                Some(*self.loaded_textures.get(uri).unwrap())
+                                let image_asset = String::from(source_folder) + "/" + uri;
+                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Normal)?)
                             }
                         }
                     } else {
@@ -110,7 +121,8 @@ impl AssetManager {
                         match info.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
-                                Some(*self.loaded_textures.get(uri).unwrap())
+                                let image_asset = String::from(source_folder) + "/" + uri;
+                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
                             }
                         }
                     } else {
@@ -122,7 +134,9 @@ impl AssetManager {
                         match emissive.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
-                                Some(*self.loaded_textures.get(uri).unwrap())
+                                let image_asset = String::from(source_folder) + "/" + uri;
+                                let format_type = ImageFormatType::Default;
+                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
                             }
                         }
                     } else {
@@ -134,7 +148,9 @@ impl AssetManager {
                         match emissive.texture().source().source() {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
-                                Some(*self.loaded_textures.get(uri).unwrap())
+                                let image_asset = String::from(source_folder) + "/" + uri;
+                                let format_type = ImageFormatType::Default;
+                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
                             }
                         }
                     } else {

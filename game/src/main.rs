@@ -80,7 +80,7 @@ fn main() {
                 .set_render_model_transform(
                     helmet,
                     from_transforms(
-                        Vector3::new(5f32, 100f32, 0.0f32),
+                        Vector3::new(10f32, 100f32, 0.0f32),
                         Quaternion::from_axis_angle(
                             Vector3::new(1f32, 0f32, 0.0f32).normalize(),
                             Deg(100f32),
@@ -88,7 +88,7 @@ fn main() {
                             Vector3::new(0f32, 0f32, 1.0f32).normalize(),
                             Deg(60f32),
                         ),
-                        Vector3::from_value(2f32),
+                        Vector3::from_value(6f32),
                     ),
                 )
                 .unwrap();
@@ -98,19 +98,19 @@ fn main() {
 
     let initial_lights = vec![
         Light::new(
-            Vector3::new(10.0f32, 95.0f32, -8.0f32),
+            Vector3::new(10.0f32, 95.0f32, -16.0f32),
             Vector3::new(3.0f32, 0.0f32, 0.0f32),
         ),
         Light::new(
-            Vector3::new(-10.0f32, 105.0f32, 8.0f32),
+            Vector3::new(-10.0f32, 105.0f32, 16.0f32),
             Vector3::new(0.0f32, 3.0f32, 0.0f32),
         ),
         Light::new(
-            Vector3::new(10.0f32, 105.0f32, -8.0f32),
+            Vector3::new(10.0f32, 105.0f32, -16.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
         Light::new(
-            Vector3::new(-10.0f32, 95.0f32, 8.0f32),
+            Vector3::new(-10.0f32, 95.0f32, 16.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
     ];

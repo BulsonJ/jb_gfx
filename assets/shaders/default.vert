@@ -56,8 +56,8 @@ void main()
 	outTexCoords = vTexCoords;
 	outNormal = normalMatrix * vNormal;
 
-	vec3 T = normalize(vec3(normalMatrix * vec3(vNormal)));
-	vec3 N = normalize(vec3(normalMatrix * vec3(vTangent.xyz)));
+	vec3 T = normalize(vec3(normalMatrix * vec3(vTangent.xyz)));
+	vec3 N = normalize(vec3(normalMatrix * vec3(vNormal)));
 	// re-orthogonalize T with respect to N
 	T = normalize(T - dot(T, N) * N);
 	// then retrieve perpendicular vector B with the cross product of T and N

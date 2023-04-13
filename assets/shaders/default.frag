@@ -65,6 +65,12 @@ void main()
 	}
 	vec3 ambient = cameraData.ambientLight.w * cameraData.ambientLight.rgb;
 
+	vec3 normal = normalize(inNormal);
+	if (normalTexIndex > 0){
+		vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
+		normal = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
+	}
+
 	// Point lights
 	vec3 diffuseResult = vec3(0);
 	vec3 specularResult = vec3(0);
@@ -75,12 +81,6 @@ void main()
 		vec3 diffuse = vec3(0);
 		vec3 specular = vec3(0);
 
-		// For normal texture
-		vec3 normal = normalize(inNormal);
-		//if (normalTexIndex > 0){
-		//	vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
-		//	norm = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
-		//}
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
 		float diff = max(dot(normal, lightDir), 0.0);
 		diffuse += diff * currentLight.colour.rgb;
