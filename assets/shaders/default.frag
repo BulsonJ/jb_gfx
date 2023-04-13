@@ -76,28 +76,27 @@ void main()
 		vec3 specular = vec3(0);
 
 		// For normal texture
-		vec3 norm = normalize(inNormal);
+		vec3 normal = normalize(inNormal);
 		//if (normalTexIndex > 0){
 		//	vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
 		//	norm = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
 		//}
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
-		float diff = max(dot(norm, lightDir), 0.0);
+		float diff = max(dot(normal, lightDir), 0.0);
 		diffuse += diff * currentLight.colour.rgb;
 
 		// Specular
-		float specularStrength = 0.2;
+		float shininess = 32.0;
 		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
-		vec3 reflectDir = reflect(-lightDir, norm);
 		vec3 halfwayDir = normalize(lightDir + viewDir);
-		float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
+		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
 		specular += vec3(0.2) * spec;
 
 		// attenuation
 		float distance    = length(currentLight.position.xyz - inWorldPos);
 		float lightConstant = 1.0;
-		float lightLinear = 0.045;
-		float lightQuadratic = 0.0075;
+		float lightLinear = 0.09;
+		float lightQuadratic = 0.032;
 		float attenuation = 1.0 / (lightConstant + lightLinear * distance + lightQuadratic * (distance * distance));
 
 		diffuse *= attenuation;
