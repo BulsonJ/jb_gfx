@@ -159,31 +159,33 @@ fn main() {
     renderer.active_camera = Some(camera_component.handle);
 
     let mut initial_resize = true;
+
     let mut frame_start_time = Instant::now();
-    let mut time_passed = 0f32;
+    let mut t = 0.0;
+    let target_dt = 1.0 / 60.0;
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::MainEventsCleared => {
-                let delta_time = frame_start_time.elapsed().as_secs_f32();
+                let mut frame_time = frame_start_time.elapsed().as_secs_f32();
                 frame_start_time = Instant::now();
-                time_passed += delta_time;
 
-                // Update lights
-                for (i, component) in light_components.iter_mut().enumerate() {
-                    let position = 10f32 + ((i as f32 + 3f32 * time_passed).sin() * 5f32);
-                    component.light.position.x = position;
+                while frame_time > 0.0f32 {
+                    let delta_time = frame_time.min(target_dt);
+
+                    // Update
+                    for (i, component) in light_components.iter_mut().enumerate() {
+                        let position = 10f32 + ((i as f32 + 3f32 * t).sin() * 5f32);
+                        component.light.position.x = position;
+                    }
+
+                    frame_time -= delta_time;
+                    t += delta_time;
                 }
 
-                // Update render objects
+                // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &light_components, &camera_component);
-
-                // Check if need to skip frame
-                let frame_skip = delta_time > 0.1f32;
-                if frame_skip {
-                    //warn!("Skipping large time delta");
-                } else {
-                    renderer.render().unwrap();
-                }
+                renderer.render().unwrap();
             }
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::CloseRequested

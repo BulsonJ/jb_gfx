@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use anyhow::anyhow;
+use std::collections::HashMap;
 
 use gltf::image::Source;
 
@@ -13,11 +13,17 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn load_texture(&mut self, renderer: &mut Renderer, file: &str, format: &ImageFormatType) -> anyhow::Result<Texture>{
+    pub fn load_texture(
+        &mut self,
+        renderer: &mut Renderer,
+        file: &str,
+        format: &ImageFormatType,
+    ) -> anyhow::Result<Texture> {
         if let Some(texture) = self.loaded_textures.get(file) {
             Ok(*texture)
         } else if let Ok(loaded_texture) = renderer.load_texture(file, format) {
-            self.loaded_textures.insert(file.to_string(), loaded_texture);
+            self.loaded_textures
+                .insert(file.to_string(), loaded_texture);
             Ok(loaded_texture)
         } else {
             Err(anyhow!("Cant load texture or find it!"))
@@ -39,9 +45,7 @@ impl AssetManager {
                 Source::Uri {
                     uri,
                     mime_type: _mime_type,
-                } => {
-
-                }
+                } => {}
             };
         }
 
@@ -93,7 +97,11 @@ impl AssetManager {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
+                                Some(self.load_texture(
+                                    renderer,
+                                    &image_asset,
+                                    &ImageFormatType::Default,
+                                )?)
                             }
                         }
                     } else {
@@ -106,7 +114,11 @@ impl AssetManager {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Normal)?)
+                                Some(self.load_texture(
+                                    renderer,
+                                    &image_asset,
+                                    &ImageFormatType::Normal,
+                                )?)
                             }
                         }
                     } else {
@@ -122,7 +134,11 @@ impl AssetManager {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
+                                Some(self.load_texture(
+                                    renderer,
+                                    &image_asset,
+                                    &ImageFormatType::Default,
+                                )?)
                             }
                         }
                     } else {
@@ -136,7 +152,11 @@ impl AssetManager {
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 let format_type = ImageFormatType::Default;
-                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
+                                Some(self.load_texture(
+                                    renderer,
+                                    &image_asset,
+                                    &ImageFormatType::Default,
+                                )?)
                             }
                         }
                     } else {
@@ -150,7 +170,11 @@ impl AssetManager {
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 let format_type = ImageFormatType::Default;
-                                Some(self.load_texture(renderer, &image_asset, &ImageFormatType::Default)?)
+                                Some(self.load_texture(
+                                    renderer,
+                                    &image_asset,
+                                    &ImageFormatType::Default,
+                                )?)
                             }
                         }
                     } else {
