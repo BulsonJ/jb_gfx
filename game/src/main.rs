@@ -16,6 +16,12 @@ use crate::components::{CameraComponent, LightComponent};
 mod components;
 
 fn main() {
+    // TODO: Fix this config flag not being set for some reason
+    //#[cfg(feature = "profile-with-tracy")]
+    profiling::tracy_client::Client::start();
+    profiling::register_thread!("Main Thread");
+    profiling::scope!("Game");
+
     // Enable logging
     let mut builder = Builder::from_default_env();
     builder.target(Target::Stdout);
@@ -165,6 +171,7 @@ fn main() {
     let target_dt = 1.0 / 60.0;
 
     event_loop.run(move |event, _, control_flow| {
+        profiling::scope!("Game Event Loop");
         match event {
             Event::MainEventsCleared => {
                 let mut frame_time = frame_start_time.elapsed().as_secs_f32();
@@ -212,9 +219,11 @@ fn main() {
             },
             _ => {}
         };
+        profiling::finish_frame!()
     });
 }
 
+#[profiling::function]
 fn update_renderer_object_states(
     renderer: &mut Renderer,
     light_components: &[LightComponent],
@@ -230,6 +239,7 @@ fn update_renderer_object_states(
         .unwrap();
 }
 
+#[profiling::function]
 fn from_transforms(
     position: Vector3<f32>,
     rotation: Quaternion<f32>,

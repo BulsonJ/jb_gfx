@@ -57,6 +57,8 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(window: &Window) -> Result<Self> {
+        profiling::scope!("Renderer::new");
+
         let mut device = GraphicsDevice::new(window)?;
 
         let vertex_input_desc = Vertex::get_vertex_input_desc();
@@ -439,10 +441,14 @@ impl Renderer {
     }
 
     pub fn reload_shaders(&mut self) -> Result<()> {
+        profiling::scope!("Reload shaders");
+
         self.pipeline_manager.reload_shaders(&mut self.device)
     }
 
     pub fn render(&mut self) -> Result<()> {
+        profiling::scope!("Render Frame");
+
         let present_index = self.device.start_frame()?;
 
         let clear_colour: Vector3<f32> = self.clear_colour.into();
@@ -967,7 +973,12 @@ impl Renderer {
         file_location: &str,
         image_type: &ImageFormatType,
     ) -> Result<Texture> {
-        let img = image::open(file_location);
+        profiling::scope!("Renderer: Load Texture");
+
+        let img = {
+            profiling::scope!("image::open");
+            image::open(file_location)
+        };
 
         if let Err(error) = img {
             return Err(anyhow!(error.to_string()));
@@ -1039,6 +1050,8 @@ impl Renderer {
     }
 
     pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
+        profiling::scope!("Load Mesh");
+
         let vertex_buffer = {
             let staging_buffer_create_info = BufferCreateInfo {
                 size: (size_of::<Vertex>() * mesh.vertices.len()),

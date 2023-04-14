@@ -27,3 +27,6 @@ features = ["linked"]
 [dependencies.gltf]
 version = "1.1.0"
 features = ["utils"]
+
+[dependencies.profiling]
+version = "1.0.7"

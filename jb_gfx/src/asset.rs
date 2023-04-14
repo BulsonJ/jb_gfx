@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
 use gltf::image::Source;
@@ -18,7 +18,7 @@ impl AssetManager {
         renderer: &mut Renderer,
         file: &str,
         format: &ImageFormatType,
-    ) -> anyhow::Result<Texture> {
+    ) -> Result<Texture> {
         if let Some(texture) = self.loaded_textures.get(file) {
             Ok(*texture)
         } else if let Ok(loaded_texture) = renderer.load_texture(file, format) {
@@ -30,10 +30,15 @@ impl AssetManager {
         }
     }
 
-    pub fn load_gltf(&mut self, renderer: &mut Renderer, file: &str) -> anyhow::Result<Vec<Model>> {
+    pub fn load_gltf(&mut self, renderer: &mut Renderer, file: &str) -> Result<Vec<Model>> {
+        profiling::scope!("Load GLTF Asset");
+
         let mut models = Vec::new();
 
-        let (gltf, buffers, _) = gltf::import(file)?;
+        let (gltf, buffers, _) = {
+            profiling::scope!("Load GLTF Asset: Import File");
+            gltf::import(file)?
+        };
 
         let (source_folder, _asset_name) = file.rsplit_once('/').unwrap();
 
@@ -50,7 +55,10 @@ impl AssetManager {
         }
 
         for mesh in gltf.meshes() {
+            profiling::scope!("Load GLTF Asset: Mesh");
             for primitive in mesh.primitives() {
+                profiling::scope!("Load GLTF Asset: Primitive");
+
                 let mut positions = Vec::new();
                 let mut tex_coords = Vec::new();
                 let mut normals = Vec::new();

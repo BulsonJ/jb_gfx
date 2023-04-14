@@ -56,6 +56,8 @@ pub struct GraphicsDevice {
 
 impl GraphicsDevice {
     pub fn new(window: &Window) -> Result<Self> {
+        profiling::scope!("GraphicsDevice::new");
+
         let size = window.inner_size();
 
         let entry = ash::Entry::linked();
@@ -466,6 +468,8 @@ impl GraphicsDevice {
     }
 
     pub fn start_frame(&mut self) -> Result<u32> {
+        profiling::scope!("Start Frame");
+
         unsafe {
             self.vk_device.wait_for_fences(
                 &[self.draw_commands_reuse_fence[self.buffered_resource_number()]],
@@ -612,6 +616,8 @@ impl GraphicsDevice {
     }
 
     pub fn end_frame(&mut self, present_index: u32) -> Result<()> {
+        profiling::scope!("End Frame");
+
         let wait_semaphores = [self.rendering_complete_semaphore[self.buffered_resource_number()]];
         let swapchains = [self.swapchain];
         let image_indices = [present_index];
@@ -633,6 +639,8 @@ impl GraphicsDevice {
         if new_size.width == 0u32 || new_size.height == 0u32 || new_size == self.size {
             return Ok(());
         }
+
+        profiling::scope!("Resize");
 
         unsafe { self.vk_device.device_wait_idle() }?;
         self.size = new_size;
@@ -853,6 +861,8 @@ impl GraphicsDevice {
         &mut self,
         function: F,
     ) -> Result<()> {
+        profiling::scope!("Immediate Submit to GPU");
+
         let mut cmd = self.upload_context.command_buffer;
 
         let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
