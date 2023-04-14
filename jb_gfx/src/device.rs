@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
@@ -56,6 +57,11 @@ pub struct GraphicsDevice {
     frame_number: usize,
     images_to_upload: Vec<ImageToUpload>,
     render_targets: RenderTargets,
+    bindless_descriptor_set_layout: vk::DescriptorSetLayout,
+    bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    bindless_textures: Vec<ImageHandle>,
+    bindless_indexes: HashMap<ImageHandle, usize>,
+    bindless_descriptor_pool: vk::DescriptorPool,
 }
 
 impl GraphicsDevice {
@@ -361,6 +367,72 @@ impl GraphicsDevice {
             queue: graphics_queue,
         };
 
+        // Create descriptor pool
+
+        let pool_sizes = [
+            *vk::DescriptorPoolSize::builder()
+                .descriptor_count(100u32)
+                .ty(vk::DescriptorType::UNIFORM_BUFFER),
+            *vk::DescriptorPoolSize::builder()
+                .descriptor_count(100u32)
+                .ty(vk::DescriptorType::STORAGE_BUFFER),
+            *vk::DescriptorPoolSize::builder()
+                .descriptor_count(1000u32)
+                .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
+        ];
+
+        let pool_create_info = vk::DescriptorPoolCreateInfo::builder()
+            .max_sets(4u32)
+            .pool_sizes(&pool_sizes);
+
+        let descriptor_pool = unsafe { device.create_descriptor_pool(&pool_create_info, None) }?;
+
+        // Create bindless set
+
+        let bindless_binding_flags = [vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT
+            | vk::DescriptorBindingFlags::PARTIALLY_BOUND];
+
+        let mut bindless_descriptor_set_binding_flags_create_info =
+            vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
+                .binding_flags(&bindless_binding_flags);
+
+        let bindless_descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
+            .binding(0u32)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(100u32)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+
+        let bindless_descriptor_set_layout_create_info =
+            vk::DescriptorSetLayoutCreateInfo::builder()
+                .push_next(&mut bindless_descriptor_set_binding_flags_create_info)
+                .bindings(&bindless_descriptor_set_bindings);
+
+        let bindless_descriptor_set_layout = unsafe {
+            device.create_descriptor_set_layout(&bindless_descriptor_set_layout_create_info, None)
+        }?;
+
+        let bindless_descriptor_set = {
+            let mut descriptor_set_counts =
+                vk::DescriptorSetVariableDescriptorCountAllocateInfo::builder()
+                    .descriptor_counts(&[100u32]);
+
+            let set_layouts = [bindless_descriptor_set_layout];
+            let create_info = vk::DescriptorSetAllocateInfo::builder()
+                .push_next(&mut descriptor_set_counts)
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&set_layouts);
+
+            let descriptor_sets = unsafe { device.allocate_descriptor_sets(&create_info) }?;
+            let first = *descriptor_sets.get(0).unwrap();
+            let descriptor_sets = unsafe { device.allocate_descriptor_sets(&create_info) }?;
+            let second = *descriptor_sets.get(0).unwrap();
+
+            [first, second]
+        };
+
+        let bindless_textures = Vec::new();
+        let bindless_indexes = HashMap::new();
+
         let mut device = Self {
             instance,
             size,
@@ -392,6 +464,11 @@ impl GraphicsDevice {
             frame_number: 0usize,
             images_to_upload: Vec::default(),
             render_targets: RenderTargets::new((size.width, size.height)),
+            bindless_descriptor_set_layout,
+            bindless_descriptor_set,
+            bindless_textures,
+            bindless_indexes,
+            bindless_descriptor_pool: descriptor_pool,
         };
 
         device.render_image = device.render_targets.create_render_target(
@@ -406,6 +483,14 @@ impl GraphicsDevice {
             RenderTargetSize::Fullscreen,
             RenderImageType::Depth,
         )?;
+
+        for set in device.bindless_descriptor_set.iter() {
+            device.set_vulkan_debug_name(
+                set.as_raw(),
+                ObjectType::DESCRIPTOR_SET,
+                "Bindless Descriptor Set(0)",
+            )?;
+        }
 
         info!("Device Created");
         Ok(device)
@@ -478,7 +563,7 @@ impl GraphicsDevice {
                         ImageLayout::UNDEFINED,
                         ImageLayout::TRANSFER_DST_OPTIMAL,
                         0,
-                        image.mip_levels
+                        image.mip_levels,
                     ))
                     .build(
                         self,
@@ -833,6 +918,34 @@ impl GraphicsDevice {
             mip_levels,
         });
 
+        self.bindless_textures.push(image);
+        let bindless_index = self.bindless_textures.len();
+        self.bindless_indexes.insert(image, bindless_index);
+
+        let bindless_image_info = vk::DescriptorImageInfo::builder()
+            .sampler(self.default_sampler)
+            .image_view(self.resource_manager.get_image(image).unwrap().image_view())
+            .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+
+        let image_info = [*bindless_image_info];
+        let desc_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.bindless_descriptor_set[0])
+            .dst_binding(0u32)
+            .dst_array_element(bindless_index as u32 - 1u32)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_info);
+        let desc_write_two = vk::WriteDescriptorSet::builder()
+            .dst_set(self.bindless_descriptor_set[1])
+            .dst_binding(0u32)
+            .dst_array_element(bindless_index as u32 - 1u32)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_info);
+
+        unsafe {
+            self.vk_device
+                .update_descriptor_sets(&[*desc_write, *desc_write_two], &[]);
+        }
+
         Ok(image)
     }
 
@@ -903,12 +1016,28 @@ impl GraphicsDevice {
     pub fn render_targets(&self) -> &RenderTargets {
         &self.render_targets
     }
+
+    pub fn bindless_descriptor_set_layout(&self) -> &vk::DescriptorSetLayout {
+        &self.bindless_descriptor_set_layout
+    }
+
+    pub fn bindless_descriptor_set(&self) -> &[vk::DescriptorSet; FRAMES_IN_FLIGHT] {
+        &self.bindless_descriptor_set
+    }
+
+    pub fn get_descriptor_index(&self, image: &ImageHandle) -> Option<usize> {
+        self.bindless_indexes.get(&image).cloned()
+    }
 }
 
 impl Drop for GraphicsDevice {
     fn drop(&mut self) {
         unsafe {
             self.vk_device.device_wait_idle().unwrap();
+            self.vk_device
+                .destroy_descriptor_set_layout(self.bindless_descriptor_set_layout, None);
+            self.vk_device
+                .destroy_descriptor_pool(self.bindless_descriptor_pool, None);
             self.resource_manager.destroy_resources();
             self.vk_device.destroy_sampler(self.default_sampler, None);
             for semaphore in self.present_complete_semaphore.into_iter() {
