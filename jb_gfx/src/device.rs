@@ -794,6 +794,41 @@ impl GraphicsDevice {
             .resource_manager
             .create_image(&depth_image_create_info, resource::ImageAspectType::Depth);
 
+        for (_, render_target) in self.render_targets.iter_mut() {
+            if render_target.size != RenderTargetSize::Fullscreen {
+                continue;
+            }
+
+            let extent = match render_target.size {
+                RenderTargetSize::Fullscreen => vk::Extent3D {
+                    width: self.surface_resolution.width,
+                    height: self.surface_resolution.height,
+                    depth: 1,
+                },
+                _ => vk::Extent3D::default(),
+            };
+
+            let render_image_create_info = vk::ImageCreateInfo::builder()
+                .format(render_target.format)
+                .usage(
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_SRC,
+                )
+                .extent(extent)
+                .image_type(vk::ImageType::TYPE_2D)
+                .array_layers(1u32)
+                .mip_levels(1u32)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL);
+
+            self.resource_manager.destroy_image(render_target.image);
+
+            render_target.image = self
+                .resource_manager
+                .create_image(&render_image_create_info, resource::ImageAspectType::Color)
+        }
+
         info!("Recreating swapchain.");
         Ok(())
     }
@@ -928,8 +963,6 @@ impl GraphicsDevice {
         format: vk::Format,
         size: RenderTargetSize,
     ) -> Result<RenderTargetHandle> {
-        let render_image_format = vk::Format::R8G8B8A8_SRGB;
-
         let extent = match size {
             RenderTargetSize::Static(width, height) => vk::Extent3D {
                 width,
@@ -945,7 +978,7 @@ impl GraphicsDevice {
 
         let render_image = {
             let render_image_create_info = vk::ImageCreateInfo::builder()
-                .format(render_image_format)
+                .format(format)
                 .usage(
                     vk::ImageUsageFlags::SAMPLED
                         | vk::ImageUsageFlags::COLOR_ATTACHMENT
@@ -962,19 +995,20 @@ impl GraphicsDevice {
                 .create_image(&render_image_create_info, resource::ImageAspectType::Color)
         };
 
-        {
-            let render_image_handle = self
-                .resource_manager
-                .get_image(render_image)
-                .unwrap()
-                .image()
-                .as_raw();
-            self.set_vulkan_debug_name(render_image_handle, ObjectType::IMAGE, "Render Image")?;
-        }
+        //{
+        //    let render_image_handle = self
+        //        .resource_manager
+        //        .get_image(render_image)
+        //        .unwrap()
+        //        .image()
+        //        .as_raw();
+        //    self.set_vulkan_debug_name(render_image_handle, ObjectType::IMAGE, "Render Image")?;
+        //}
 
         let render_target = RenderTarget {
             image: render_image,
             size,
+            format,
         };
         Ok(self.render_targets.insert(render_target))
     }
@@ -1101,6 +1135,7 @@ pub enum ImageFormatType {
 
 new_key_type! {pub struct RenderTargetHandle;}
 
+#[derive(PartialEq)]
 pub enum RenderTargetSize {
     Static(u32, u32),
     Fullscreen,
@@ -1109,4 +1144,5 @@ pub enum RenderTargetSize {
 struct RenderTarget {
     image: ImageHandle,
     size: RenderTargetSize,
+    format: vk::Format,
 }
