@@ -49,7 +49,7 @@ pub struct Renderer {
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    pub light_mesh: Option<RenderModelHandle>,
+    pub light_mesh: Option<MeshHandle>,
     stored_lights: SlotMap<LightHandle, Light>,
     stored_cameras: SlotMap<CameraHandle, Camera>,
     pub active_camera: Option<CameraHandle>,
@@ -649,10 +649,11 @@ impl Renderer {
             .copy_from_slice(&materials);
 
         // Fill draw commands
-        let mut draw_commands: Vec<DrawCommand> = Vec::new();
+        let mut draw_data: Vec<DrawData> = Vec::new();
         for (i, model) in self.render_models.keys().enumerate() {
-            draw_commands.push(DrawCommand {
-                render_model: model,
+            let model = self.render_models.get(model).unwrap();
+            draw_data.push(DrawData {
+                mesh_handle: model.mesh_handle,
                 transform_index: i,
                 material_index: i,
             });
@@ -661,8 +662,8 @@ impl Renderer {
             for i in 0..self.stored_lights.len() {
                 let i = i + self.render_models.len();
 
-                draw_commands.push(DrawCommand {
-                    render_model: light_model,
+                draw_data.push(DrawData {
+                    mesh_handle: light_model,
                     transform_index: i,
                     material_index: i,
                 });
@@ -736,12 +737,12 @@ impl Renderer {
 
         // Draw commands
 
-        for command in draw_commands.iter() {
-            if let Some(render_model) = self.render_models.get(command.render_model) {
+        for draw in draw_data.iter() {
+            if let Some(mesh) = self.meshes.get(draw.mesh_handle) {
                 let push_constants = PushConstants {
                     handles: [
-                        command.transform_index as i32,
-                        command.material_index as i32,
+                        draw.transform_index as i32,
+                        draw.material_index as i32,
                         0,
                         0,
                     ],
@@ -756,45 +757,40 @@ impl Renderer {
                     )
                 };
 
-                if let Some(display_mesh) = self.meshes.get(render_model.mesh_handle) {
-                    let vertex_buffer = self
-                        .device
-                        .resource_manager
-                        .get_buffer(display_mesh.vertex_buffer)
-                        .unwrap()
-                        .buffer();
-                    let index_buffer = self
-                        .device
-                        .resource_manager
-                        .get_buffer(display_mesh.index_buffer.unwrap())
-                        .unwrap()
-                        .buffer();
+                let vertex_buffer = self
+                    .device
+                    .resource_manager
+                    .get_buffer(mesh.vertex_buffer)
+                    .unwrap()
+                    .buffer();
+                let index_buffer = self
+                    .device
+                    .resource_manager
+                    .get_buffer(mesh.index_buffer.unwrap())
+                    .unwrap()
+                    .buffer();
 
-                    unsafe {
-                        self.device.vk_device.cmd_bind_vertex_buffers(
-                            self.device.graphics_command_buffer
-                                [self.device.buffered_resource_number()],
-                            0u32,
-                            &[vertex_buffer],
-                            &[0u64],
-                        );
-                        self.device.vk_device.cmd_bind_index_buffer(
-                            self.device.graphics_command_buffer
-                                [self.device.buffered_resource_number()],
-                            index_buffer,
-                            DeviceSize::zero(),
-                            IndexType::UINT32,
-                        );
-                        self.device.vk_device.cmd_draw_indexed(
-                            self.device.graphics_command_buffer
-                                [self.device.buffered_resource_number()],
-                            display_mesh.vertex_count,
-                            1u32,
-                            0u32,
-                            0i32,
-                            0u32,
-                        );
-                    }
+                unsafe {
+                    self.device.vk_device.cmd_bind_vertex_buffers(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        0u32,
+                        &[vertex_buffer],
+                        &[0u64],
+                    );
+                    self.device.vk_device.cmd_bind_index_buffer(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        index_buffer,
+                        DeviceSize::zero(),
+                        IndexType::UINT32,
+                    );
+                    self.device.vk_device.cmd_draw_indexed(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        mesh.vertex_count,
+                        1u32,
+                        0u32,
+                        0i32,
+                        0u32,
+                    );
                 }
             }
         }
@@ -1423,8 +1419,8 @@ impl Light {
     }
 }
 
-struct DrawCommand {
-    render_model: RenderModelHandle,
+struct DrawData {
+    mesh_handle: MeshHandle,
     transform_index: usize,
     material_index: usize,
 }

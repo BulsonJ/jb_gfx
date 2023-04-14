@@ -41,7 +41,7 @@ fn main() {
         for model in models.iter() {
             let render_model =
                 renderer.add_render_model(model.mesh, model.material_instance.clone());
-            renderer.light_mesh = Some(render_model);
+            renderer.light_mesh = Some(model.mesh);
         }
     }
     // Load sponza
