@@ -716,7 +716,7 @@ impl GraphicsDevice {
 
         let image = self
             .resource_manager
-            .create_image(&image_create_info, resource::ImageAspectType::Color);
+            .create_image(&image_create_info);
 
         self.images_to_upload.push(ImageToUpload {
             buffer_handle: staging_buffer,

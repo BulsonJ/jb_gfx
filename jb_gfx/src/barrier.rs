@@ -83,7 +83,7 @@ impl ImageBarrierBuilder {
 
             let aspect_mask: ImageAspectFlags = {
                 if let Some(image) = image {
-                    image.aspect_type().into()
+                    image.aspect_flags().into()
                 } else {
                     ImageAspectFlags::COLOR
                 }

@@ -1,4 +1,4 @@
-use crate::resource::{ImageAspectType, ImageHandle, ResourceManager};
+use crate::resource::{ImageHandle, ResourceManager};
 use anyhow::Result;
 use ash::vk;
 use slotmap::{new_key_type, SlotMap};
@@ -134,11 +134,6 @@ fn create_render_target_image(
         }
     };
 
-    let image_aspect_type = match image_type {
-        RenderImageType::Colour => ImageAspectType::Color,
-        RenderImageType::Depth => ImageAspectType::Depth,
-    };
-
     let render_image = {
         let render_image_create_info = vk::ImageCreateInfo::builder()
             .format(format)
@@ -150,7 +145,7 @@ fn create_render_target_image(
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL);
 
-        resource_manager.create_image(&render_image_create_info, image_aspect_type)
+        resource_manager.create_image(&render_image_create_info)
     };
 
     Ok(render_image)

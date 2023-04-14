@@ -1,5 +1,6 @@
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
+use ash::vk::Format;
 use log::{info, trace};
 use slotmap::{self, new_key_type, SlotMap};
 
@@ -145,7 +146,6 @@ impl ResourceManager {
     pub fn create_image(
         &mut self,
         image_create_info: &vk::ImageCreateInfo,
-        usage_type: ImageAspectType,
     ) -> ImageHandle {
         let alloc_create_info = vk_mem_alloc::AllocationCreateInfo {
             usage: vk_mem_alloc::MemoryUsage::AUTO,
@@ -163,7 +163,7 @@ impl ResourceManager {
             .image(vk_image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: usage_type.into(),
+                aspect_mask: get_image_aspect_flags_from_format(image_create_info.format),
                 level_count: 1u32,
                 layer_count: 1u32,
                 ..Default::default()
@@ -182,7 +182,7 @@ impl ResourceManager {
             image_view: default_view,
             image: vk_image,
             image_usage: image_create_info.usage,
-            image_aspect_type: usage_type,
+            image_format: image_create_info.format,
             allocation,
             allocation_info,
         };
@@ -219,21 +219,6 @@ impl ResourceManager {
 
             vk_mem_alloc::destroy_allocator(self.allocator)
         };
-    }
-}
-
-#[derive(Copy, Clone)]
-pub enum ImageAspectType {
-    Color,
-    Depth,
-}
-
-impl From<ImageAspectType> for vk::ImageAspectFlags {
-    fn from(value: ImageAspectType) -> Self {
-        match value {
-            ImageAspectType::Color => vk::ImageAspectFlags::COLOR,
-            ImageAspectType::Depth => vk::ImageAspectFlags::DEPTH,
-        }
     }
 }
 
@@ -345,7 +330,7 @@ impl<'a, T> BufferView<'a, T> {
 pub struct Image {
     image: vk::Image,
     image_usage: vk::ImageUsageFlags,
-    image_aspect_type: ImageAspectType,
+    image_format: vk::Format,
     image_view: vk::ImageView,
     allocation: vk_mem_alloc::Allocation,
     allocation_info: vk_mem_alloc::AllocationInfo,
@@ -356,8 +341,8 @@ impl Image {
         self.image
     }
 
-    pub fn aspect_type(&self) -> ImageAspectType {
-        self.image_aspect_type
+    pub fn aspect_flags(&self) -> vk::ImageAspectFlags {
+        get_image_aspect_flags_from_format(self.image_format)
     }
 
     pub fn usage(&self) -> vk::ImageUsageFlags {
@@ -374,4 +359,18 @@ new_key_type! {
     pub struct BufferHandle;
     /// Used to access images in a ResourceManager.
     pub struct ImageHandle;
+}
+
+fn get_image_aspect_flags_from_format(format: Format) -> vk::ImageAspectFlags {
+    let mut flags = vk::ImageAspectFlags::empty();
+
+    match format {
+        Format::R8G8B8A8_SRGB | Format::R8G8B8A8_UNORM => flags |= vk::ImageAspectFlags::COLOR,
+        Format::D32_SFLOAT => flags |= vk::ImageAspectFlags::DEPTH,
+        _ => {
+            todo!()
+        }
+    }
+
+    flags
 }
