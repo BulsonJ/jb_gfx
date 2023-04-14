@@ -524,7 +524,12 @@ impl Renderer {
             .image(
                 self.device
                     .resource_manager
-                    .get_image(self.device.render_image)
+                    .get_image(
+                        self.device
+                            .get_render_target(self.device.render_image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap()
                     .image(),
             )
@@ -546,7 +551,12 @@ impl Renderer {
             .image(
                 self.device
                     .resource_manager
-                    .get_image(self.device.depth_image)
+                    .get_image(
+                        self.device
+                            .get_render_target(self.device.depth_image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap()
                     .image(),
             )
@@ -684,7 +694,12 @@ impl Renderer {
             .image_view(
                 self.device
                     .resource_manager
-                    .get_image(self.device.render_image)
+                    .get_image(
+                        self.device
+                            .get_render_target(self.device.render_image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap()
                     .image_view(),
             )
@@ -697,7 +712,12 @@ impl Renderer {
             .image_view(
                 self.device
                     .resource_manager
-                    .get_image(self.device.depth_image)
+                    .get_image(
+                        self.device
+                            .get_render_target(self.device.depth_image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap()
                     .image_view(),
             )
@@ -821,7 +841,12 @@ impl Renderer {
             .image(
                 self.device
                     .resource_manager
-                    .get_image(self.device.render_image)
+                    .get_image(
+                        self.device
+                            .get_render_target(self.device.render_image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap()
                     .image(),
             )
@@ -880,7 +905,12 @@ impl Renderer {
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 self.device
                     .resource_manager
-                    .get_image(self.device.render_image)
+                    .get_image(
+                        self.device
+                            .get_render_target(self.device.render_image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap()
                     .image(),
                 ImageLayout::TRANSFER_SRC_OPTIMAL,

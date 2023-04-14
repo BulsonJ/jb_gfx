@@ -39,9 +39,9 @@ pub struct GraphicsDevice {
     swapchain_loader: Swapchain,
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
-    pub render_image: ImageHandle,
+    pub render_image: RenderTargetHandle,
     pub render_image_format: vk::Format,
-    pub depth_image: ImageHandle,
+    pub depth_image: RenderTargetHandle,
     pub depth_image_format: vk::Format,
     pub graphics_queue: vk::Queue,
     pub graphics_command_pool: [vk::CommandPool; FRAMES_IN_FLIGHT],
@@ -338,54 +338,6 @@ impl GraphicsDevice {
             unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
         ];
 
-        let render_image_format = vk::Format::R8G8B8A8_SRGB;
-        let render_image = {
-            let render_image_create_info = vk::ImageCreateInfo::builder()
-                .format(render_image_format)
-                .usage(
-                    vk::ImageUsageFlags::SAMPLED
-                        | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                        | vk::ImageUsageFlags::TRANSFER_SRC,
-                )
-                .extent(vk::Extent3D {
-                    width: surface_resolution.width,
-                    height: surface_resolution.height,
-                    depth: 1,
-                })
-                .image_type(vk::ImageType::TYPE_2D)
-                .array_layers(1u32)
-                .mip_levels(1u32)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL);
-
-            resource_manager
-                .create_image(&render_image_create_info, resource::ImageAspectType::Color)
-        };
-
-        let depth_image_format = vk::Format::D32_SFLOAT;
-        let depth_image = {
-            let depth_image_create_info = vk::ImageCreateInfo::builder()
-                .format(depth_image_format)
-                .usage(
-                    vk::ImageUsageFlags::SAMPLED
-                        | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                        | vk::ImageUsageFlags::TRANSFER_SRC,
-                )
-                .extent(vk::Extent3D {
-                    width: surface_resolution.width,
-                    height: surface_resolution.height,
-                    depth: 1,
-                })
-                .image_type(vk::ImageType::TYPE_2D)
-                .array_layers(1u32)
-                .mip_levels(1u32)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL);
-
-            resource_manager
-                .create_image(&depth_image_create_info, resource::ImageAspectType::Depth)
-        };
-
         let default_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::NEAREST)
@@ -420,10 +372,10 @@ impl GraphicsDevice {
             swapchain_loader,
             present_images,
             present_image_views,
-            render_image,
-            render_image_format,
-            depth_image,
-            depth_image_format,
+            render_image: RenderTargetHandle::default(),
+            render_image_format: vk::Format::R8G8B8A8_SRGB,
+            depth_image: RenderTargetHandle::default(),
+            depth_image_format: vk::Format::D32_SFLOAT,
             graphics_queue,
             graphics_command_pool,
             graphics_command_buffer,
@@ -437,25 +389,16 @@ impl GraphicsDevice {
             render_targets: SlotMap::default(),
         };
 
-        // Set debug names
-
-        {
-            let render_image_handle = device
-                .resource_manager
-                .get_image(render_image)
-                .unwrap()
-                .image()
-                .as_raw();
-            device.set_vulkan_debug_name(render_image_handle, ObjectType::IMAGE, "Render Image")?;
-
-            let depth_image_handle = device
-                .resource_manager
-                .get_image(device.depth_image)
-                .unwrap()
-                .image()
-                .as_raw();
-            device.set_vulkan_debug_name(depth_image_handle, ObjectType::IMAGE, "Depth Image")?;
-        }
+        device.render_image = device.create_render_target(
+            vk::Format::R8G8B8A8_SRGB,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Colour,
+        )?;
+        device.depth_image = device.create_render_target(
+            vk::Format::D32_SFLOAT,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Depth,
+        )?;
 
         info!("Device Created");
         Ok(device)
@@ -742,91 +685,29 @@ impl GraphicsDevice {
             })
             .collect();
 
-        // Recreate render image
-
-        let render_image_create_info = vk::ImageCreateInfo::builder()
-            .format(vk::Format::R8G8B8A8_SRGB)
-            .usage(
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )
-            .extent(vk::Extent3D {
-                width: self.surface_resolution.width,
-                height: self.surface_resolution.height,
-                depth: 1,
-            })
-            .image_type(vk::ImageType::TYPE_2D)
-            .array_layers(1u32)
-            .mip_levels(1u32)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL);
-
-        self.resource_manager.destroy_image(self.render_image);
-
-        self.render_image = self
-            .resource_manager
-            .create_image(&render_image_create_info, resource::ImageAspectType::Color);
-
-        // Recreate depth image
-
-        let depth_image_create_info = vk::ImageCreateInfo::builder()
-            .format(self.depth_image_format)
-            .usage(
-                vk::ImageUsageFlags::SAMPLED
-                    | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                    | vk::ImageUsageFlags::TRANSFER_SRC,
-            )
-            .extent(vk::Extent3D {
-                width: self.surface_resolution.width,
-                height: self.surface_resolution.height,
-                depth: 1,
-            })
-            .image_type(vk::ImageType::TYPE_2D)
-            .array_layers(1u32)
-            .mip_levels(1u32)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL);
-
-        self.resource_manager.destroy_image(self.depth_image);
-
-        self.depth_image = self
-            .resource_manager
-            .create_image(&depth_image_create_info, resource::ImageAspectType::Depth);
-
-        for (_, render_target) in self.render_targets.iter_mut() {
+        let render_targets = &mut self.render_targets;
+        for (_, render_target) in render_targets {
             if render_target.size != RenderTargetSize::Fullscreen {
                 continue;
             }
 
-            let extent = match render_target.size {
-                RenderTargetSize::Fullscreen => vk::Extent3D {
-                    width: self.surface_resolution.width,
-                    height: self.surface_resolution.height,
-                    depth: 1,
-                },
-                _ => vk::Extent3D::default(),
+            let size = {
+                match render_target.size {
+                    RenderTargetSize::Fullscreen => (
+                        self.surface_resolution.width,
+                        self.surface_resolution.height,
+                    ),
+                    _ => (0, 0),
+                }
             };
 
-            let render_image_create_info = vk::ImageCreateInfo::builder()
-                .format(render_target.format)
-                .usage(
-                    vk::ImageUsageFlags::SAMPLED
-                        | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                        | vk::ImageUsageFlags::TRANSFER_SRC,
-                )
-                .extent(extent)
-                .image_type(vk::ImageType::TYPE_2D)
-                .array_layers(1u32)
-                .mip_levels(1u32)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL);
-
             self.resource_manager.destroy_image(render_target.image);
-
-            render_target.image = self
-                .resource_manager
-                .create_image(&render_image_create_info, resource::ImageAspectType::Color)
+            render_target.image = create_render_target_image(
+                &mut self.resource_manager,
+                render_target.format,
+                size,
+                render_target.image_type,
+            )?;
         }
 
         info!("Recreating swapchain.");
@@ -962,64 +843,33 @@ impl GraphicsDevice {
         &mut self,
         format: vk::Format,
         size: RenderTargetSize,
+        image_type: RenderImageType,
     ) -> Result<RenderTargetHandle> {
-        let extent = match size {
-            RenderTargetSize::Static(width, height) => vk::Extent3D {
-                width,
-                height,
-                depth: 1,
-            },
-            RenderTargetSize::Fullscreen => vk::Extent3D {
-                width: self.surface_resolution.width,
-                height: self.surface_resolution.height,
-                depth: 1,
-            },
+        let actual_size = match size {
+            RenderTargetSize::Static(width, height) => (width, height),
+            RenderTargetSize::Fullscreen => (
+                self.surface_resolution.width,
+                self.surface_resolution.height,
+            ),
         };
 
-        let render_image = {
-            let render_image_create_info = vk::ImageCreateInfo::builder()
-                .format(format)
-                .usage(
-                    vk::ImageUsageFlags::SAMPLED
-                        | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                        | vk::ImageUsageFlags::TRANSFER_SRC,
-                )
-                .extent(extent)
-                .image_type(vk::ImageType::TYPE_2D)
-                .array_layers(1u32)
-                .mip_levels(1u32)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL);
-
-            self.resource_manager
-                .create_image(&render_image_create_info, resource::ImageAspectType::Color)
-        };
-
-        //{
-        //    let render_image_handle = self
-        //        .resource_manager
-        //        .get_image(render_image)
-        //        .unwrap()
-        //        .image()
-        //        .as_raw();
-        //    self.set_vulkan_debug_name(render_image_handle, ObjectType::IMAGE, "Render Image")?;
-        //}
-
+        let render_image = create_render_target_image(
+            &mut self.resource_manager,
+            format,
+            actual_size,
+            image_type,
+        )?;
         let render_target = RenderTarget {
             image: render_image,
             size,
             format,
+            image_type,
         };
         Ok(self.render_targets.insert(render_target))
     }
 
-    pub fn get_render_target_image(
-        &self,
-        render_target: RenderTargetHandle,
-    ) -> Option<ImageHandle> {
-        self.render_targets
-            .get(render_target)
-            .map(|target| target.image)
+    pub fn get_render_target(&self, render_target: RenderTargetHandle) -> Option<&RenderTarget> {
+        self.render_targets.get(render_target)
     }
 }
 
@@ -1135,14 +985,77 @@ pub enum ImageFormatType {
 
 new_key_type! {pub struct RenderTargetHandle;}
 
-#[derive(PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum RenderTargetSize {
     Static(u32, u32),
     Fullscreen,
 }
 
-struct RenderTarget {
+#[derive(Copy, Clone)]
+pub enum RenderImageType {
+    Colour,
+    Depth,
+}
+
+pub struct RenderTarget {
     image: ImageHandle,
     size: RenderTargetSize,
     format: vk::Format,
+    image_type: RenderImageType,
+}
+
+impl RenderTarget {
+    pub fn image(&self) -> ImageHandle {
+        self.image
+    }
+
+    pub fn size(&self) -> RenderTargetSize {
+        self.size
+    }
+
+    pub fn format(&self) -> vk::Format {
+        self.format
+    }
+}
+
+fn create_render_target_image(
+    resource_manager: &mut ResourceManager,
+    format: vk::Format,
+    size: (u32, u32),
+    image_type: RenderImageType,
+) -> Result<ImageHandle> {
+    let extent = vk::Extent3D {
+        width: size.0,
+        height: size.1,
+        depth: 1,
+    };
+
+    let usage = match image_type {
+        RenderImageType::Colour => {
+            vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC
+        }
+        RenderImageType::Depth => {
+            vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC
+        }
+    };
+
+    let render_image = {
+        let render_image_create_info = vk::ImageCreateInfo::builder()
+            .format(format)
+            .usage(usage)
+            .extent(extent)
+            .image_type(vk::ImageType::TYPE_2D)
+            .array_layers(1u32)
+            .mip_levels(1u32)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL);
+
+        resource_manager.create_image(&render_image_create_info, resource::ImageAspectType::Color)
+    };
+
+    Ok(render_image)
 }
