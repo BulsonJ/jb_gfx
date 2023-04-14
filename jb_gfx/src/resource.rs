@@ -187,7 +187,8 @@ impl ResourceManager {
 
         trace!(
             "Image created. [Dim: {},{}]",
-            image_create_info.extent.width, image_create_info.extent.height
+            image_create_info.extent.width,
+            image_create_info.extent.height
         );
 
         self.images.insert(image)

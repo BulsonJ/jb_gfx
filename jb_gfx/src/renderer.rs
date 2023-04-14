@@ -1102,7 +1102,11 @@ impl Renderer {
                     index_buffer: None,
                     vertex_count: mesh.vertices.len() as u32,
                 };
-                trace!("Mesh Loaded. Vertex Count:{}|Faces:{}", mesh.vertices.len(), mesh.faces.len());
+                trace!(
+                    "Mesh Loaded. Vertex Count:{}|Faces:{}",
+                    mesh.vertices.len(),
+                    mesh.faces.len()
+                );
                 Ok(self.meshes.insert(render_mesh))
             }
             Some(indices) => {
@@ -1151,7 +1155,12 @@ impl Renderer {
                     index_buffer: Some(index_buffer),
                     vertex_count: indices.len() as u32,
                 };
-                trace!("Mesh Loaded. Vertex Count:{}|Index Count:{}|Faces:{}", mesh.vertices.len(), mesh.indices.as_ref().unwrap().len(), mesh.faces.len());
+                trace!(
+                    "Mesh Loaded. Vertex Count:{}|Index Count:{}|Faces:{}",
+                    mesh.vertices.len(),
+                    mesh.indices.as_ref().unwrap().len(),
+                    mesh.faces.len()
+                );
                 Ok(self.meshes.insert(render_mesh))
             }
         }

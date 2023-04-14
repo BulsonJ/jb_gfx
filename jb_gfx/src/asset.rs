@@ -269,7 +269,11 @@ impl AssetManager {
             }
         }
 
-        info!("Loaded GLTF Model. Name: [{}], Models: [{}]",asset_name, models.len());
+        info!(
+            "Loaded GLTF Model. Name: [{}], Models: [{}]",
+            asset_name,
+            models.len()
+        );
         Ok(models)
     }
 }

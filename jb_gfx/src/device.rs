@@ -13,6 +13,7 @@ use ash::vk::{
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use slotmap::{new_key_type, SlotMap};
 use winit::window::Window;
 
 use crate::resource;
@@ -52,6 +53,7 @@ pub struct GraphicsDevice {
     pub default_sampler: vk::Sampler,
     frame_number: usize,
     images_to_upload: Vec<ImageToUpload>,
+    render_targets: SlotMap<RenderTargetHandle, RenderTarget>,
 }
 
 impl GraphicsDevice {
@@ -432,6 +434,7 @@ impl GraphicsDevice {
             default_sampler,
             frame_number: 0usize,
             images_to_upload: Vec::default(),
+            render_targets: SlotMap::default(),
         };
 
         // Set debug names
@@ -919,6 +922,71 @@ impl GraphicsDevice {
         }
         Ok(())
     }
+
+    pub fn create_render_target(
+        &mut self,
+        format: vk::Format,
+        size: RenderTargetSize,
+    ) -> Result<RenderTargetHandle> {
+        let render_image_format = vk::Format::R8G8B8A8_SRGB;
+
+        let extent = match size {
+            RenderTargetSize::Static(width, height) => vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            },
+            RenderTargetSize::Fullscreen => vk::Extent3D {
+                width: self.surface_resolution.width,
+                height: self.surface_resolution.height,
+                depth: 1,
+            },
+        };
+
+        let render_image = {
+            let render_image_create_info = vk::ImageCreateInfo::builder()
+                .format(render_image_format)
+                .usage(
+                    vk::ImageUsageFlags::SAMPLED
+                        | vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_SRC,
+                )
+                .extent(extent)
+                .image_type(vk::ImageType::TYPE_2D)
+                .array_layers(1u32)
+                .mip_levels(1u32)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL);
+
+            self.resource_manager
+                .create_image(&render_image_create_info, resource::ImageAspectType::Color)
+        };
+
+        {
+            let render_image_handle = self
+                .resource_manager
+                .get_image(render_image)
+                .unwrap()
+                .image()
+                .as_raw();
+            self.set_vulkan_debug_name(render_image_handle, ObjectType::IMAGE, "Render Image")?;
+        }
+
+        let render_target = RenderTarget {
+            image: render_image,
+            size,
+        };
+        Ok(self.render_targets.insert(render_target))
+    }
+
+    pub fn get_render_target_image(
+        &self,
+        render_target: RenderTargetHandle,
+    ) -> Option<ImageHandle> {
+        self.render_targets
+            .get(render_target)
+            .map(|target| target.image)
+    }
 }
 
 impl Drop for GraphicsDevice {
@@ -1029,4 +1097,16 @@ unsafe extern "system" fn vulkan_debug_callback(
 pub enum ImageFormatType {
     Default,
     Normal,
+}
+
+new_key_type! {pub struct RenderTargetHandle;}
+
+pub enum RenderTargetSize {
+    Static(u32, u32),
+    Fullscreen,
+}
+
+struct RenderTarget {
+    image: ImageHandle,
+    size: RenderTargetSize,
 }
