@@ -526,6 +526,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(
                         self.device
+                            .render_targets()
                             .get_render_target(self.device.render_image)
                             .unwrap()
                             .image(),
@@ -553,6 +554,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(
                         self.device
+                            .render_targets()
                             .get_render_target(self.device.depth_image)
                             .unwrap()
                             .image(),
@@ -696,6 +698,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(
                         self.device
+                            .render_targets()
                             .get_render_target(self.device.render_image)
                             .unwrap()
                             .image(),
@@ -714,6 +717,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(
                         self.device
+                            .render_targets()
                             .get_render_target(self.device.depth_image)
                             .unwrap()
                             .image(),
@@ -843,6 +847,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(
                         self.device
+                            .render_targets()
                             .get_render_target(self.device.render_image)
                             .unwrap()
                             .image(),
@@ -907,6 +912,7 @@ impl Renderer {
                     .resource_manager
                     .get_image(
                         self.device
+                            .render_targets()
                             .get_render_target(self.device.render_image)
                             .unwrap()
                             .image(),

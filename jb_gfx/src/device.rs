@@ -20,6 +20,7 @@ use crate::resource;
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
+use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 
@@ -53,7 +54,7 @@ pub struct GraphicsDevice {
     pub default_sampler: vk::Sampler,
     frame_number: usize,
     images_to_upload: Vec<ImageToUpload>,
-    render_targets: SlotMap<RenderTargetHandle, RenderTarget>,
+    render_targets: RenderTargets,
 }
 
 impl GraphicsDevice {
@@ -386,15 +387,17 @@ impl GraphicsDevice {
             default_sampler,
             frame_number: 0usize,
             images_to_upload: Vec::default(),
-            render_targets: SlotMap::default(),
+            render_targets: RenderTargets::new((size.width, size.height)),
         };
 
-        device.render_image = device.create_render_target(
+        device.render_image = device.render_targets.create_render_target(
+            &mut device.resource_manager,
             vk::Format::R8G8B8A8_SRGB,
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
-        device.depth_image = device.create_render_target(
+        device.depth_image = device.render_targets.create_render_target(
+            &mut device.resource_manager,
             vk::Format::D32_SFLOAT,
             RenderTargetSize::Fullscreen,
             RenderImageType::Depth,
@@ -685,30 +688,10 @@ impl GraphicsDevice {
             })
             .collect();
 
-        let render_targets = &mut self.render_targets;
-        for (_, render_target) in render_targets {
-            if render_target.size != RenderTargetSize::Fullscreen {
-                continue;
-            }
-
-            let size = {
-                match render_target.size {
-                    RenderTargetSize::Fullscreen => (
-                        self.surface_resolution.width,
-                        self.surface_resolution.height,
-                    ),
-                    _ => (0, 0),
-                }
-            };
-
-            self.resource_manager.destroy_image(render_target.image);
-            render_target.image = create_render_target_image(
-                &mut self.resource_manager,
-                render_target.format,
-                size,
-                render_target.image_type,
-            )?;
-        }
+        self.render_targets.recreate_render_targets(
+            &mut self.resource_manager,
+            (self.size.width, self.size.height),
+        )?;
 
         info!("Recreating swapchain.");
         Ok(())
@@ -839,37 +822,8 @@ impl GraphicsDevice {
         Ok(())
     }
 
-    pub fn create_render_target(
-        &mut self,
-        format: vk::Format,
-        size: RenderTargetSize,
-        image_type: RenderImageType,
-    ) -> Result<RenderTargetHandle> {
-        let actual_size = match size {
-            RenderTargetSize::Static(width, height) => (width, height),
-            RenderTargetSize::Fullscreen => (
-                self.surface_resolution.width,
-                self.surface_resolution.height,
-            ),
-        };
-
-        let render_image = create_render_target_image(
-            &mut self.resource_manager,
-            format,
-            actual_size,
-            image_type,
-        )?;
-        let render_target = RenderTarget {
-            image: render_image,
-            size,
-            format,
-            image_type,
-        };
-        Ok(self.render_targets.insert(render_target))
-    }
-
-    pub fn get_render_target(&self, render_target: RenderTargetHandle) -> Option<&RenderTarget> {
-        self.render_targets.get(render_target)
+    pub fn render_targets(&self) -> &RenderTargets {
+        &self.render_targets
     }
 }
 
@@ -981,81 +935,4 @@ unsafe extern "system" fn vulkan_debug_callback(
 pub enum ImageFormatType {
     Default,
     Normal,
-}
-
-new_key_type! {pub struct RenderTargetHandle;}
-
-#[derive(Copy, Clone, PartialEq)]
-pub enum RenderTargetSize {
-    Static(u32, u32),
-    Fullscreen,
-}
-
-#[derive(Copy, Clone)]
-pub enum RenderImageType {
-    Colour,
-    Depth,
-}
-
-pub struct RenderTarget {
-    image: ImageHandle,
-    size: RenderTargetSize,
-    format: vk::Format,
-    image_type: RenderImageType,
-}
-
-impl RenderTarget {
-    pub fn image(&self) -> ImageHandle {
-        self.image
-    }
-
-    pub fn size(&self) -> RenderTargetSize {
-        self.size
-    }
-
-    pub fn format(&self) -> vk::Format {
-        self.format
-    }
-}
-
-fn create_render_target_image(
-    resource_manager: &mut ResourceManager,
-    format: vk::Format,
-    size: (u32, u32),
-    image_type: RenderImageType,
-) -> Result<ImageHandle> {
-    let extent = vk::Extent3D {
-        width: size.0,
-        height: size.1,
-        depth: 1,
-    };
-
-    let usage = match image_type {
-        RenderImageType::Colour => {
-            vk::ImageUsageFlags::SAMPLED
-                | vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_SRC
-        }
-        RenderImageType::Depth => {
-            vk::ImageUsageFlags::SAMPLED
-                | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_SRC
-        }
-    };
-
-    let render_image = {
-        let render_image_create_info = vk::ImageCreateInfo::builder()
-            .format(format)
-            .usage(usage)
-            .extent(extent)
-            .image_type(vk::ImageType::TYPE_2D)
-            .array_layers(1u32)
-            .mip_levels(1u32)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL);
-
-        resource_manager.create_image(&render_image_create_info, resource::ImageAspectType::Color)
-    };
-
-    Ok(render_image)
 }
