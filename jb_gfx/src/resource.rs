@@ -182,6 +182,7 @@ impl ResourceManager {
             image_view: default_view,
             image: vk_image,
             image_usage: image_create_info.usage,
+            image_aspect_type: usage_type,
             allocation,
             allocation_info,
         };
@@ -221,6 +222,7 @@ impl ResourceManager {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum ImageAspectType {
     Color,
     Depth,
@@ -343,6 +345,7 @@ impl<'a, T> BufferView<'a, T> {
 pub struct Image {
     image: vk::Image,
     image_usage: vk::ImageUsageFlags,
+    image_aspect_type: ImageAspectType,
     image_view: vk::ImageView,
     allocation: vk_mem_alloc::Allocation,
     allocation_info: vk_mem_alloc::AllocationInfo,
@@ -351,6 +354,10 @@ pub struct Image {
 impl Image {
     pub fn image(&self) -> vk::Image {
         self.image
+    }
+
+    pub fn aspect_type(&self) -> ImageAspectType {
+        self.image_aspect_type
     }
 
     pub fn usage(&self) -> vk::ImageUsageFlags {

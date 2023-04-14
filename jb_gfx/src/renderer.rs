@@ -546,10 +546,8 @@ impl Renderer {
                 ImageLayout::ATTACHMENT_OPTIMAL,
             ))
             .build(
-                &self.device.vk_device,
+                &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                &self.device.resource_manager,
-                self.device.render_targets(),
             )?;
 
         // Copy camera
@@ -813,10 +811,8 @@ impl Renderer {
                 ImageLayout::TRANSFER_SRC_OPTIMAL,
             ))
             .build(
-                &self.device.vk_device,
+                &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                &self.device.resource_manager,
-                self.device.render_targets(),
             )?;
 
         let image_blit = vk::ImageBlit::builder()

@@ -53,32 +53,24 @@ impl ImageBarrierBuilder {
         self
     }
 
-    pub fn build(
-        self,
-        vk_device: &ash::Device,
-        command_buffer: &vk::CommandBuffer,
-        resource_manager: &ResourceManager,
-        render_targets: &RenderTargets,
-    ) -> Result<()> {
+    pub fn build(self, device: &GraphicsDevice, command_buffer: &vk::CommandBuffer) -> Result<()> {
         let mut image_memory_barriers = Vec::new();
         for image_barrier in self.barriers.iter() {
             let image = match image_barrier.image {
-                ImageHandleType::Image(image) => resource_manager.get_image(image).unwrap(),
-                ImageHandleType::RenderTarget(image) => resource_manager
-                    .get_image(render_targets.get_render_target(image).unwrap().image())
+                ImageHandleType::Image(image) => device.resource_manager.get_image(image).unwrap(),
+                ImageHandleType::RenderTarget(image) => device
+                    .resource_manager
+                    .get_image(
+                        device
+                            .render_targets()
+                            .get_render_target(image)
+                            .unwrap()
+                            .image(),
+                    )
                     .unwrap(),
             };
 
-            let aspect_mask = {
-                if image
-                    .usage()
-                    .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                {
-                    ImageAspectFlags::COLOR
-                } else {
-                    ImageAspectFlags::DEPTH
-                }
-            };
+            let aspect_mask = image.aspect_type().into();
 
             let barrier = vk::ImageMemoryBarrier2::builder()
                 .src_stage_mask(image_barrier.src_stage_mask)
@@ -102,7 +94,9 @@ impl ImageBarrierBuilder {
             vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
 
         unsafe {
-            vk_device.cmd_pipeline_barrier2(*command_buffer, &graphics_barrier_dependency_info)
+            device
+                .vk_device
+                .cmd_pipeline_barrier2(*command_buffer, &graphics_barrier_dependency_info)
         };
 
         Ok(())

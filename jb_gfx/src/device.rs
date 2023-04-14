@@ -1,6 +1,7 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
+use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
@@ -8,8 +9,8 @@ use ash::extensions::{
     khr::{DynamicRendering, Swapchain},
 };
 use ash::vk::{
-    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ObjectType, PipelineStageFlags2,
-    SwapchainKHR,
+    self, AccessFlags2, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
+    PipelineStageFlags2, SwapchainKHR,
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -463,40 +464,20 @@ impl GraphicsDevice {
         // TODO: Remove buffers once upload has completed. Could use status enum so when fences are called, updates images that were submitted to being done.
         // Can then clear done images from vec.
         for image in self.images_to_upload.iter() {
-            let range = vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_mip_level(0u32)
-                .level_count(1u32)
-                .base_array_layer(0u32)
-                .layer_count(1u32);
-
-            {
-                let image_barrier_transfer_to = vk::ImageMemoryBarrier2::builder()
-                    .src_stage_mask(PipelineStageFlags2::NONE)
-                    .src_access_mask(vk::AccessFlags2::NONE)
-                    .dst_stage_mask(PipelineStageFlags2::TRANSFER)
-                    .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-                    .old_layout(vk::ImageLayout::UNDEFINED)
-                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .image(
-                        self.resource_manager
-                            .get_image(image.image_handle)
-                            .unwrap()
-                            .image(),
-                    )
-                    .subresource_range(*range);
-
-                let image_memory_barriers = [*image_barrier_transfer_to];
-                let image_dependency_info =
-                    vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
-
-                unsafe {
-                    self.vk_device.cmd_pipeline_barrier2(
-                        self.graphics_command_buffer[self.buffered_resource_number()],
-                        &image_dependency_info,
-                    );
-                }
-            }
+            ImageBarrierBuilder::default()
+                .add_image_barrier(ImageBarrier::new(
+                    ImageHandleType::Image(image.image_handle),
+                    PipelineStageFlags2::NONE,
+                    AccessFlags2::NONE,
+                    PipelineStageFlags2::TRANSFER,
+                    AccessFlags2::TRANSFER_WRITE,
+                    ImageLayout::UNDEFINED,
+                    ImageLayout::TRANSFER_DST_OPTIMAL,
+                ))
+                .build(
+                    self,
+                    &self.graphics_command_buffer[self.buffered_resource_number()],
+                )?;
 
             let copy_region = vk::BufferImageCopy::builder()
                 .buffer_offset(0u64)
@@ -531,31 +512,20 @@ impl GraphicsDevice {
             }
 
             {
-                let image_barrier_transfer = vk::ImageMemoryBarrier2::builder()
-                    .src_stage_mask(PipelineStageFlags2::TRANSFER)
-                    .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
-                    .dst_stage_mask(PipelineStageFlags2::FRAGMENT_SHADER)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_READ)
-                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image(
-                        self.resource_manager
-                            .get_image(image.image_handle)
-                            .unwrap()
-                            .image(),
-                    )
-                    .subresource_range(*range);
-
-                let image_memory_barriers = [*image_barrier_transfer];
-                let image_dependency_info =
-                    vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
-
-                unsafe {
-                    self.vk_device.cmd_pipeline_barrier2(
-                        self.graphics_command_buffer[self.buffered_resource_number()],
-                        &image_dependency_info,
-                    );
-                }
+                ImageBarrierBuilder::default()
+                    .add_image_barrier(ImageBarrier::new(
+                        ImageHandleType::Image(image.image_handle),
+                        PipelineStageFlags2::TRANSFER,
+                        AccessFlags2::TRANSFER_WRITE,
+                        PipelineStageFlags2::FRAGMENT_SHADER,
+                        AccessFlags2::SHADER_READ,
+                        ImageLayout::TRANSFER_DST_OPTIMAL,
+                        ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ))
+                    .build(
+                        self,
+                        &self.graphics_command_buffer[self.buffered_resource_number()],
+                    )?;
             }
         }
         self.images_to_upload.clear();
@@ -869,6 +839,7 @@ pub struct UploadContext {
     fence: vk::Fence,
     queue: vk::Queue,
 }
+
 struct ImageToUpload {
     buffer_handle: BufferHandle,
     image_handle: ImageHandle,
