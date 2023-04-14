@@ -1,6 +1,7 @@
 use crate::resource::{ImageHandle, ResourceManager};
 use anyhow::Result;
 use ash::vk;
+use log::info;
 use slotmap::{new_key_type, SlotMap};
 
 pub struct RenderTargets {
@@ -70,6 +71,8 @@ impl RenderTargets {
                 render_target.image_type,
             )?;
         }
+
+        info!("Render Targets recreated successfully.");
         Ok(())
     }
 }

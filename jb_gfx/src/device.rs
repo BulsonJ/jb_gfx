@@ -340,7 +340,6 @@ impl GraphicsDevice {
             unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
         ];
 
-        // TODO: Find out how sampler LOD works
         let default_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::NEAREST)
@@ -350,7 +349,7 @@ impl GraphicsDevice {
                 .address_mode_w(vk::SamplerAddressMode::REPEAT)
                 .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                 .min_lod(0.0f32)
-                .max_lod(20.0f32);
+                .max_lod(vk::LOD_CLAMP_NONE);
 
             unsafe { device.create_sampler(&sampler_info, None)? }
         };
