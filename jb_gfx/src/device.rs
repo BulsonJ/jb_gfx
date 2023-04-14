@@ -673,6 +673,7 @@ impl GraphicsDevice {
         img_width: u32,
         img_height: u32,
         image_type: &ImageFormatType,
+        mip_levels: u32,
     ) -> Result<ImageHandle> {
         let img_size = (img_width * img_height * 4u32) as DeviceSize;
 
@@ -710,7 +711,7 @@ impl GraphicsDevice {
             })
             .image_type(vk::ImageType::TYPE_2D)
             .array_layers(1u32)
-            .mip_levels(1u32)
+            .mip_levels(mip_levels)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL);
 

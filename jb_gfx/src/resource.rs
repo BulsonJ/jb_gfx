@@ -164,7 +164,7 @@ impl ResourceManager {
             .view_type(vk::ImageViewType::TYPE_2D)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: get_image_aspect_flags_from_format(image_create_info.format),
-                level_count: 1u32,
+                level_count: image_create_info.mip_levels,
                 layer_count: 1u32,
                 ..Default::default()
             })
@@ -183,6 +183,7 @@ impl ResourceManager {
             image: vk_image,
             image_usage: image_create_info.usage,
             image_format: image_create_info.format,
+            mip_levels: image_create_info.mip_levels,
             allocation,
             allocation_info,
         };
@@ -332,6 +333,7 @@ pub struct Image {
     image_usage: vk::ImageUsageFlags,
     image_format: vk::Format,
     image_view: vk::ImageView,
+    mip_levels: u32,
     allocation: vk_mem_alloc::Allocation,
     allocation_info: vk_mem_alloc::AllocationInfo,
 }
@@ -343,6 +345,10 @@ impl Image {
 
     pub fn aspect_flags(&self) -> vk::ImageAspectFlags {
         get_image_aspect_flags_from_format(self.image_format)
+    }
+
+    pub fn mip_levels(&self) -> u32 {
+        self.mip_levels
     }
 
     pub fn usage(&self) -> vk::ImageUsageFlags {

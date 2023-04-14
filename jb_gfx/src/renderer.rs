@@ -948,9 +948,13 @@ impl Renderer {
         let img = img?;
         let rgba_img = img.to_rgba8();
         let img_bytes = rgba_img.as_bytes();
+        let mip_levels = (img.width().max(img.height()) as f32).log2().floor() as u32 + 1u32;
+
         let image = self
             .device
-            .load_image(img_bytes, img.width(), img.height(), image_type)?;
+            .load_image(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
+
+
 
         self.bindless_textures.push(image);
         let bindless_index = self.bindless_textures.len();
@@ -1007,7 +1011,7 @@ impl Renderer {
             self.device
                 .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &name)?;
 
-            info!("Texture Loaded: {}", image_name);
+            info!("Texture Loaded: {} | Size: [{},{}] | Mip Levels:[{}]", image_name, img.width(), img.height(), mip_levels);
         }
 
         Ok(texture)

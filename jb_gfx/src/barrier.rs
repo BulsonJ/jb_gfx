@@ -81,6 +81,11 @@ impl ImageBarrierBuilder {
                 _ => image.unwrap().image(),
             };
 
+            let mip_levels = match image_barrier.image {
+                ImageHandleType::SwapchainImage(_) => 1,
+                _ => image.unwrap().mip_levels(),
+            };
+
             let aspect_mask: ImageAspectFlags = {
                 if let Some(image) = image {
                     image.aspect_flags().into()
@@ -100,7 +105,7 @@ impl ImageBarrierBuilder {
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask,
                     base_mip_level: 0,
-                    level_count: 1,
+                    level_count: mip_levels,
                     base_array_layer: 0,
                     layer_count: 1,
                 });
