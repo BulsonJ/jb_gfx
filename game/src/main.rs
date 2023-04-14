@@ -51,27 +51,27 @@ fn main() {
         }
     }
     // Load sponza
-    //{
-    //    let models = asset_manager
-    //        .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-    //        .unwrap();
-    //    for model in models.iter() {
-    //        let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
-    //        renderer
-    //            .set_render_model_transform(
-    //                handle,
-    //                from_transforms(
-    //                    Vector3::new(0f32, 80f32, 0.0f32),
-    //                    Quaternion::from_axis_angle(
-    //                        Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-    //                        Deg(180f32),
-    //                    ),
-    //                    Vector3::from_value(0.1f32),
-    //                ),
-    //            )
-    //            .unwrap();
-    //    }
-    //}
+    {
+        let models = asset_manager
+            .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+            .unwrap();
+        for model in models.iter() {
+            let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer
+                .set_render_model_transform(
+                    handle,
+                    from_transforms(
+                        Vector3::new(0f32, 80f32, 0.0f32),
+                        Quaternion::from_axis_angle(
+                            Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+                            Deg(180f32),
+                        ),
+                        Vector3::from_value(0.1f32),
+                    ),
+                )
+                .unwrap();
+        }
+    }
     // Load helmet
     {
         let models = asset_manager
