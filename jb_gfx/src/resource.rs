@@ -181,6 +181,7 @@ impl ResourceManager {
         let image = Image {
             image_view: default_view,
             image: vk_image,
+            image_usage: image_create_info.usage,
             allocation,
             allocation_info,
         };
@@ -341,6 +342,7 @@ impl<'a, T> BufferView<'a, T> {
 /// A image and it's memory allocation.
 pub struct Image {
     image: vk::Image,
+    image_usage: vk::ImageUsageFlags,
     image_view: vk::ImageView,
     allocation: vk_mem_alloc::Allocation,
     allocation_info: vk_mem_alloc::AllocationInfo,
@@ -349,6 +351,10 @@ pub struct Image {
 impl Image {
     pub fn image(&self) -> vk::Image {
         self.image
+    }
+
+    pub fn usage(&self) -> vk::ImageUsageFlags {
+        self.image_usage
     }
 
     pub fn image_view(&self) -> vk::ImageView {
