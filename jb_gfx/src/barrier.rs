@@ -18,6 +18,7 @@ pub struct ImageBarrier {
 pub enum ImageHandleType {
     Image(ImageHandle),
     RenderTarget(RenderTargetHandle),
+    SwapchainImage(usize),
 }
 
 impl ImageBarrier {
@@ -57,20 +58,36 @@ impl ImageBarrierBuilder {
         let mut image_memory_barriers = Vec::new();
         for image_barrier in self.barriers.iter() {
             let image = match image_barrier.image {
-                ImageHandleType::Image(image) => device.resource_manager.get_image(image).unwrap(),
-                ImageHandleType::RenderTarget(image) => device
-                    .resource_manager
-                    .get_image(
-                        device
-                            .render_targets()
-                            .get_render_target(image)
-                            .unwrap()
-                            .image(),
-                    )
-                    .unwrap(),
+                ImageHandleType::Image(image) => {
+                    Some(device.resource_manager.get_image(image).unwrap())
+                }
+                ImageHandleType::RenderTarget(image) => Some(
+                    device
+                        .resource_manager
+                        .get_image(
+                            device
+                                .render_targets()
+                                .get_render_target(image)
+                                .unwrap()
+                                .image(),
+                        )
+                        .unwrap(),
+                ),
+                _ => None,
             };
 
-            let aspect_mask = image.aspect_type().into();
+            let image_handle = match image_barrier.image {
+                ImageHandleType::SwapchainImage(index) => device.present_images[index],
+                _ => image.unwrap().image(),
+            };
+
+            let aspect_mask: ImageAspectFlags = {
+                if let Some(image) = image {
+                    image.aspect_type().into()
+                } else {
+                    ImageAspectFlags::COLOR
+                }
+            };
 
             let barrier = vk::ImageMemoryBarrier2::builder()
                 .src_stage_mask(image_barrier.src_stage_mask)
@@ -79,7 +96,7 @@ impl ImageBarrierBuilder {
                 .dst_access_mask(image_barrier.dst_access_mask)
                 .old_layout(image_barrier.old_layout)
                 .new_layout(image_barrier.new_layout)
-                .image(image.image())
+                .image(image_handle)
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask,
                     base_mip_level: 0,

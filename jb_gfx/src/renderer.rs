@@ -499,34 +499,16 @@ impl Renderer {
 
         // Memory barrier attachments
 
-        let present_to_dst_barrier = vk::ImageMemoryBarrier2::builder()
-            .src_stage_mask(PipelineStageFlags2::NONE)
-            .src_access_mask(AccessFlags2::NONE)
-            .dst_stage_mask(PipelineStageFlags2::BLIT)
-            .dst_access_mask(AccessFlags2::TRANSFER_WRITE)
-            .old_layout(ImageLayout::UNDEFINED)
-            .new_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
-            .image(self.device.present_images[present_index as usize])
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-
-        let image_memory_barriers = [*present_to_dst_barrier];
-        let graphics_barrier_dependency_info =
-            vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
-
-        unsafe {
-            self.device.vk_device.cmd_pipeline_barrier2(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                &graphics_barrier_dependency_info,
-            )
-        };
-
         ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier::new(
+                ImageHandleType::SwapchainImage(present_index as usize),
+                PipelineStageFlags2::NONE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::BLIT,
+                AccessFlags2::TRANSFER_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+            ))
             .add_image_barrier(ImageBarrier::new(
                 ImageHandleType::RenderTarget(self.device.render_image),
                 PipelineStageFlags2::NONE,
