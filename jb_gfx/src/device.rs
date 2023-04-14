@@ -340,13 +340,17 @@ impl GraphicsDevice {
             unsafe { device.create_semaphore(&semaphore_create_info, None) }?,
         ];
 
+        // TODO: Find out how sampler LOD works
         let default_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::NEAREST)
                 .min_filter(vk::Filter::NEAREST)
                 .address_mode_u(vk::SamplerAddressMode::REPEAT)
                 .address_mode_v(vk::SamplerAddressMode::REPEAT)
-                .address_mode_w(vk::SamplerAddressMode::REPEAT);
+                .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .min_lod(0.0f32)
+                .max_lod(20.0f32);
 
             unsafe { device.create_sampler(&sampler_info, None)? }
         };
@@ -464,54 +468,153 @@ impl GraphicsDevice {
         // TODO: Remove buffers once upload has completed. Could use status enum so when fences are called, updates images that were submitted to being done.
         // Can then clear done images from vec.
         for image in self.images_to_upload.iter() {
-            ImageBarrierBuilder::default()
-                .add_image_barrier(ImageBarrier::new(
-                    ImageHandleType::Image(image.image_handle),
-                    PipelineStageFlags2::NONE,
-                    AccessFlags2::NONE,
-                    PipelineStageFlags2::TRANSFER,
-                    AccessFlags2::TRANSFER_WRITE,
-                    ImageLayout::UNDEFINED,
-                    ImageLayout::TRANSFER_DST_OPTIMAL,
-                ))
-                .build(
-                    self,
-                    &self.graphics_command_buffer[self.buffered_resource_number()],
-                )?;
+            {
+                ImageBarrierBuilder::default()
+                    .add_image_barrier(ImageBarrier::new(
+                        ImageHandleType::Image(image.image_handle),
+                        PipelineStageFlags2::NONE,
+                        AccessFlags2::NONE,
+                        PipelineStageFlags2::TRANSFER,
+                        AccessFlags2::TRANSFER_WRITE,
+                        ImageLayout::UNDEFINED,
+                        ImageLayout::TRANSFER_DST_OPTIMAL,
+                        0,
+                        image.mip_levels
+                    ))
+                    .build(
+                        self,
+                        &self.graphics_command_buffer[self.buffered_resource_number()],
+                    )?;
 
-            let copy_region = vk::BufferImageCopy::builder()
-                .buffer_offset(0u64)
-                .buffer_row_length(0u32)
-                .buffer_image_height(0u32)
-                .image_subresource(vk::ImageSubresourceLayers {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    mip_level: 0u32,
-                    base_array_layer: 0u32,
-                    layer_count: 1u32,
-                })
-                .image_extent(vk::Extent3D {
-                    width: image.width,
-                    height: image.height,
-                    depth: 1,
-                });
+                let copy_region = vk::BufferImageCopy::builder()
+                    .buffer_offset(0u64)
+                    .buffer_row_length(0u32)
+                    .buffer_image_height(0u32)
+                    .image_subresource(vk::ImageSubresourceLayers {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        mip_level: 0u32,
+                        base_array_layer: 0u32,
+                        layer_count: 1u32,
+                    })
+                    .image_extent(vk::Extent3D {
+                        width: image.width,
+                        height: image.height,
+                        depth: 1,
+                    });
 
-            unsafe {
-                self.vk_device.cmd_copy_buffer_to_image(
-                    self.graphics_command_buffer[self.buffered_resource_number()],
-                    self.resource_manager
-                        .get_buffer(image.buffer_handle)
-                        .unwrap()
-                        .buffer(),
-                    self.resource_manager
-                        .get_image(image.image_handle)
-                        .unwrap()
-                        .image(),
-                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    &[*copy_region],
-                );
+                unsafe {
+                    self.vk_device.cmd_copy_buffer_to_image(
+                        self.graphics_command_buffer[self.buffered_resource_number()],
+                        self.resource_manager
+                            .get_buffer(image.buffer_handle)
+                            .unwrap()
+                            .buffer(),
+                        self.resource_manager
+                            .get_image(image.image_handle)
+                            .unwrap()
+                            .image(),
+                        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        &[*copy_region],
+                    );
+                }
             }
 
+            // Generate mipmaps
             {
+                let mut mip_width = image.width;
+                let mut mip_height = image.height;
+
+                for i in 1..image.mip_levels {
+                    ImageBarrierBuilder::default()
+                        .add_image_barrier(ImageBarrier::new(
+                            ImageHandleType::Image(image.image_handle),
+                            PipelineStageFlags2::TRANSFER,
+                            AccessFlags2::TRANSFER_WRITE,
+                            PipelineStageFlags2::TRANSFER,
+                            AccessFlags2::TRANSFER_READ,
+                            ImageLayout::TRANSFER_DST_OPTIMAL,
+                            ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            i - 1,
+                            1,
+                        ))
+                        .build(
+                            self,
+                            &self.graphics_command_buffer[self.buffered_resource_number()],
+                        )?;
+
+                    let image_blit = vk::ImageBlit::builder()
+                        .src_subresource(vk::ImageSubresourceLayers {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            mip_level: i - 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .src_offsets([
+                            vk::Offset3D { x: 0, y: 0, z: 0 },
+                            vk::Offset3D {
+                                x: mip_width as i32,
+                                y: mip_height as i32,
+                                z: 1,
+                            },
+                        ])
+                        .dst_subresource(vk::ImageSubresourceLayers {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            mip_level: i,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .dst_offsets([
+                            vk::Offset3D { x: 0, y: 0, z: 0 },
+                            vk::Offset3D {
+                                x: if mip_width > 1 { mip_width / 2 } else { 1 } as i32,
+                                y: if mip_height > 1 { mip_height / 2 } else { 1 } as i32,
+                                z: 1,
+                            },
+                        ]);
+
+                    let regions = [*image_blit];
+                    let image_vk_handle = self
+                        .resource_manager
+                        .get_image(image.image_handle)
+                        .unwrap()
+                        .image();
+                    unsafe {
+                        self.vk_device.cmd_blit_image(
+                            self.graphics_command_buffer[self.buffered_resource_number()],
+                            image_vk_handle,
+                            ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            image_vk_handle,
+                            ImageLayout::TRANSFER_DST_OPTIMAL,
+                            &regions,
+                            vk::Filter::LINEAR,
+                        )
+                    }
+
+                    ImageBarrierBuilder::default()
+                        .add_image_barrier(ImageBarrier::new(
+                            ImageHandleType::Image(image.image_handle),
+                            PipelineStageFlags2::TRANSFER,
+                            AccessFlags2::TRANSFER_READ,
+                            PipelineStageFlags2::FRAGMENT_SHADER,
+                            AccessFlags2::SHADER_READ,
+                            ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                            i - 1,
+                            1,
+                        ))
+                        .build(
+                            self,
+                            &self.graphics_command_buffer[self.buffered_resource_number()],
+                        )?;
+
+                    if mip_width > 1 {
+                        mip_width /= 2
+                    };
+                    if mip_height > 1 {
+                        mip_height /= 2
+                    };
+                }
+
                 ImageBarrierBuilder::default()
                     .add_image_barrier(ImageBarrier::new(
                         ImageHandleType::Image(image.image_handle),
@@ -521,6 +624,8 @@ impl GraphicsDevice {
                         AccessFlags2::SHADER_READ,
                         ImageLayout::TRANSFER_DST_OPTIMAL,
                         ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        image.mip_levels - 1,
+                        1,
                     ))
                     .build(
                         self,
@@ -703,7 +808,11 @@ impl GraphicsDevice {
 
         let image_create_info = vk::ImageCreateInfo::builder()
             .format(format)
-            .usage(vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST)
+            .usage(
+                vk::ImageUsageFlags::SAMPLED
+                    | vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::TRANSFER_DST,
+            )
             .extent(vk::Extent3D {
                 width: img_width,
                 height: img_height,
@@ -715,15 +824,14 @@ impl GraphicsDevice {
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL);
 
-        let image = self
-            .resource_manager
-            .create_image(&image_create_info);
+        let image = self.resource_manager.create_image(&image_create_info);
 
         self.images_to_upload.push(ImageToUpload {
             buffer_handle: staging_buffer,
             image_handle: image,
             width: img_width,
             height: img_height,
+            mip_levels,
         });
 
         Ok(image)
@@ -846,6 +954,7 @@ struct ImageToUpload {
     image_handle: ImageHandle,
     width: u32,
     height: u32,
+    mip_levels: u32,
 }
 
 pub(crate) fn cmd_copy_buffer(

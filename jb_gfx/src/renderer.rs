@@ -508,6 +508,8 @@ impl Renderer {
                 AccessFlags2::TRANSFER_WRITE,
                 ImageLayout::UNDEFINED,
                 ImageLayout::TRANSFER_DST_OPTIMAL,
+                0,
+                1,
             ))
             .add_image_barrier(ImageBarrier::new(
                 ImageHandleType::RenderTarget(self.device.render_image),
@@ -517,6 +519,8 @@ impl Renderer {
                 AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 ImageLayout::UNDEFINED,
                 ImageLayout::ATTACHMENT_OPTIMAL,
+                0,
+                1,
             ))
             .add_image_barrier(ImageBarrier::new(
                 ImageHandleType::RenderTarget(self.device.depth_image),
@@ -526,6 +530,8 @@ impl Renderer {
                 AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 ImageLayout::UNDEFINED,
                 ImageLayout::ATTACHMENT_OPTIMAL,
+                0,
+                1,
             ))
             .build(
                 &self.device,
@@ -791,6 +797,8 @@ impl Renderer {
                 AccessFlags2::TRANSFER_READ,
                 ImageLayout::ATTACHMENT_OPTIMAL,
                 ImageLayout::TRANSFER_SRC_OPTIMAL,
+                0,
+                1,
             ))
             .build(
                 &self.device,
@@ -950,11 +958,9 @@ impl Renderer {
         let img_bytes = rgba_img.as_bytes();
         let mip_levels = (img.width().max(img.height()) as f32).log2().floor() as u32 + 1u32;
 
-        let image = self
-            .device
-            .load_image(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
-
-
+        let image =
+            self.device
+                .load_image(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
 
         self.bindless_textures.push(image);
         let bindless_index = self.bindless_textures.len();
@@ -1011,7 +1017,13 @@ impl Renderer {
             self.device
                 .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &name)?;
 
-            info!("Texture Loaded: {} | Size: [{},{}] | Mip Levels:[{}]", image_name, img.width(), img.height(), mip_levels);
+            info!(
+                "Texture Loaded: {} | Size: [{},{}] | Mip Levels:[{}]",
+                image_name,
+                img.width(),
+                img.height(),
+                mip_levels
+            );
         }
 
         Ok(texture)

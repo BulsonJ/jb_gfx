@@ -13,6 +13,8 @@ pub struct ImageBarrier {
     dst_access_mask: AccessFlags2,
     old_layout: ImageLayout,
     new_layout: ImageLayout,
+    base_mip_level: u32,
+    level_count: u32,
 }
 
 pub enum ImageHandleType {
@@ -30,6 +32,8 @@ impl ImageBarrier {
         dst_access_mask: AccessFlags2,
         old_layout: ImageLayout,
         new_layout: ImageLayout,
+        base_mip_level: u32,
+        level_count: u32,
     ) -> Self {
         Self {
             image,
@@ -39,6 +43,8 @@ impl ImageBarrier {
             dst_access_mask,
             old_layout,
             new_layout,
+            base_mip_level,
+            level_count,
         }
     }
 }
@@ -81,11 +87,6 @@ impl ImageBarrierBuilder {
                 _ => image.unwrap().image(),
             };
 
-            let mip_levels = match image_barrier.image {
-                ImageHandleType::SwapchainImage(_) => 1,
-                _ => image.unwrap().mip_levels(),
-            };
-
             let aspect_mask: ImageAspectFlags = {
                 if let Some(image) = image {
                     image.aspect_flags().into()
@@ -104,8 +105,8 @@ impl ImageBarrierBuilder {
                 .image(image_handle)
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask,
-                    base_mip_level: 0,
-                    level_count: mip_levels,
+                    base_mip_level: image_barrier.base_mip_level,
+                    level_count: image_barrier.level_count,
                     base_array_layer: 0,
                     layer_count: 1,
                 });

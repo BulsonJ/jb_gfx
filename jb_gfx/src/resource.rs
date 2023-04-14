@@ -143,10 +143,7 @@ impl ResourceManager {
     /// ```
     ///
     /// ```
-    pub fn create_image(
-        &mut self,
-        image_create_info: &vk::ImageCreateInfo,
-    ) -> ImageHandle {
+    pub fn create_image(&mut self, image_create_info: &vk::ImageCreateInfo) -> ImageHandle {
         let alloc_create_info = vk_mem_alloc::AllocationCreateInfo {
             usage: vk_mem_alloc::MemoryUsage::AUTO,
             ..Default::default()
