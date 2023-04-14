@@ -179,11 +179,14 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
     let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
         .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
-    let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
-        .blend_enable(false)
-        .color_write_mask(vk::ColorComponentFlags::RGBA);
+    let mut attachments = Vec::new();
+    for attachment in build_info.color_attachment_formats.iter() {
+        let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
+            .blend_enable(false)
+            .color_write_mask(vk::ColorComponentFlags::RGBA);
+        attachments.push(*color_blend_attachment_state);
+    }
 
-    let attachments = [*color_blend_attachment_state];
     let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
         .logic_op_enable(false)
         .logic_op(vk::LogicOp::COPY)
