@@ -16,6 +16,7 @@ use log::{error, info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
+use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::device::{cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT};
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
@@ -514,67 +515,7 @@ impl Renderer {
                 layer_count: 1,
             });
 
-        let render_image_attachment_barrier = vk::ImageMemoryBarrier2::builder()
-            .src_stage_mask(PipelineStageFlags2::NONE)
-            .src_access_mask(AccessFlags2::NONE)
-            .dst_stage_mask(PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(AccessFlags2::COLOR_ATTACHMENT_WRITE)
-            .old_layout(ImageLayout::UNDEFINED)
-            .new_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-            .image(
-                self.device
-                    .resource_manager
-                    .get_image(
-                        self.device
-                            .render_targets()
-                            .get_render_target(self.device.render_image)
-                            .unwrap()
-                            .image(),
-                    )
-                    .unwrap()
-                    .image(),
-            )
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-
-        let depth_image_attachment_barrier = vk::ImageMemoryBarrier2::builder()
-            .src_stage_mask(PipelineStageFlags2::NONE)
-            .src_access_mask(AccessFlags2::NONE)
-            .dst_stage_mask(PipelineStageFlags2::EARLY_FRAGMENT_TESTS)
-            .dst_access_mask(AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE)
-            .old_layout(ImageLayout::UNDEFINED)
-            .new_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-            .image(
-                self.device
-                    .resource_manager
-                    .get_image(
-                        self.device
-                            .render_targets()
-                            .get_render_target(self.device.depth_image)
-                            .unwrap()
-                            .image(),
-                    )
-                    .unwrap()
-                    .image(),
-            )
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: ImageAspectFlags::DEPTH,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-
-        let image_memory_barriers = [
-            *render_image_attachment_barrier,
-            *present_to_dst_barrier,
-            *depth_image_attachment_barrier,
-        ];
+        let image_memory_barriers = [*present_to_dst_barrier];
         let graphics_barrier_dependency_info =
             vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
 
@@ -584,6 +525,32 @@ impl Renderer {
                 &graphics_barrier_dependency_info,
             )
         };
+
+        ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier::new(
+                ImageHandleType::RenderTarget(self.device.render_image),
+                PipelineStageFlags2::NONE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::ATTACHMENT_OPTIMAL,
+            ))
+            .add_image_barrier(ImageBarrier::new(
+                ImageHandleType::RenderTarget(self.device.depth_image),
+                PipelineStageFlags2::NONE,
+                AccessFlags2::NONE,
+                PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                ImageLayout::UNDEFINED,
+                ImageLayout::ATTACHMENT_OPTIMAL,
+            ))
+            .build(
+                &self.device.vk_device,
+                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                &self.device.resource_manager,
+                self.device.render_targets(),
+            )?;
 
         // Copy camera
         if let Some(camera) = self.active_camera {
@@ -835,44 +802,22 @@ impl Renderer {
 
         // Transition render image to transfer src
 
-        let render_to_src_barrier = vk::ImageMemoryBarrier2::builder()
-            .src_stage_mask(PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(AccessFlags2::COLOR_ATTACHMENT_WRITE)
-            .dst_stage_mask(PipelineStageFlags2::BLIT)
-            .dst_access_mask(AccessFlags2::TRANSFER_READ)
-            .old_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-            .new_layout(ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .image(
-                self.device
-                    .resource_manager
-                    .get_image(
-                        self.device
-                            .render_targets()
-                            .get_render_target(self.device.render_image)
-                            .unwrap()
-                            .image(),
-                    )
-                    .unwrap()
-                    .image(),
-            )
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
-
-        let image_memory_barriers = [*render_to_src_barrier];
-        let render_to_src_barrier_dependency_info =
-            vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
-
-        unsafe {
-            self.device.vk_device.cmd_pipeline_barrier2(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                &render_to_src_barrier_dependency_info,
-            )
-        };
+        ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier::new(
+                ImageHandleType::RenderTarget(self.device.render_image),
+                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                PipelineStageFlags2::BLIT,
+                AccessFlags2::TRANSFER_READ,
+                ImageLayout::ATTACHMENT_OPTIMAL,
+                ImageLayout::TRANSFER_SRC_OPTIMAL,
+            ))
+            .build(
+                &self.device.vk_device,
+                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                &self.device.resource_manager,
+                self.device.render_targets(),
+            )?;
 
         let image_blit = vk::ImageBlit::builder()
             .src_subresource(vk::ImageSubresourceLayers {

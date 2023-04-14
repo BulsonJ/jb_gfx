@@ -195,7 +195,7 @@ impl ResourceManager {
         self.images.insert(image)
     }
 
-    pub fn get_image(&mut self, handle: ImageHandle) -> Option<&Image> {
+    pub fn get_image(&self, handle: ImageHandle) -> Option<&Image> {
         self.images.get(handle)
     }
 

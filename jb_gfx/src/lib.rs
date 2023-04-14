@@ -3,6 +3,7 @@ pub use colour::*;
 pub use mesh::*;
 
 pub mod asset;
+mod barrier;
 pub mod camera;
 pub mod colour;
 pub mod device;
