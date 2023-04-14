@@ -1,6 +1,6 @@
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
-use log::info;
+use log::{info, trace};
 use slotmap::{self, new_key_type, SlotMap};
 
 /// Used to create Buffers and Images.
@@ -102,7 +102,7 @@ impl ResourceManager {
             allocation_info,
         };
 
-        info!("Buffer created. [Size: {} bytes]", buffer_create_info.size);
+        trace!("Buffer created. [Size: {} bytes]", buffer_create_info.size);
 
         self.buffers.insert(buffer)
     }
@@ -185,7 +185,7 @@ impl ResourceManager {
             allocation_info,
         };
 
-        info!(
+        trace!(
             "Image created. [Dim: {},{}]",
             image_create_info.extent.width, image_create_info.extent.height
         );

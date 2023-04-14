@@ -4,7 +4,7 @@ use std::fs;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
-use log::info;
+use log::{info, trace};
 use slotmap::{new_key_type, SlotMap};
 
 use crate::device::GraphicsDevice;
@@ -250,10 +250,10 @@ fn include_resolve_callback(
     source_file_name: &str,
     include_depth: usize,
 ) -> shaderc::IncludeCallbackResult {
-    info!("Attempting to resolve library: {}", requested_file_name);
-    info!("Include Type: {:?}", include_type);
-    info!("Directive source file: {}", source_file_name);
-    info!("Current library depth: {}", include_depth);
+    trace!("Attempting to resolve library: {}", requested_file_name);
+    trace!("Include Type: {:?}", include_type);
+    trace!("Directive source file: {}", source_file_name);
+    trace!("Current library depth: {}", include_depth);
 
     let content = fs::read_to_string(requested_file_name).unwrap();
 

@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
 use gltf::image::Source;
+use log::info;
 
 use crate::device::ImageFormatType;
 use crate::renderer::{MaterialInstance, MeshHandle, Renderer, Texture};
@@ -40,7 +41,7 @@ impl AssetManager {
             gltf::import(file)?
         };
 
-        let (source_folder, _asset_name) = file.rsplit_once('/').unwrap();
+        let (source_folder, asset_name) = file.rsplit_once('/').unwrap();
 
         // TODO : Add image load to vec when iterating through materials, then for normal maps upload them as normal
         for image in gltf.images() {
@@ -268,6 +269,7 @@ impl AssetManager {
             }
         }
 
+        info!("Loaded GLTF Model. Name: [{}], Models: [{}]",asset_name, models.len());
         Ok(models)
     }
 }

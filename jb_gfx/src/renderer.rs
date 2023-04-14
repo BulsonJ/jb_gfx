@@ -12,7 +12,7 @@ use cgmath::{
     Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
 use image::EncodableLayout;
-use log::{error, warn};
+use log::{error, info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -407,6 +407,7 @@ impl Renderer {
         let bindless_textures = Vec::new();
         let bindless_indexes = HashMap::new();
 
+        info!("Renderer Created");
         Ok(Self {
             device,
             pso_layout,
@@ -442,8 +443,9 @@ impl Renderer {
 
     pub fn reload_shaders(&mut self) -> Result<()> {
         profiling::scope!("Reload shaders");
-
-        self.pipeline_manager.reload_shaders(&mut self.device)
+        self.pipeline_manager.reload_shaders(&mut self.device)?;
+        info!("Shaders reloaded!");
+        Ok(())
     }
 
     pub fn render(&mut self) -> Result<()> {
@@ -1034,7 +1036,8 @@ impl Renderer {
 
         // Debug name image
         {
-            let image_name = "Image:".to_string() + file_location.rsplit_once('/').unwrap().1;
+            let image_name = file_location.rsplit_once('/').unwrap().1;
+            let name = "Image:".to_string() + image_name;
             let image_handle = self
                 .device
                 .resource_manager
@@ -1043,7 +1046,9 @@ impl Renderer {
                 .image()
                 .as_raw();
             self.device
-                .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &image_name)?;
+                .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &name)?;
+
+            info!("Texture Loaded: {}", image_name);
         }
 
         Ok(texture)
@@ -1097,6 +1102,7 @@ impl Renderer {
                     index_buffer: None,
                     vertex_count: mesh.vertices.len() as u32,
                 };
+                trace!("Mesh Loaded. Vertex Count:{}|Faces:{}", mesh.vertices.len(), mesh.faces.len());
                 Ok(self.meshes.insert(render_mesh))
             }
             Some(indices) => {
@@ -1145,6 +1151,7 @@ impl Renderer {
                     index_buffer: Some(index_buffer),
                     vertex_count: indices.len() as u32,
                 };
+                trace!("Mesh Loaded. Vertex Count:{}|Index Count:{}|Faces:{}", mesh.vertices.len(), mesh.indices.as_ref().unwrap().len(), mesh.faces.len());
                 Ok(self.meshes.insert(render_mesh))
             }
         }

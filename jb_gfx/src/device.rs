@@ -402,8 +402,6 @@ impl GraphicsDevice {
             queue: graphics_queue,
         };
 
-        info!("Device created");
-
         let mut device = Self {
             instance,
             size,
@@ -456,6 +454,7 @@ impl GraphicsDevice {
             device.set_vulkan_debug_name(depth_image_handle, ObjectType::IMAGE, "Depth Image")?;
         }
 
+        info!("Device Created");
         Ok(device)
     }
 
