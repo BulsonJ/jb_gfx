@@ -1,8 +1,9 @@
-use crate::resource::{ImageHandle, ResourceManager};
 use anyhow::Result;
 use ash::vk;
 use log::info;
 use slotmap::{new_key_type, SlotMap};
+
+use crate::resource::{ImageHandle, ResourceManager};
 
 pub struct RenderTargets {
     targets: SlotMap<RenderTargetHandle, RenderTarget>,

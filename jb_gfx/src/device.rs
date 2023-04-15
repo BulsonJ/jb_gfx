@@ -1,9 +1,6 @@
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
-use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
-use crate::bindless::{BindlessImage, BindlessManager};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
@@ -16,10 +13,10 @@ use ash::vk::{
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use slotmap::{new_key_type, SlotMap};
 use winit::window::Window;
 
-use crate::resource;
+use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::bindless::{BindlessImage, BindlessManager};
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };

@@ -1,9 +1,11 @@
-use crate::device::FRAMES_IN_FLIGHT;
-use crate::resource::{Image, ImageHandle, ResourceManager};
-use crate::targets::{RenderTargetHandle, RenderTargets};
+use std::collections::HashMap;
+
 use ash::vk;
 use ash::vk::ImageLayout;
-use std::collections::HashMap;
+
+use crate::device::FRAMES_IN_FLIGHT;
+use crate::resource::{ImageHandle, ResourceManager};
+use crate::targets::{RenderTargetHandle, RenderTargets};
 
 #[derive(Default)]
 pub struct BindlessManager {

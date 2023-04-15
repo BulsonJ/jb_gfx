@@ -1,7 +1,7 @@
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
 use ash::vk::Format;
-use log::{info, trace};
+use log::trace;
 use slotmap::{self, new_key_type, SlotMap};
 
 /// Used to create Buffers and Images.

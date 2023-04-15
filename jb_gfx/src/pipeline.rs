@@ -4,7 +4,7 @@ use std::fs;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
-use log::{info, trace};
+use log::trace;
 use slotmap::{new_key_type, SlotMap};
 
 use crate::device::GraphicsDevice;

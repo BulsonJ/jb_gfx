@@ -1,13 +1,13 @@
-use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
+use anyhow::{anyhow, Result};
 use gltf::image::Source;
 use log::info;
 
 use crate::device::ImageFormatType;
 use crate::renderer::{MaterialInstance, MeshHandle, Renderer};
 use crate::resource::ImageHandle;
-use crate::{Face, MeshData, Vertex};
+use crate::{MeshData, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
