@@ -559,17 +559,17 @@ impl GraphicsDevice {
         for image in self.images_to_upload.iter() {
             {
                 ImageBarrierBuilder::default()
-                    .add_image_barrier(ImageBarrier::new(
-                        ImageHandleType::Image(image.image_handle),
-                        PipelineStageFlags2::NONE,
-                        AccessFlags2::NONE,
-                        PipelineStageFlags2::TRANSFER,
-                        AccessFlags2::TRANSFER_WRITE,
-                        ImageLayout::UNDEFINED,
-                        ImageLayout::TRANSFER_DST_OPTIMAL,
-                        0,
-                        image.mip_levels,
-                    ))
+                    .add_image_barrier(ImageBarrier {
+                        image: ImageHandleType::Image(image.image_handle),
+                        src_stage_mask: vk::PipelineStageFlags2::NONE,
+                        src_access_mask: vk::AccessFlags2::NONE,
+                        dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                        dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                        old_layout: vk::ImageLayout::UNDEFINED,
+                        new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        base_mip_level: 0,
+                        level_count: image.mip_levels,
+                    })
                     .build(
                         self,
                         &self.graphics_command_buffer[self.buffered_resource_number()],
@@ -617,17 +617,17 @@ impl GraphicsDevice {
 
                 for i in 1..image.mip_levels {
                     ImageBarrierBuilder::default()
-                        .add_image_barrier(ImageBarrier::new(
-                            ImageHandleType::Image(image.image_handle),
-                            PipelineStageFlags2::TRANSFER,
-                            AccessFlags2::TRANSFER_WRITE,
-                            PipelineStageFlags2::TRANSFER,
-                            AccessFlags2::TRANSFER_READ,
-                            ImageLayout::TRANSFER_DST_OPTIMAL,
-                            ImageLayout::TRANSFER_SRC_OPTIMAL,
-                            i - 1,
-                            1,
-                        ))
+                        .add_image_barrier(ImageBarrier {
+                            image: ImageHandleType::Image(image.image_handle),
+                            src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                            src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                            dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                            dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
+                            old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                            new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            base_mip_level: i - 1,
+                            level_count: 1,
+                        })
                         .build(
                             self,
                             &self.graphics_command_buffer[self.buffered_resource_number()],
@@ -682,17 +682,17 @@ impl GraphicsDevice {
                     }
 
                     ImageBarrierBuilder::default()
-                        .add_image_barrier(ImageBarrier::new(
-                            ImageHandleType::Image(image.image_handle),
-                            PipelineStageFlags2::TRANSFER,
-                            AccessFlags2::TRANSFER_READ,
-                            PipelineStageFlags2::FRAGMENT_SHADER,
-                            AccessFlags2::SHADER_READ,
-                            ImageLayout::TRANSFER_SRC_OPTIMAL,
-                            ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            i - 1,
-                            1,
-                        ))
+                        .add_image_barrier(ImageBarrier {
+                            image: ImageHandleType::Image(image.image_handle),
+                            src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                            src_access_mask: vk::AccessFlags2::TRANSFER_READ,
+                            dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
+                            dst_access_mask: vk::AccessFlags2::SHADER_READ,
+                            old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                            base_mip_level: i - 1,
+                            level_count: 1,
+                        })
                         .build(
                             self,
                             &self.graphics_command_buffer[self.buffered_resource_number()],
@@ -707,17 +707,17 @@ impl GraphicsDevice {
                 }
 
                 ImageBarrierBuilder::default()
-                    .add_image_barrier(ImageBarrier::new(
-                        ImageHandleType::Image(image.image_handle),
-                        PipelineStageFlags2::TRANSFER,
-                        AccessFlags2::TRANSFER_WRITE,
-                        PipelineStageFlags2::FRAGMENT_SHADER,
-                        AccessFlags2::SHADER_READ,
-                        ImageLayout::TRANSFER_DST_OPTIMAL,
-                        ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        image.mip_levels - 1,
-                        1,
-                    ))
+                    .add_image_barrier(ImageBarrier {
+                        image: ImageHandleType::Image(image.image_handle),
+                        src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                        src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                        dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
+                        dst_access_mask: vk::AccessFlags2::SHADER_READ,
+                        old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                        new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        base_mip_level: image.mip_levels - 1,
+                        level_count: 1,
+                    })
                     .build(
                         self,
                         &self.graphics_command_buffer[self.buffered_resource_number()],

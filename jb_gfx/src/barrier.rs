@@ -7,15 +7,15 @@ use crate::resource::ImageHandle;
 use crate::targets::RenderTargetHandle;
 
 pub struct ImageBarrier {
-    image: ImageHandleType,
-    src_stage_mask: PipelineStageFlags2,
-    src_access_mask: AccessFlags2,
-    dst_stage_mask: PipelineStageFlags2,
-    dst_access_mask: AccessFlags2,
-    old_layout: ImageLayout,
-    new_layout: ImageLayout,
-    base_mip_level: u32,
-    level_count: u32,
+    pub image: ImageHandleType,
+    pub src_stage_mask: PipelineStageFlags2,
+    pub src_access_mask: AccessFlags2,
+    pub dst_stage_mask: PipelineStageFlags2,
+    pub dst_access_mask: AccessFlags2,
+    pub old_layout: ImageLayout,
+    pub new_layout: ImageLayout,
+    pub base_mip_level: u32,
+    pub level_count: u32,
 }
 
 pub enum ImageHandleType {
@@ -24,28 +24,18 @@ pub enum ImageHandleType {
     SwapchainImage(usize),
 }
 
-impl ImageBarrier {
-    pub fn new(
-        image: ImageHandleType,
-        src_stage_mask: PipelineStageFlags2,
-        src_access_mask: AccessFlags2,
-        dst_stage_mask: PipelineStageFlags2,
-        dst_access_mask: AccessFlags2,
-        old_layout: ImageLayout,
-        new_layout: ImageLayout,
-        base_mip_level: u32,
-        level_count: u32,
-    ) -> Self {
+impl Default for ImageBarrier {
+    fn default() -> Self {
         Self {
-            image,
-            src_stage_mask,
-            src_access_mask,
-            dst_stage_mask,
-            dst_access_mask,
-            old_layout,
-            new_layout,
-            base_mip_level,
-            level_count,
+            image: ImageHandleType::Image(ImageHandle::default()),
+            src_stage_mask: PipelineStageFlags2::NONE,
+            src_access_mask: AccessFlags2::NONE,
+            dst_stage_mask: PipelineStageFlags2::NONE,
+            dst_access_mask: AccessFlags2::NONE,
+            old_layout: ImageLayout::UNDEFINED,
+            new_layout: ImageLayout::UNDEFINED,
+            base_mip_level: 0,
+            level_count: 1,
         }
     }
 }

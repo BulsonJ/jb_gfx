@@ -464,39 +464,27 @@ impl Renderer {
         // Memory barrier attachments
 
         ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier::new(
-                ImageHandleType::SwapchainImage(present_index as usize),
-                PipelineStageFlags2::NONE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::BLIT,
-                AccessFlags2::TRANSFER_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                0,
-                1,
-            ))
-            .add_image_barrier(ImageBarrier::new(
-                ImageHandleType::RenderTarget(self.device.render_image),
-                PipelineStageFlags2::NONE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::ATTACHMENT_OPTIMAL,
-                0,
-                1,
-            ))
-            .add_image_barrier(ImageBarrier::new(
-                ImageHandleType::RenderTarget(self.device.depth_image),
-                PipelineStageFlags2::NONE,
-                AccessFlags2::NONE,
-                PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                ImageLayout::UNDEFINED,
-                ImageLayout::ATTACHMENT_OPTIMAL,
-                0,
-                1,
-            ))
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::SwapchainImage(present_index as usize),
+                dst_stage_mask: PipelineStageFlags2::BLIT,
+                dst_access_mask: AccessFlags2::TRANSFER_WRITE,
+                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.render_image),
+                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.depth_image),
+                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
             .build(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -753,17 +741,16 @@ impl Renderer {
         // Transition render image to transfer src
 
         ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier::new(
-                ImageHandleType::RenderTarget(self.device.render_image),
-                PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                PipelineStageFlags2::BLIT,
-                AccessFlags2::TRANSFER_READ,
-                ImageLayout::ATTACHMENT_OPTIMAL,
-                ImageLayout::TRANSFER_SRC_OPTIMAL,
-                0,
-                1,
-            ))
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.render_image),
+                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                dst_stage_mask: PipelineStageFlags2::BLIT,
+                dst_access_mask: AccessFlags2::TRANSFER_READ,
+                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                new_layout: ImageLayout::TRANSFER_SRC_OPTIMAL,
+                ..Default::default()
+            })
             .build(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -1179,8 +1166,7 @@ impl Renderer {
     }
 
     pub fn create_camera(&mut self, camera: &Camera) -> CameraHandle {
-        let handle = self.stored_cameras.insert(*camera);
-        handle
+        self.stored_cameras.insert(*camera)
     }
 
     pub fn set_camera(&mut self, handle: CameraHandle, camera: &Camera) -> Result<()> {
