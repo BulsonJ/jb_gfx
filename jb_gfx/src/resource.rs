@@ -340,6 +340,10 @@ impl Image {
         self.image
     }
 
+    pub fn format(&self) -> vk::Format {
+        self.image_format
+    }
+
     pub fn aspect_flags(&self) -> vk::ImageAspectFlags {
         get_image_aspect_flags_from_format(self.image_format)
     }

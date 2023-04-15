@@ -3,6 +3,7 @@ use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::bindless::BindlessManager;
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
@@ -43,9 +44,7 @@ pub struct GraphicsDevice {
     pub present_images: Vec<vk::Image>,
     pub present_image_views: Vec<vk::ImageView>,
     pub render_image: RenderTargetHandle,
-    pub render_image_format: vk::Format,
     pub depth_image: RenderTargetHandle,
-    pub depth_image_format: vk::Format,
     pub graphics_queue: vk::Queue,
     pub graphics_command_pool: [vk::CommandPool; FRAMES_IN_FLIGHT],
     pub graphics_command_buffer: [vk::CommandBuffer; FRAMES_IN_FLIGHT],
@@ -59,8 +58,7 @@ pub struct GraphicsDevice {
     render_targets: RenderTargets,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
-    bindless_textures: Vec<ImageHandle>,
-    bindless_indexes: HashMap<ImageHandle, usize>,
+    bindless_manager: BindlessManager,
     bindless_descriptor_pool: vk::DescriptorPool,
 }
 
@@ -430,8 +428,7 @@ impl GraphicsDevice {
             [first, second]
         };
 
-        let bindless_textures = Vec::new();
-        let bindless_indexes = HashMap::new();
+        let bindless_manager = BindlessManager::new(default_sampler, bindless_descriptor_set);
 
         let mut device = Self {
             instance,
@@ -450,9 +447,7 @@ impl GraphicsDevice {
             present_images,
             present_image_views,
             render_image: RenderTargetHandle::default(),
-            render_image_format: vk::Format::R8G8B8A8_SRGB,
             depth_image: RenderTargetHandle::default(),
-            depth_image_format: vk::Format::D32_SFLOAT,
             graphics_queue,
             graphics_command_pool,
             graphics_command_buffer,
@@ -466,8 +461,7 @@ impl GraphicsDevice {
             render_targets: RenderTargets::new((size.width, size.height)),
             bindless_descriptor_set_layout,
             bindless_descriptor_set,
-            bindless_textures,
-            bindless_indexes,
+            bindless_manager,
             bindless_descriptor_pool: descriptor_pool,
         };
 
@@ -918,33 +912,11 @@ impl GraphicsDevice {
             mip_levels,
         });
 
-        self.bindless_textures.push(image);
-        let bindless_index = self.bindless_textures.len();
-        self.bindless_indexes.insert(image, bindless_index);
-
-        let bindless_image_info = vk::DescriptorImageInfo::builder()
-            .sampler(self.default_sampler)
-            .image_view(self.resource_manager.get_image(image).unwrap().image_view())
-            .image_layout(ImageLayout::SHADER_READ_ONLY_OPTIMAL);
-
-        let image_info = [*bindless_image_info];
-        let desc_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.bindless_descriptor_set[0])
-            .dst_binding(0u32)
-            .dst_array_element(bindless_index as u32 - 1u32)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&image_info);
-        let desc_write_two = vk::WriteDescriptorSet::builder()
-            .dst_set(self.bindless_descriptor_set[1])
-            .dst_binding(0u32)
-            .dst_array_element(bindless_index as u32 - 1u32)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&image_info);
-
-        unsafe {
-            self.vk_device
-                .update_descriptor_sets(&[*desc_write, *desc_write_two], &[]);
-        }
+        self.bindless_manager.add_image_to_bindless(
+            &self.vk_device,
+            &self.resource_manager,
+            &image,
+        );
 
         Ok(image)
     }
@@ -1026,7 +998,7 @@ impl GraphicsDevice {
     }
 
     pub fn get_descriptor_index(&self, image: &ImageHandle) -> Option<usize> {
-        self.bindless_indexes.get(&image).cloned()
+        self.bindless_manager.get_bindless_index(image)
     }
 }
 

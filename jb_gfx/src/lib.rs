@@ -4,6 +4,7 @@ pub use mesh::*;
 
 pub mod asset;
 mod barrier;
+mod bindless;
 pub mod camera;
 pub mod colour;
 pub mod device;

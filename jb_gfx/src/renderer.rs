@@ -147,13 +147,40 @@ impl Renderer {
                 .create_pipeline_layout(&pipeline_layout_info, None)
         }?;
 
+        let render_image_format = {
+            device
+                .resource_manager
+                .get_image(
+                    device
+                        .render_targets()
+                        .get_render_target(device.render_image)
+                        .unwrap()
+                        .image(),
+                )
+                .unwrap()
+                .format()
+        };
+        let depth_image_format = {
+            device
+                .resource_manager
+                .get_image(
+                    device
+                        .render_targets()
+                        .get_render_target(device.depth_image)
+                        .unwrap()
+                        .image(),
+                )
+                .unwrap()
+                .format()
+        };
+
         let pso_build_info = PipelineCreateInfo {
             pipeline_layout: pso_layout,
             vertex_shader: "assets/shaders/default.vert".to_string(),
             fragment_shader: "assets/shaders/default.frag".to_string(),
             vertex_input_state: *vertex_input_state,
-            color_attachment_formats: vec![device.render_image_format],
-            depth_attachment_format: Some(device.depth_image_format),
+            color_attachment_formats: vec![render_image_format],
+            depth_attachment_format: Some(depth_image_format),
             depth_stencil_state: *depth_stencil_state,
         };
 
