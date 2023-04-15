@@ -24,6 +24,8 @@ impl RenderTargets {
         size: RenderTargetSize,
         image_type: RenderImageType,
     ) -> Result<RenderTargetHandle> {
+        profiling::scope!("Create Render Target");
+
         let actual_size = match size {
             RenderTargetSize::Static(width, height) => (width, height),
             RenderTargetSize::Fullscreen => self.fullscreen_size,
@@ -49,6 +51,8 @@ impl RenderTargets {
         resource_manager: &mut ResourceManager,
         new_size: (u32, u32),
     ) -> Result<()> {
+        profiling::scope!("Recreate Render Targets");
+
         self.fullscreen_size = new_size;
 
         for (_, render_target) in self.targets.iter_mut() {

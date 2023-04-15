@@ -55,6 +55,7 @@ pub struct GraphicsDevice {
     pub default_sampler: vk::Sampler,
     frame_number: usize,
     images_to_upload: Vec<ImageToUpload>,
+    buffers_to_delete: Vec<(BufferHandle, usize)>,
     render_targets: RenderTargets,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
@@ -473,6 +474,7 @@ impl GraphicsDevice {
             default_sampler,
             frame_number: 0usize,
             images_to_upload: Vec::default(),
+            buffers_to_delete: Vec::default(),
             render_targets,
             bindless_descriptor_set_layout,
             bindless_descriptor_set,
@@ -544,6 +546,16 @@ impl GraphicsDevice {
             )
         }?;
 
+        // Delete old image buffers
+        for buffer_to_delete in self.buffers_to_delete.iter_mut() {
+            buffer_to_delete.1 -= 1;
+
+            if buffer_to_delete.1 == 0 {
+                self.resource_manager.destroy_buffer(buffer_to_delete.0);
+            }
+        }
+        self.buffers_to_delete.clear();
+
         // Upload images
         // TODO: Remove buffers once upload has completed. Could use status enum so when fences are called, updates images that were submitted to being done.
         // Can then clear done images from vec.
@@ -597,6 +609,8 @@ impl GraphicsDevice {
                         &[*copy_region],
                     );
                 }
+
+                self.buffers_to_delete.push((image.buffer_handle, 2));
             }
 
             // Generate mipmaps
@@ -860,6 +874,8 @@ impl GraphicsDevice {
         image_type: &ImageFormatType,
         mip_levels: u32,
     ) -> Result<ImageHandle> {
+        profiling::scope!("Load Image");
+
         let img_size = (img_width * img_height * 4u32) as DeviceSize;
 
         let staging_buffer_create_info = BufferCreateInfo {

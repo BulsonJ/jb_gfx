@@ -129,6 +129,14 @@ impl ResourceManager {
         self.buffers.get_mut(handle)
     }
 
+    pub fn destroy_buffer(&mut self, handle: BufferHandle) {
+        let buffer = self.buffers.remove(handle).unwrap();
+        unsafe {
+            self.device.destroy_buffer(buffer.buffer, None);
+            vk_mem_alloc::destroy_buffer(self.allocator, buffer.buffer, buffer.allocation)
+        };
+    }
+
     /// Creates an [`Image`] on the GPU.
     ///
     /// # Arguments
