@@ -8,8 +8,7 @@ use ash::extensions::{
     khr::{DynamicRendering, Swapchain},
 };
 use ash::vk::{
-    self, AccessFlags2, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
-    PipelineStageFlags2, SwapchainKHR,
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType, SwapchainKHR,
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -561,14 +560,11 @@ impl GraphicsDevice {
                 ImageBarrierBuilder::default()
                     .add_image_barrier(ImageBarrier {
                         image: ImageHandleType::Image(image.image_handle),
-                        src_stage_mask: vk::PipelineStageFlags2::NONE,
-                        src_access_mask: vk::AccessFlags2::NONE,
                         dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                         dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
-                        old_layout: vk::ImageLayout::UNDEFINED,
                         new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        base_mip_level: 0,
                         level_count: image.mip_levels,
+                        ..Default::default()
                     })
                     .build(
                         self,
