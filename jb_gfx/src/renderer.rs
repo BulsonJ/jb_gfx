@@ -905,7 +905,7 @@ impl Renderer {
         &mut self,
         file_location: &str,
         image_type: &ImageFormatType,
-    ) -> Result<Texture> {
+    ) -> Result<ImageHandle> {
         profiling::scope!("Renderer: Load Texture");
 
         let img = {
@@ -925,12 +925,6 @@ impl Renderer {
         let image =
             self.device
                 .load_image(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
-
-        let texture = Texture {
-            image_handle: image,
-            width: img.width(),
-            height: img.height(),
-        };
 
         // Debug name image
         {
@@ -955,7 +949,7 @@ impl Renderer {
             );
         }
 
-        Ok(texture)
+        Ok(image)
     }
 
     pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
@@ -1073,7 +1067,7 @@ impl Renderer {
     fn get_material_ssbo_from_instance(&self, instance: &MaterialInstance) -> MaterialParamSSBO {
         let diffuse_tex = {
             if let Some(tex) = instance.diffuse_texture {
-                self.device.get_descriptor_index(&tex.image_handle).unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1081,7 +1075,7 @@ impl Renderer {
 
         let normal_tex = {
             if let Some(tex) = instance.normal_texture {
-                self.device.get_descriptor_index(&tex.image_handle).unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1089,7 +1083,7 @@ impl Renderer {
 
         let metallic_roughness_tex = {
             if let Some(tex) = instance.metallic_roughness_texture {
-                self.device.get_descriptor_index(&tex.image_handle).unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1097,7 +1091,7 @@ impl Renderer {
 
         let emissive_tex = {
             if let Some(tex) = instance.emissive_texture {
-                self.device.get_descriptor_index(&tex.image_handle).unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1105,7 +1099,7 @@ impl Renderer {
 
         let occlusion_tex = {
             if let Some(tex) = instance.occlusion_texture {
-                self.device.get_descriptor_index(&tex.image_handle).unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1281,40 +1275,16 @@ fn from_transforms(
     model
 }
 
-/// Texture, stored on the GPU.
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct Texture {
-    image_handle: ImageHandle,
-    width: u32,
-    height: u32,
-}
-
-impl Texture {
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-}
-
-impl From<Texture> for ImageHandle {
-    fn from(tex: Texture) -> ImageHandle {
-        tex.image_handle
-    }
-}
-
 #[derive(Clone)]
 pub struct MaterialInstance {
     pub diffuse: Vector3<f32>,
     pub emissive: Vector3<f32>,
 
-    pub diffuse_texture: Option<Texture>,
-    pub normal_texture: Option<Texture>,
-    pub metallic_roughness_texture: Option<Texture>,
-    pub emissive_texture: Option<Texture>,
-    pub occlusion_texture: Option<Texture>,
+    pub diffuse_texture: Option<ImageHandle>,
+    pub normal_texture: Option<ImageHandle>,
+    pub metallic_roughness_texture: Option<ImageHandle>,
+    pub emissive_texture: Option<ImageHandle>,
+    pub occlusion_texture: Option<ImageHandle>,
 }
 
 impl Default for MaterialInstance {

@@ -5,12 +5,13 @@ use gltf::image::Source;
 use log::info;
 
 use crate::device::ImageFormatType;
-use crate::renderer::{MaterialInstance, MeshHandle, Renderer, Texture};
+use crate::renderer::{MaterialInstance, MeshHandle, Renderer};
+use crate::resource::ImageHandle;
 use crate::{Face, MeshData, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
-    loaded_textures: HashMap<String, Texture>,
+    loaded_textures: HashMap<String, ImageHandle>,
 }
 
 impl AssetManager {
@@ -19,7 +20,7 @@ impl AssetManager {
         renderer: &mut Renderer,
         file: &str,
         format: &ImageFormatType,
-    ) -> Result<Texture> {
+    ) -> Result<ImageHandle> {
         if let Some(texture) = self.loaded_textures.get(file) {
             Ok(*texture)
         } else if let Ok(loaded_texture) = renderer.load_texture(file, format) {
