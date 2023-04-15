@@ -430,6 +430,21 @@ impl GraphicsDevice {
 
         let bindless_manager = BindlessManager::new(default_sampler, bindless_descriptor_set);
 
+        let mut render_targets = RenderTargets::new((size.width, size.height));
+
+        let render_image = render_targets.create_render_target(
+            &mut resource_manager,
+            vk::Format::R8G8B8A8_SRGB,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Colour,
+        )?;
+        let depth_image = render_targets.create_render_target(
+            &mut resource_manager,
+            vk::Format::D32_SFLOAT,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Depth,
+        )?;
+
         let mut device = Self {
             instance,
             size,
@@ -446,8 +461,8 @@ impl GraphicsDevice {
             swapchain_loader,
             present_images,
             present_image_views,
-            render_image: RenderTargetHandle::default(),
-            depth_image: RenderTargetHandle::default(),
+            render_image,
+            depth_image,
             graphics_queue,
             graphics_command_pool,
             graphics_command_buffer,
@@ -458,25 +473,12 @@ impl GraphicsDevice {
             default_sampler,
             frame_number: 0usize,
             images_to_upload: Vec::default(),
-            render_targets: RenderTargets::new((size.width, size.height)),
+            render_targets,
             bindless_descriptor_set_layout,
             bindless_descriptor_set,
             bindless_manager,
             bindless_descriptor_pool: descriptor_pool,
         };
-
-        device.render_image = device.render_targets.create_render_target(
-            &mut device.resource_manager,
-            vk::Format::R8G8B8A8_SRGB,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
-        device.depth_image = device.render_targets.create_render_target(
-            &mut device.resource_manager,
-            vk::Format::D32_SFLOAT,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Depth,
-        )?;
 
         for set in device.bindless_descriptor_set.iter() {
             device.set_vulkan_debug_name(
