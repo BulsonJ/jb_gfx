@@ -3,7 +3,7 @@ use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
-use crate::bindless::BindlessManager;
+use crate::bindless::{BindlessImage, BindlessManager};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
@@ -933,7 +933,8 @@ impl GraphicsDevice {
         self.bindless_manager.add_image_to_bindless(
             &self.vk_device,
             &self.resource_manager,
-            &image,
+            &self.render_targets,
+            &BindlessImage::Image(image),
         );
 
         Ok(image)
@@ -1015,7 +1016,7 @@ impl GraphicsDevice {
         &self.bindless_descriptor_set
     }
 
-    pub fn get_descriptor_index(&self, image: &ImageHandle) -> Option<usize> {
+    pub fn get_descriptor_index(&self, image: &BindlessImage) -> Option<usize> {
         self.bindless_manager.get_bindless_index(image)
     }
 }

@@ -17,6 +17,7 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::bindless::BindlessImage;
 use crate::device::{cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT};
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
@@ -1067,7 +1068,9 @@ impl Renderer {
     fn get_material_ssbo_from_instance(&self, instance: &MaterialInstance) -> MaterialParamSSBO {
         let diffuse_tex = {
             if let Some(tex) = instance.diffuse_texture {
-                self.device.get_descriptor_index(&tex).unwrap()
+                self.device
+                    .get_descriptor_index(&BindlessImage::Image(tex))
+                    .unwrap()
             } else {
                 0usize
             }
@@ -1075,7 +1078,9 @@ impl Renderer {
 
         let normal_tex = {
             if let Some(tex) = instance.normal_texture {
-                self.device.get_descriptor_index(&tex).unwrap()
+                self.device
+                    .get_descriptor_index(&BindlessImage::Image(tex))
+                    .unwrap()
             } else {
                 0usize
             }
@@ -1083,7 +1088,9 @@ impl Renderer {
 
         let metallic_roughness_tex = {
             if let Some(tex) = instance.metallic_roughness_texture {
-                self.device.get_descriptor_index(&tex).unwrap()
+                self.device
+                    .get_descriptor_index(&BindlessImage::Image(tex))
+                    .unwrap()
             } else {
                 0usize
             }
@@ -1091,7 +1098,9 @@ impl Renderer {
 
         let emissive_tex = {
             if let Some(tex) = instance.emissive_texture {
-                self.device.get_descriptor_index(&tex).unwrap()
+                self.device
+                    .get_descriptor_index(&BindlessImage::Image(tex))
+                    .unwrap()
             } else {
                 0usize
             }
@@ -1099,7 +1108,9 @@ impl Renderer {
 
         let occlusion_tex = {
             if let Some(tex) = instance.occlusion_texture {
-                self.device.get_descriptor_index(&tex).unwrap()
+                self.device
+                    .get_descriptor_index(&BindlessImage::Image(tex))
+                    .unwrap()
             } else {
                 0usize
             }
