@@ -422,49 +422,6 @@ impl Renderer {
 
         let present_index = self.device.start_frame()?;
 
-        let clear_colour: Vector3<f32> = self.clear_colour.into();
-        let clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [clear_colour.x, clear_colour.y, clear_colour.z, 0.0],
-            },
-        };
-        let depth_clear_value = vk::ClearValue {
-            depth_stencil: ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            },
-        };
-
-        let viewport = vk::Viewport::builder()
-            .x(0.0f32)
-            .y(self.device.size.height as f32)
-            .width(self.device.size.width as f32)
-            .height(-(self.device.size.height as f32))
-            .min_depth(0.0f32)
-            .max_depth(1.0f32);
-
-        let scissor = vk::Rect2D::builder()
-            .offset(vk::Offset2D { x: 0, y: 0 })
-            .extent(vk::Extent2D {
-                width: self.device.size.width,
-                height: self.device.size.height,
-            });
-
-        unsafe {
-            self.device.vk_device.cmd_set_viewport(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                0u32,
-                &[*viewport],
-            )
-        };
-        unsafe {
-            self.device.vk_device.cmd_set_scissor(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                0u32,
-                &[*scissor],
-            )
-        };
-
         // Memory barrier attachments
 
         ImageBarrierBuilder::default()
@@ -627,92 +584,138 @@ impl Renderer {
                 )?;
         }
 
-        // Start dynamic rendering
+        // Normal Pass
 
-        let color_attach_info = vk::RenderingAttachmentInfo::builder()
-            .image_view(
-                self.device
-                    .resource_manager
-                    .get_image(
-                        self.device
-                            .render_targets()
-                            .get_render_target(self.device.render_image)
-                            .unwrap()
-                            .image(),
-                    )
-                    .unwrap()
-                    .image_view(),
-            )
-            .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .clear_value(clear_value);
+        {
+            let clear_colour: Vector3<f32> = self.clear_colour.into();
+            let clear_value = vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [clear_colour.x, clear_colour.y, clear_colour.z, 0.0],
+                },
+            };
+            let depth_clear_value = vk::ClearValue {
+                depth_stencil: ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            };
 
-        let depth_attach_info = vk::RenderingAttachmentInfo::builder()
-            .image_view(
-                self.device
-                    .resource_manager
-                    .get_image(
-                        self.device
-                            .render_targets()
-                            .get_render_target(self.device.depth_image)
-                            .unwrap()
-                            .image(),
-                    )
-                    .unwrap()
-                    .image_view(),
-            )
-            .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .clear_value(depth_clear_value);
+            let viewport = vk::Viewport::builder()
+                .x(0.0f32)
+                .y(self.device.size.height as f32)
+                .width(self.device.size.width as f32)
+                .height(-(self.device.size.height as f32))
+                .min_depth(0.0f32)
+                .max_depth(1.0f32);
 
-        let color_attachments = [*color_attach_info];
-        let render_info = vk::RenderingInfo::builder()
-            .render_area(*scissor)
-            .layer_count(1u32)
-            .color_attachments(&color_attachments)
-            .depth_attachment(&depth_attach_info);
+            let scissor = vk::Rect2D::builder()
+                .offset(vk::Offset2D { x: 0, y: 0 })
+                .extent(vk::Extent2D {
+                    width: self.device.size.width,
+                    height: self.device.size.height,
+                });
 
-        let pipeline = self.pipeline_manager.get_pipeline(self.pso);
+            unsafe {
+                self.device.vk_device.cmd_set_viewport(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    0u32,
+                    &[*viewport],
+                )
+            };
+            unsafe {
+                self.device.vk_device.cmd_set_scissor(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    0u32,
+                    &[*scissor],
+                )
+            };
 
-        unsafe {
-            self.device.vk_device.cmd_begin_rendering(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                &render_info,
-            );
-            self.device.vk_device.cmd_bind_pipeline(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                vk::PipelineBindPoint::GRAPHICS,
-                pipeline,
-            );
-            self.device.vk_device.cmd_bind_descriptor_sets(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pso_layout,
-                0u32,
-                &[self.device.bindless_descriptor_set()[self.device.buffered_resource_number()]],
-                &[],
-            );
-            self.device.vk_device.cmd_bind_descriptor_sets(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pso_layout,
-                1u32,
-                &[self.descriptor_set[self.device.buffered_resource_number()]],
-                &[],
-            );
-        };
 
-        // Draw commands
+            let color_attach_info = vk::RenderingAttachmentInfo::builder()
+                .image_view(
+                    self.device
+                        .resource_manager
+                        .get_image(
+                            self.device
+                                .render_targets()
+                                .get_render_target(self.device.render_image)
+                                .unwrap()
+                                .image(),
+                        )
+                        .unwrap()
+                        .image_view(),
+                )
+                .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(clear_value);
 
-        self.draw_objects(&draw_data)?;
+            let depth_attach_info = vk::RenderingAttachmentInfo::builder()
+                .image_view(
+                    self.device
+                        .resource_manager
+                        .get_image(
+                            self.device
+                                .render_targets()
+                                .get_render_target(self.device.depth_image)
+                                .unwrap()
+                                .image(),
+                        )
+                        .unwrap()
+                        .image_view(),
+                )
+                .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(depth_clear_value);
 
-        unsafe {
-            self.device.vk_device.cmd_end_rendering(
-                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-            )
-        };
+            let color_attachments = [*color_attach_info];
+            let render_info = vk::RenderingInfo::builder()
+                .render_area(*scissor)
+                .layer_count(1u32)
+                .color_attachments(&color_attachments)
+                .depth_attachment(&depth_attach_info);
+
+            let pipeline = self.pipeline_manager.get_pipeline(self.pso);
+
+            unsafe {
+                self.device.vk_device.cmd_begin_rendering(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    &render_info,
+                );
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pso_layout,
+                    0u32,
+                    &[self.device.bindless_descriptor_set()[self.device.buffered_resource_number()]],
+                    &[],
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pso_layout,
+                    1u32,
+                    &[self.descriptor_set[self.device.buffered_resource_number()]],
+                    &[],
+                );
+            };
+
+            // Draw commands
+
+            self.draw_objects(&draw_data)?;
+
+            unsafe {
+                self.device.vk_device.cmd_end_rendering(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                )
+            };
+        }
 
         // Transition render image to transfer src
 
