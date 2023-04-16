@@ -53,6 +53,7 @@ pub struct Renderer {
     stored_lights: SlotMap<LightHandle, Light>,
     stored_cameras: SlotMap<CameraHandle, Camera>,
     pub active_camera: Option<CameraHandle>,
+    shadow_pso: PipelineHandle,
 }
 
 impl Renderer {
@@ -66,15 +67,6 @@ impl Renderer {
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&vertex_input_desc.bindings)
             .vertex_attribute_descriptions(&vertex_input_desc.attributes);
-
-        let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-            .depth_test_enable(true)
-            .depth_write_enable(true)
-            .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
-            .depth_bounds_test_enable(false)
-            .stencil_test_enable(false)
-            .min_depth_bounds(0.0f32)
-            .max_depth_bounds(1.0f32);
 
         let pool_sizes = [
             *vk::DescriptorPoolSize::builder()
@@ -177,19 +169,53 @@ impl Renderer {
                 .format()
         };
 
-        let pso_build_info = PipelineCreateInfo {
-            pipeline_layout: pso_layout,
-            vertex_shader: "assets/shaders/default.vert".to_string(),
-            fragment_shader: "assets/shaders/default.frag".to_string(),
-            vertex_input_state: *vertex_input_state,
-            color_attachment_formats: vec![render_image_format],
-            depth_attachment_format: Some(depth_image_format),
-            depth_stencil_state: *depth_stencil_state,
+        let mut pipeline_manager = PipelineManager::new();
+
+        let pso = {
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/default.vert".to_string(),
+                fragment_shader: "assets/shaders/default.frag".to_string(),
+                vertex_input_state: *vertex_input_state,
+                color_attachment_formats: vec![render_image_format],
+                depth_attachment_format: Some(depth_image_format),
+                depth_stencil_state: *depth_stencil_state,
+            };
+
+            pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
         };
 
-        // TODO : Move more into PipelineManager
-        let mut pipeline_manager = PipelineManager::new();
-        let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info)?;
+        let shadow_pso = {
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/shadow.vert".to_string(),
+                fragment_shader: "assets/shaders/shadow.frag".to_string(),
+                vertex_input_state: *vertex_input_state,
+                color_attachment_formats: vec![],
+                depth_attachment_format: Some(depth_image_format),
+                depth_stencil_state: *depth_stencil_state,
+            };
+
+            pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
+        };
 
         let camera = Camera {
             position: (0.0, -100.0, -2.0).into(),
@@ -404,6 +430,7 @@ impl Renderer {
             stored_lights: SlotMap::default(),
             stored_cameras: SlotMap::default(),
             active_camera: None,
+            shadow_pso,
         })
     }
 
@@ -646,7 +673,7 @@ impl Renderer {
                 .layer_count(1u32)
                 .depth_attachment(&depth_attach_info);
 
-            let pipeline = self.pipeline_manager.get_pipeline(self.pso);
+            let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
 
             unsafe {
                 self.device.vk_device.cmd_begin_rendering(
