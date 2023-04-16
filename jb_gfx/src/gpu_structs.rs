@@ -32,6 +32,8 @@ pub(crate) struct CameraUniform {
     pub view: [[f32; 4]; 4],
     pub position: [f32; 4],
     pub ambient_light: [f32; 4],
+    pub directional_light_colour: [f32;4],
+    pub directional_light_direction: [f32;4],
 }
 
 impl CameraUniform {
@@ -41,6 +43,8 @@ impl CameraUniform {
             view: Matrix4::identity().into(),
             position: Vector4::zero().into(),
             ambient_light: Vector4::zero().into(),
+            directional_light_colour: Vector4::zero().into(),
+            directional_light_direction: Vector4::zero().into(),
         }
     }
 

@@ -21,6 +21,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 view;
 	vec4 cameraPos;
 	vec4 ambientLight;
+	vec4 directionalLightColour;
+	vec4 directionalLightDirection;
 } cameraData;
 
 layout(std140,set = 1, binding = 1) uniform LightBuffer{
@@ -71,9 +73,30 @@ void main()
 		normal = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
 	}
 
-	// Point lights
 	vec3 diffuseResult = vec3(0);
 	vec3 specularResult = vec3(0);
+	// Scene directional light
+	{
+		vec3 diffuse = vec3(0);
+		vec3 specular = vec3(0);
+
+		vec3 lightDir = cameraData.directionalLightDirection.xyz;
+		float diff = max(dot(normal, lightDir), 0.0);
+		diffuse += diff * cameraData.directionalLightColour.rgb;
+
+		// Specular
+		float shininess = 32.0;
+		float specularStrength = 0.2;
+		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
+		vec3 halfwayDir = normalize(lightDir + viewDir);
+		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
+		specular += specularStrength * spec * cameraData.directionalLightColour.rgb;
+
+		diffuseResult += diffuse;
+		specularResult += specular;
+	}
+
+	// Point lights
 
 	for (int i = 0; i < 4; i++){
 		// Diffuse
@@ -87,10 +110,11 @@ void main()
 
 		// Specular
 		float shininess = 32.0;
+		float specularStrength = 0.2;
 		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
 		vec3 halfwayDir = normalize(lightDir + viewDir);
 		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-		specular += vec3(0.2) * spec;
+		specular += specularStrength * spec * currentLight.colour.rgb;
 
 		// attenuation
 		float distance    = length(currentLight.position.xyz - inWorldPos);

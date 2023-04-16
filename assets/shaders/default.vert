@@ -19,6 +19,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 view;
 	vec4 cameraPos;
 	vec4 ambientLight;
+	vec4 directionalLightColour;
+	vec4 directionalLightDirection;
 } cameraData;
 
 struct ModelMatrix{
