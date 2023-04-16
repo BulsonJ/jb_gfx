@@ -18,7 +18,9 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::bindless::BindlessImage;
-use crate::device::{cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT};
+use crate::device::{
+    cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
+};
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
 };
@@ -582,6 +584,108 @@ impl Renderer {
                     &self.device,
                     &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 )?;
+
+            let depth_clear_value = vk::ClearValue {
+                depth_stencil: ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            };
+
+            let viewport = vk::Viewport::builder()
+                .x(0.0f32)
+                .y(SHADOWMAP_SIZE as f32)
+                .width(SHADOWMAP_SIZE as f32)
+                .height(-(SHADOWMAP_SIZE as f32))
+                .min_depth(0.0f32)
+                .max_depth(1.0f32);
+
+            let scissor = vk::Rect2D::builder()
+                .offset(vk::Offset2D { x: 0, y: 0 })
+                .extent(vk::Extent2D {
+                    width: SHADOWMAP_SIZE,
+                    height: SHADOWMAP_SIZE,
+                });
+
+            unsafe {
+                self.device.vk_device.cmd_set_viewport(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    0u32,
+                    &[*viewport],
+                )
+            };
+            unsafe {
+                self.device.vk_device.cmd_set_scissor(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    0u32,
+                    &[*scissor],
+                )
+            };
+
+            let depth_attach_info = vk::RenderingAttachmentInfo::builder()
+                .image_view(
+                    self.device
+                        .resource_manager
+                        .get_image(
+                            self.device
+                                .render_targets()
+                                .get_render_target(self.device.directional_light_shadow_image)
+                                .unwrap()
+                                .image(),
+                        )
+                        .unwrap()
+                        .image_view(),
+                )
+                .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(depth_clear_value);
+
+            let render_info = vk::RenderingInfo::builder()
+                .render_area(*scissor)
+                .layer_count(1u32)
+                .depth_attachment(&depth_attach_info);
+
+            let pipeline = self.pipeline_manager.get_pipeline(self.pso);
+
+            unsafe {
+                self.device.vk_device.cmd_begin_rendering(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    &render_info,
+                );
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pso_layout,
+                    0u32,
+                    &[self.device.bindless_descriptor_set()
+                        [self.device.buffered_resource_number()]],
+                    &[],
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pso_layout,
+                    1u32,
+                    &[self.descriptor_set[self.device.buffered_resource_number()]],
+                    &[],
+                );
+            };
+
+            // Draw commands
+
+            self.draw_objects(&draw_data)?;
+
+            unsafe {
+                self.device.vk_device.cmd_end_rendering(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                )
+            };
         }
 
         // Normal Pass
@@ -629,7 +733,6 @@ impl Renderer {
                     &[*scissor],
                 )
             };
-
 
             let color_attach_info = vk::RenderingAttachmentInfo::builder()
                 .image_view(
@@ -693,7 +796,8 @@ impl Renderer {
                     vk::PipelineBindPoint::GRAPHICS,
                     self.pso_layout,
                     0u32,
-                    &[self.device.bindless_descriptor_set()[self.device.buffered_resource_number()]],
+                    &[self.device.bindless_descriptor_set()
+                        [self.device.buffered_resource_number()]],
                     &[],
                 );
                 self.device.vk_device.cmd_bind_descriptor_sets(
