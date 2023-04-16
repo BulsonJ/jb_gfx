@@ -22,6 +22,7 @@ use crate::resource::{
 use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
+pub const SHADOWMAP_SIZE: u32 = 4096u32;
 
 pub struct GraphicsDevice {
     instance: ash::Instance,
@@ -57,6 +58,7 @@ pub struct GraphicsDevice {
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     bindless_manager: BindlessManager,
     bindless_descriptor_pool: vk::DescriptorPool,
+    pub directional_light_shadow_image: RenderTargetHandle,
 }
 
 impl GraphicsDevice {
@@ -425,7 +427,7 @@ impl GraphicsDevice {
             [first, second]
         };
 
-        let bindless_manager = BindlessManager::new(default_sampler, bindless_descriptor_set);
+        let mut bindless_manager = BindlessManager::new(default_sampler, bindless_descriptor_set);
 
         let mut render_targets = RenderTargets::new((size.width, size.height));
 
@@ -441,6 +443,18 @@ impl GraphicsDevice {
             RenderTargetSize::Fullscreen,
             RenderImageType::Depth,
         )?;
+        let directional_light_shadow_image = render_targets.create_render_target(
+            &mut resource_manager,
+            vk::Format::D32_SFLOAT,
+            RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
+            RenderImageType::Depth,
+        )?;
+        bindless_manager.add_image_to_bindless(
+            &device,
+            &resource_manager,
+            &render_targets,
+            &BindlessImage::RenderTarget(directional_light_shadow_image),
+        );
 
         let mut device = Self {
             instance,
@@ -476,6 +490,7 @@ impl GraphicsDevice {
             bindless_descriptor_set,
             bindless_manager,
             bindless_descriptor_pool: descriptor_pool,
+            directional_light_shadow_image,
         };
 
         for set in device.bindless_descriptor_set.iter() {

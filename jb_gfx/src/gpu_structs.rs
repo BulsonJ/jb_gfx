@@ -32,8 +32,8 @@ pub(crate) struct CameraUniform {
     pub view: [[f32; 4]; 4],
     pub position: [f32; 4],
     pub ambient_light: [f32; 4],
-    pub directional_light_colour: [f32;4],
-    pub directional_light_direction: [f32;4],
+    pub directional_light_colour: [f32; 4],
+    pub directional_light_direction: [f32; 4],
 }
 
 impl CameraUniform {

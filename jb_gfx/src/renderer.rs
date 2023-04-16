@@ -7,7 +7,10 @@ use ash::vk::{
     IndexType, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::{offset_of, Zeroable};
-use cgmath::{Array, Deg, InnerSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{
+    Array, Deg, InnerSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4,
+    Zero,
+};
 use image::EncodableLayout;
 use log::{error, info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
@@ -198,7 +201,8 @@ impl Renderer {
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_proj(&camera);
         camera_uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
-        camera_uniform.directional_light_direction = Vector4::new(0.0,1.0,0.25, 0.0).normalize().into();
+        camera_uniform.directional_light_direction =
+            Vector4::new(0.0, 1.0, 0.25, 0.0).normalize().into();
         camera_uniform.directional_light_colour = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
 
         let camera_buffer = {
