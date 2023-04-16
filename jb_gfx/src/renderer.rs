@@ -489,6 +489,13 @@ impl Renderer {
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.directional_light_shadow_image),
+                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
             .build(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -597,6 +604,27 @@ impl Renderer {
                     material_index: i,
                 });
             }
+        }
+
+        // Shadow pass
+        {
+            ImageBarrierBuilder::default()
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::RenderTarget(
+                        self.device.directional_light_shadow_image,
+                    ),
+                    src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                    dst_access_mask: AccessFlags2::SHADER_READ,
+                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ..Default::default()
+                })
+                .build(
+                    &self.device,
+                    &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                )?;
         }
 
         // Start dynamic rendering
