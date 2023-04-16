@@ -678,63 +678,7 @@ impl Renderer {
 
         // Draw commands
 
-        for draw in draw_data.iter() {
-            if let Some(mesh) = self.meshes.get(draw.mesh_handle) {
-                let push_constants = PushConstants {
-                    handles: [
-                        draw.transform_index as i32,
-                        draw.material_index as i32,
-                        0,
-                        0,
-                    ],
-                };
-                unsafe {
-                    self.device.vk_device.cmd_push_constants(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        self.pso_layout,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        0u32,
-                        bytemuck::cast_slice(&[push_constants]),
-                    )
-                };
-
-                let vertex_buffer = self
-                    .device
-                    .resource_manager
-                    .get_buffer(mesh.vertex_buffer)
-                    .unwrap()
-                    .buffer();
-                let index_buffer = self
-                    .device
-                    .resource_manager
-                    .get_buffer(mesh.index_buffer.unwrap())
-                    .unwrap()
-                    .buffer();
-
-                unsafe {
-                    self.device.vk_device.cmd_bind_vertex_buffers(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        0u32,
-                        &[vertex_buffer],
-                        &[0u64],
-                    );
-                    self.device.vk_device.cmd_bind_index_buffer(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        index_buffer,
-                        DeviceSize::zero(),
-                        IndexType::UINT32,
-                    );
-                    self.device.vk_device.cmd_draw_indexed(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        mesh.vertex_count,
-                        1u32,
-                        0u32,
-                        0i32,
-                        0u32,
-                    );
-                }
-            }
-        }
+        self.draw_objects(&draw_data)?;
 
         unsafe {
             self.device.vk_device.cmd_end_rendering(
@@ -876,6 +820,67 @@ impl Renderer {
         }
 
         self.device.end_frame(present_index)?;
+        Ok(())
+    }
+
+    fn draw_objects(&self, draws: &[DrawData]) -> Result<()> {
+        for draw in draws.iter() {
+            if let Some(mesh) = self.meshes.get(draw.mesh_handle) {
+                let push_constants = PushConstants {
+                    handles: [
+                        draw.transform_index as i32,
+                        draw.material_index as i32,
+                        0,
+                        0,
+                    ],
+                };
+                unsafe {
+                    self.device.vk_device.cmd_push_constants(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        self.pso_layout,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        0u32,
+                        bytemuck::cast_slice(&[push_constants]),
+                    )
+                };
+
+                let vertex_buffer = self
+                    .device
+                    .resource_manager
+                    .get_buffer(mesh.vertex_buffer)
+                    .unwrap()
+                    .buffer();
+                let index_buffer = self
+                    .device
+                    .resource_manager
+                    .get_buffer(mesh.index_buffer.unwrap())
+                    .unwrap()
+                    .buffer();
+
+                unsafe {
+                    self.device.vk_device.cmd_bind_vertex_buffers(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        0u32,
+                        &[vertex_buffer],
+                        &[0u64],
+                    );
+                    self.device.vk_device.cmd_bind_index_buffer(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        index_buffer,
+                        DeviceSize::zero(),
+                        IndexType::UINT32,
+                    );
+                    self.device.vk_device.cmd_draw_indexed(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        mesh.vertex_count,
+                        1u32,
+                        0u32,
+                        0i32,
+                        0u32,
+                    );
+                }
+            }
+        }
         Ok(())
     }
 
