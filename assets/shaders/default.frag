@@ -53,7 +53,7 @@ float ShadowCalculation(vec4 fragPosLightSpace)
 	// transform to [0,1] range
 	projCoords = projCoords * 0.5 + 0.5;
 	// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-	float closestDepth = SampleBindlessTexture(pushConstants.handles.b, projCoords.xy).r;
+	float closestDepth = SampleBindlessTexture(1, pushConstants.handles.b, projCoords.xy).r;
 	// get depth of current fragment from light's perspective
 	float currentDepth = projCoords.z;
 	// check whether current frag pos is in shadow
@@ -69,8 +69,8 @@ void main()
 	int normalTexIndex = material.textures.g;
 	int emissiveTexIndex = material.textures_two.r;
 
-	vec4 diffuseTexture = SampleBindlessTexture(diffuseTexIndex, inTexCoords);
-	vec3 emissiveTexture = SampleBindlessTexture(emissiveTexIndex, inTexCoords).rgb;
+	vec4 diffuseTexture = SampleBindlessTexture(0, diffuseTexIndex, inTexCoords);
+	vec3 emissiveTexture = SampleBindlessTexture(0, emissiveTexIndex, inTexCoords).rgb;
 
 	// Ambient
 	vec3 objectColour = inColor;
@@ -86,7 +86,7 @@ void main()
 
 	vec3 normal = normalize(inNormal);
 	if (normalTexIndex > 0){
-		vec3 normalTexture = SampleBindlessTexture(normalTexIndex, inTexCoords).rgb;
+		vec3 normalTexture = SampleBindlessTexture(0, normalTexIndex, inTexCoords).rgb;
 		normal = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
 	}
 

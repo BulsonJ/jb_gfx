@@ -59,6 +59,7 @@ pub struct GraphicsDevice {
     bindless_manager: BindlessManager,
     bindless_descriptor_pool: vk::DescriptorPool,
     pub directional_light_shadow_image: RenderTargetHandle,
+    pub shadow_sampler: vk::Sampler,
 }
 
 impl GraphicsDevice {
@@ -357,6 +358,20 @@ impl GraphicsDevice {
             unsafe { device.create_sampler(&sampler_info, None)? }
         };
 
+        let shadow_sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::NEAREST)
+                .min_filter(vk::Filter::NEAREST)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .min_lod(0.0f32)
+                .max_lod(1.0f32);
+
+            unsafe { device.create_sampler(&sampler_info, None)? }
+        };
+
         let upload_context = UploadContext {
             command_pool: upload_command_pool,
             command_buffer: upload_command_buffer,
@@ -375,7 +390,10 @@ impl GraphicsDevice {
                 .ty(vk::DescriptorType::STORAGE_BUFFER),
             *vk::DescriptorPoolSize::builder()
                 .descriptor_count(1000u32)
-                .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
+                .ty(vk::DescriptorType::SAMPLER),
+            *vk::DescriptorPoolSize::builder()
+                .descriptor_count(1000u32)
+                .ty(vk::DescriptorType::SAMPLED_IMAGE),
         ];
 
         let pool_create_info = vk::DescriptorPoolCreateInfo::builder()
@@ -386,18 +404,28 @@ impl GraphicsDevice {
 
         // Create bindless set
 
-        let bindless_binding_flags = [vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT
-            | vk::DescriptorBindingFlags::PARTIALLY_BOUND];
+        let bindless_binding_flags = [
+            vk::DescriptorBindingFlags::empty(),
+            vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT
+                | vk::DescriptorBindingFlags::PARTIALLY_BOUND,
+        ];
 
         let mut bindless_descriptor_set_binding_flags_create_info =
             vk::DescriptorSetLayoutBindingFlagsCreateInfo::builder()
                 .binding_flags(&bindless_binding_flags);
 
-        let bindless_descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
-            .binding(0u32)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(100u32)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+        let bindless_descriptor_set_bindings = [
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(0u32)
+                .descriptor_type(vk::DescriptorType::SAMPLER)
+                .descriptor_count(2u32)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+            *vk::DescriptorSetLayoutBinding::builder()
+                .binding(1u32)
+                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                .descriptor_count(100u32)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+        ];
 
         let bindless_descriptor_set_layout_create_info =
             vk::DescriptorSetLayoutCreateInfo::builder()
@@ -427,7 +455,9 @@ impl GraphicsDevice {
             [first, second]
         };
 
-        let mut bindless_manager = BindlessManager::new(default_sampler, bindless_descriptor_set);
+        let samplers = vec![default_sampler, shadow_sampler];
+        let mut bindless_manager = BindlessManager::new(bindless_descriptor_set);
+        bindless_manager.setup_samplers(&samplers, &device)?;
 
         let mut render_targets = RenderTargets::new((size.width, size.height));
 
@@ -491,6 +521,7 @@ impl GraphicsDevice {
             bindless_manager,
             bindless_descriptor_pool: descriptor_pool,
             directional_light_shadow_image,
+            shadow_sampler,
         };
 
         for set in device.bindless_descriptor_set.iter() {
@@ -1039,6 +1070,7 @@ impl Drop for GraphicsDevice {
                 .destroy_descriptor_pool(self.bindless_descriptor_pool, None);
             self.resource_manager.destroy_resources();
             self.vk_device.destroy_sampler(self.default_sampler, None);
+            self.vk_device.destroy_sampler(self.shadow_sampler, None);
             for semaphore in self.present_complete_semaphore.into_iter() {
                 self.vk_device.destroy_semaphore(semaphore, None);
             }
