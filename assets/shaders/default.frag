@@ -97,7 +97,7 @@ void main()
 		vec3 diffuse = vec3(0);
 		vec3 specular = vec3(0);
 
-		vec3 lightDir = cameraData.directionalLightDirection.xyz;
+		vec3 lightDir = -cameraData.directionalLightDirection.xyz;
 		float diff = max(dot(normal, lightDir), 0.0);
 		diffuse += diff * cameraData.directionalLightColour.rgb;
 
@@ -148,7 +148,8 @@ void main()
 	}
 
 	// calculate shadow
-	float shadow = ShadowCalculation(inWorldPosLightSpace);
+	float shadow = 0.0f;
+	//ShadowCalculation(inWorldPosLightSpace);
 
 	vec3 result = (ambient + (1.0 - shadow) * (diffuseResult + specularResult)) * objectColour;
 
