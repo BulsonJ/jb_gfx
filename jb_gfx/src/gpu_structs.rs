@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{EuclideanSpace, Matrix4, SquareMatrix, Vector3, Vector4, Zero};
 
 use crate::renderer::Light;
 use crate::Camera;
@@ -51,7 +51,7 @@ impl CameraUniform {
     pub fn update_proj(&mut self, camera: &Camera) {
         self.proj = camera.build_projection_matrix().into();
         self.view = camera.build_view_matrix().into();
-        self.position = camera.position.extend(0f32).into();
+        self.position = camera.position.to_vec().extend(0f32).into();
     }
 }
 

@@ -8,6 +8,7 @@ layout (location = 1) in vec2 inTexCoords;
 layout (location = 2) in vec3 inNormal;
 layout (location = 3) in vec3 inWorldPos;
 layout (location = 4) in mat3 inTBN;
+layout (location = 7) in vec4 inWorldPosLightSpace;
 
 layout (location = 0) out vec4 outFragColor;
 
@@ -44,6 +45,22 @@ layout( push_constant ) uniform constants
 {
 	ivec4 handles;
 } pushConstants;
+
+float ShadowCalculation(vec4 fragPosLightSpace)
+{
+	// perform perspective divide
+	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+	// transform to [0,1] range
+	projCoords = projCoords * 0.5 + 0.5;
+	// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+	float closestDepth = SampleBindlessTexture(pushConstants.handles.b, projCoords.xy).r;
+	// get depth of current fragment from light's perspective
+	float currentDepth = projCoords.z;
+	// check whether current frag pos is in shadow
+	float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
+
+	return shadow;
+}
 
 void main()
 {
@@ -130,7 +147,10 @@ void main()
 		specularResult += specular;
 	}
 
-	vec3 result = (ambient + diffuseResult + specularResult) * objectColour;
+	// calculate shadow
+	float shadow = ShadowCalculation(inWorldPosLightSpace);
+
+	vec3 result = (ambient + (1.0 - shadow) * (diffuseResult + specularResult)) * objectColour;
 
 	// Emissive
 	if (emissiveTexIndex > 0){

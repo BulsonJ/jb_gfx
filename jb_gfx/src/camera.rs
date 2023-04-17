@@ -1,9 +1,9 @@
-use cgmath::{Deg, Matrix4, Vector3};
+use cgmath::{Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Vector3};
 
 #[derive(Copy, Clone)]
 pub struct Camera {
-    pub position: Vector3<f32>,
-    pub rotation: f32,
+    pub position: Point3<f32>,
+    pub direction: Vector3<f32>,
     pub aspect: f32,
     pub fovy: f32,
     pub znear: f32,
@@ -12,7 +12,7 @@ pub struct Camera {
 
 impl Camera {
     pub fn build_view_matrix(&self) -> Matrix4<f32> {
-        Matrix4::from_translation(self.position) * Matrix4::from_angle_y(Deg(self.rotation))
+        Matrix4::look_to_rh(self.position, self.direction, cgmath::Vector3::unit_y())
     }
 
     pub fn build_projection_matrix(&self) -> Matrix4<f32> {

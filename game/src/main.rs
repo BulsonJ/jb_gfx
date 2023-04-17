@@ -150,8 +150,8 @@ fn main() {
 
     let mut camera_component = {
         let camera = Camera {
-            position: (0.0, -100.0, -8.0).into(),
-            rotation: 90f32,
+            position: (-8.0, 100.0, 0.0).into(),
+            direction: (1.0, 0.0, 0.0).into(),
             aspect: screen_width as f32 / screen_height as f32,
             fovy: 90.0,
             znear: 0.1,

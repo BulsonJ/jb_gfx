@@ -218,8 +218,8 @@ impl Renderer {
         };
 
         let camera = Camera {
-            position: (0.0, -100.0, -2.0).into(),
-            rotation: 90f32,
+            position: (-8.0, 100.0, 0.0).into(),
+            direction: (1.0, 0.0, 0.0).into(),
             aspect: device.size.width as f32 / device.size.height as f32,
             fovy: 90.0,
             znear: 0.1,
@@ -230,7 +230,7 @@ impl Renderer {
         camera_uniform.update_proj(&camera);
         camera_uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
         camera_uniform.directional_light_direction =
-            Vector4::new(0.0, 1.0, 0.25, 0.0).normalize().into();
+            Vector3::new(1.0, 0.0, 0.0).normalize().extend(0f32).into();
         camera_uniform.directional_light_colour = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
 
         let camera_buffer = {
@@ -992,7 +992,7 @@ impl Renderer {
                     handles: [
                         draw.transform_index as i32,
                         draw.material_index as i32,
-                        0,
+                        self.device.get_descriptor_index(&BindlessImage::RenderTarget(self.device.directional_light_shadow_image)).unwrap() as i32,
                         0,
                     ],
                 };
