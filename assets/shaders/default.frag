@@ -150,8 +150,7 @@ void main()
 	}
 
 	// calculate shadow
-	float shadow = 0.0f;
-	//ShadowCalculation(inWorldPosLightSpace);
+	float shadow = ShadowCalculation(inWorldPosLightSpace);
 
 	vec3 result = (ambient + (1.0 - shadow) * (diffuseResult + specularResult)) * objectColour;
 

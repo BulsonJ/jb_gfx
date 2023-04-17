@@ -228,8 +228,8 @@ impl Renderer {
         };
 
         let sun = DirectionalLight::new(
-            (0.0, 600.0, 100.0).into(),
-            (0.0, -1.0, -0.25).into(),
+            (-8.0, 400.0, 40.0).into(),
+            (0.0, -1.0, -0.1).into(),
             (1.0, 1.0, 1.0).into(),
         );
 
