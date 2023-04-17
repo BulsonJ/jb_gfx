@@ -22,6 +22,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	vec4 ambientLight;
 	vec4 directionalLightColour;
 	vec4 directionalLightDirection;
+	mat4 sunProj;
+	mat4 sunView;
 } cameraData;
 
 struct ModelMatrix{
@@ -55,7 +57,7 @@ void main()
 	mat3 normalMatrix = mat3(modelData.models[pushConstants.handles.x].normal);
 	vec3 worldPos = vec3(modelMatrix * vec4(vPosition, 1.0f));
 	outWorldPos = worldPos;
-	outWorldPosLightSpace = cameraData.proj * cameraData.view * modelMatrix * vec4(vPosition, 1.0f);
+	outWorldPosLightSpace = cameraData.sunProj * cameraData.sunView * vec4(worldPos, 1.0f);
 	outColor = vColor;
 	outTexCoords = vTexCoords;
 	outNormal = normalMatrix * vNormal;

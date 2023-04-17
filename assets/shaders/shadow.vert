@@ -15,6 +15,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	vec4 ambientLight;
 	vec4 directionalLightColour;
 	vec4 directionalLightDirection;
+	mat4 sunProj;
+	mat4 sunView;
 } cameraData;
 
 struct ModelMatrix{
@@ -34,5 +36,5 @@ layout( push_constant ) uniform constants
 void main()
 {
 	mat4 modelMatrix = modelData.models[pushConstants.handles.x].model;
-	gl_Position = cameraData.proj * cameraData.view * modelMatrix * vec4(vPosition, 1.0f);
+	gl_Position = cameraData.sunProj * cameraData.sunView * modelMatrix * vec4(vPosition, 1.0f);
 }

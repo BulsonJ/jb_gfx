@@ -22,7 +22,7 @@ use crate::resource::{
 use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
-pub const SHADOWMAP_SIZE: u32 = 4096u32;
+pub const SHADOWMAP_SIZE: u32 = 8192u32 * 2u32;
 
 pub struct GraphicsDevice {
     instance: ash::Instance,

@@ -8,8 +8,8 @@ use ash::vk::{
 };
 use bytemuck::{offset_of, Zeroable};
 use cgmath::{
-    Array, Deg, InnerSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4,
-    Zero,
+    Array, Deg, EuclideanSpace, InnerSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix,
+    Vector3, Vector4, Zero,
 };
 use image::EncodableLayout;
 use log::{error, info, trace, warn};
@@ -26,7 +26,7 @@ use crate::gpu_structs::{
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
-use crate::{Camera, Colour, MeshData, Vertex};
+use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
 
@@ -54,6 +54,7 @@ pub struct Renderer {
     stored_cameras: SlotMap<CameraHandle, Camera>,
     pub active_camera: Option<CameraHandle>,
     shadow_pso: PipelineHandle,
+    pub sun: DirectionalLight,
 }
 
 impl Renderer {
@@ -226,12 +227,16 @@ impl Renderer {
             zfar: 4000.0,
         };
 
+        let sun = DirectionalLight::new(
+            (0.0, 600.0, 100.0).into(),
+            (0.0, -1.0, -0.25).into(),
+            (1.0, 1.0, 1.0).into(),
+        );
+
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_proj(&camera);
+        camera_uniform.update_light(&sun);
         camera_uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
-        camera_uniform.directional_light_direction =
-            Vector3::new(1.0, 0.0, 0.0).normalize().extend(0f32).into();
-        camera_uniform.directional_light_colour = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
 
         let camera_buffer = {
             let buffer_create_info = BufferCreateInfo {
@@ -431,6 +436,7 @@ impl Renderer {
             stored_cameras: SlotMap::default(),
             active_camera: None,
             shadow_pso,
+            sun,
         })
     }
 
@@ -498,6 +504,7 @@ impl Renderer {
         } else {
             self.camera_uniform.update_proj(&self.default_camera);
         }
+        self.camera_uniform.update_light(&self.sun);
 
         self.device
             .resource_manager
@@ -530,8 +537,8 @@ impl Renderer {
         }
         for light in self.stored_lights.values() {
             let transform = TransformSSBO {
-                model: Matrix4::from_translation(light.position).into(),
-                normal: Matrix4::from_translation(light.position)
+                model: Matrix4::from_translation(light.position.to_vec()).into(),
+                normal: Matrix4::from_translation(light.position.to_vec())
                     .invert()
                     .unwrap()
                     .transpose()
@@ -992,7 +999,11 @@ impl Renderer {
                     handles: [
                         draw.transform_index as i32,
                         draw.material_index as i32,
-                        self.device.get_descriptor_index(&BindlessImage::RenderTarget(self.device.directional_light_shadow_image)).unwrap() as i32,
+                        self.device
+                            .get_descriptor_index(&BindlessImage::RenderTarget(
+                                self.device.directional_light_shadow_image,
+                            ))
+                            .unwrap() as i32,
                         0,
                     ],
                 };
@@ -1472,18 +1483,6 @@ struct RenderModel {
     mesh_handle: MeshHandle,
     material_instance: MaterialInstance,
     transform: Matrix4<f32>,
-}
-
-#[derive(Copy, Clone)]
-pub struct Light {
-    pub position: Vector3<f32>,
-    pub colour: Vector3<f32>,
-}
-
-impl Light {
-    pub fn new(position: Vector3<f32>, colour: Vector3<f32>) -> Self {
-        Self { position, colour }
-    }
 }
 
 struct DrawData {

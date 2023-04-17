@@ -1,7 +1,7 @@
-use cgmath::{EuclideanSpace, Matrix4, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{EuclideanSpace, Matrix4, Point3, SquareMatrix, Vector3, Vector4, Zero};
 
-use crate::renderer::Light;
-use crate::Camera;
+use crate::light::Light;
+use crate::{Camera, DirectionalLight};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -34,6 +34,8 @@ pub(crate) struct CameraUniform {
     pub ambient_light: [f32; 4],
     pub directional_light_colour: [f32; 4],
     pub directional_light_direction: [f32; 4],
+    directional_light_proj: [[f32; 4]; 4],
+    directional_light_view: [[f32; 4]; 4],
 }
 
 impl CameraUniform {
@@ -45,6 +47,8 @@ impl CameraUniform {
             ambient_light: Vector4::zero().into(),
             directional_light_colour: Vector4::zero().into(),
             directional_light_direction: Vector4::zero().into(),
+            directional_light_proj: Matrix4::identity().into(),
+            directional_light_view: Matrix4::identity().into(),
         }
     }
 
@@ -52,6 +56,13 @@ impl CameraUniform {
         self.proj = camera.build_projection_matrix().into();
         self.view = camera.build_view_matrix().into();
         self.position = camera.position.to_vec().extend(0f32).into();
+    }
+
+    pub fn update_light(&mut self, light: &DirectionalLight) {
+        self.directional_light_proj = light.build_projection_matrix().into();
+        self.directional_light_view = light.build_view_matrix().into();
+        self.directional_light_colour = light.colour.extend(0f32).into();
+        self.directional_light_direction = light.direction().extend(0f32).into();
     }
 }
 
@@ -63,8 +74,8 @@ pub(crate) struct LightUniform {
 }
 
 impl LightUniform {
-    pub fn new(position: Vector3<f32>, colour: Vector3<f32>) -> Self {
-        let position = position.extend(0f32);
+    pub fn new(position: Point3<f32>, colour: Vector3<f32>) -> Self {
+        let position = position.to_vec().extend(0f32);
         let colour = colour.extend(0f32);
 
         Self {

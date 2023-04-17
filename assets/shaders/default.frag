@@ -24,6 +24,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	vec4 ambientLight;
 	vec4 directionalLightColour;
 	vec4 directionalLightDirection;
+	mat4 sunProj;
+	mat4 sunView;
 } cameraData;
 
 layout(std140,set = 1, binding = 1) uniform LightBuffer{

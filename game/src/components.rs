@@ -1,5 +1,5 @@
-use jb_gfx::renderer::{CameraHandle, Light, LightHandle};
-use jb_gfx::Camera;
+use jb_gfx::renderer::{CameraHandle, LightHandle};
+use jb_gfx::{Camera, Light};
 
 #[derive(Copy, Clone)]
 pub struct LightComponent {

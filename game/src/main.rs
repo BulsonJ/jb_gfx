@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use cgmath::{Array, Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Zero};
+use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -8,8 +8,8 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Light, Renderer};
-use jb_gfx::{Camera, Colour};
+use jb_gfx::renderer::Renderer;
+use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
 
@@ -104,19 +104,19 @@ fn main() {
 
     let initial_lights = vec![
         Light::new(
-            Vector3::new(10.0f32, 95.0f32, -16.0f32),
+            Point3::new(10.0f32, 95.0f32, -16.0f32),
             Vector3::new(3.0f32, 0.0f32, 0.0f32),
         ),
         Light::new(
-            Vector3::new(-10.0f32, 105.0f32, 16.0f32),
+            Point3::new(-10.0f32, 105.0f32, 16.0f32),
             Vector3::new(0.0f32, 3.0f32, 0.0f32),
         ),
         Light::new(
-            Vector3::new(10.0f32, 105.0f32, -16.0f32),
+            Point3::new(10.0f32, 105.0f32, -16.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
         Light::new(
-            Vector3::new(-10.0f32, 95.0f32, 16.0f32),
+            Point3::new(-10.0f32, 95.0f32, 16.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
     ];
