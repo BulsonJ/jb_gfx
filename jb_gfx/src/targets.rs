@@ -40,6 +40,10 @@ impl RenderTargets {
             format,
             image_type,
         };
+        info!(
+            "Render Target Created: {} | Size: [{},{}]",
+            "Test", actual_size.0, actual_size.1,
+        );
         Ok(self.targets.insert(render_target))
     }
 
@@ -67,6 +71,11 @@ impl RenderTargets {
                     _ => (0, 0),
                 }
             };
+
+            info!(
+                "Recreating Render Target: {} | Size: [{},{}] |",
+                "Test", size.0, size.1,
+            );
 
             resource_manager.destroy_image(render_target.image);
             render_target.image = create_render_target_image(
