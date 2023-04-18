@@ -935,6 +935,14 @@ impl Renderer {
             let mut ui_vertices = Vec::new();
             let mut ui_indices = Vec::new();
             for element in self.ui_to_draw.iter_mut() {
+                let texture_id = {
+                    if let Some(index) = self.device.get_descriptor_index(&BindlessImage::Image(element.texture_id)){
+                        index as i32
+                    } else {
+                        0
+                    }
+                };
+
                 let mut verts: Vec<UIVertexData> = element
                     .vertices
                     .iter()
@@ -942,6 +950,7 @@ impl Renderer {
                         pos: vert.pos,
                         uv: vert.uv,
                         colour: vert.colour,
+                        texture_id: [texture_id, 0, 0, 0],
                     })
                     .collect();
                 ui_vertices.append(&mut verts);

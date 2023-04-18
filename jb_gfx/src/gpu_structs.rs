@@ -103,4 +103,5 @@ pub struct UIVertexData {
     pub pos: [f32; 2],
     pub uv: [f32; 2],
     pub colour: [f32; 4],
+    pub texture_id: [i32;4],
 }
