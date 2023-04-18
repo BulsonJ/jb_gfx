@@ -89,6 +89,7 @@ impl PipelineManager {
             depth_attachment_format: build_info.depth_attachment_format,
             depth_stencil_state: build_info.depth_stencil_state,
             pipeline_layout: build_info.pipeline_layout,
+            cull_mode: build_info.cull_mode,
         };
 
         let pipeline = build_pipeline(&mut device.vk_device, info);
@@ -158,6 +159,7 @@ pub struct PipelineCreateInfo {
     pub color_attachment_formats: Vec<vk::Format>,
     pub depth_attachment_format: Option<vk::Format>,
     pub depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
+    pub cull_mode: vk::CullModeFlags,
 }
 
 pub struct PipelineBuildInfo {
@@ -167,6 +169,7 @@ pub struct PipelineBuildInfo {
     pub depth_attachment_format: Option<vk::Format>,
     pub depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
     pub pipeline_layout: vk::PipelineLayout,
+    pub cull_mode: vk::CullModeFlags,
 }
 
 pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -> vk::Pipeline {
@@ -207,7 +210,7 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
 
     let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
         .polygon_mode(vk::PolygonMode::FILL)
-        .cull_mode(vk::CullModeFlags::BACK)
+        .cull_mode(build_info.cull_mode)
         .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
         .depth_bias_enable(false)
         .depth_bias_constant_factor(0.0f32)

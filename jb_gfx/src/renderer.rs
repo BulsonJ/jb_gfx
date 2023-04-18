@@ -190,6 +190,7 @@ impl Renderer {
                 color_attachment_formats: vec![render_image_format],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::BACK,
             };
 
             pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
@@ -213,6 +214,7 @@ impl Renderer {
                 color_attachment_formats: vec![],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::FRONT,
             };
 
             pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
