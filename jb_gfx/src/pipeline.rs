@@ -218,9 +218,16 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
         .depth_bias_slope_factor(0.0f32)
         .line_width(1.0f32);
 
-    let mut dynamic_rendering_info = vk::PipelineRenderingCreateInfo::builder()
-        .color_attachment_formats(&build_info.color_attachment_formats)
-        .depth_attachment_format(build_info.depth_attachment_format.unwrap());
+    let mut dynamic_rendering_info = {
+        if let Some(depth_format) = build_info.depth_attachment_format {
+            vk::PipelineRenderingCreateInfo::builder()
+                .color_attachment_formats(&build_info.color_attachment_formats)
+                .depth_attachment_format(depth_format)
+        } else {
+            vk::PipelineRenderingCreateInfo::builder()
+                .color_attachment_formats(&build_info.color_attachment_formats)
+        }
+    };
 
     let pso_create_info = vk::GraphicsPipelineCreateInfo::builder()
         .push_next(&mut dynamic_rendering_info)
