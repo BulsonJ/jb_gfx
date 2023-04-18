@@ -10,8 +10,8 @@ layout (location = 0) out vec4 outFragColor;
 void main()
 {
     if (inTexHandle > 0){
-        vec4 texture = SampleBindlessTexture(0, inTexHandle, inTexCoords);
-        outFragColor = inColor * vec4(texture.rgb, 1.0f);
+        vec4 texture = SampleBindlessTexture(2, inTexHandle, inTexCoords);
+        outFragColor = inColor * texture;
     } else {
         outFragColor = vec4(inColor);
     }

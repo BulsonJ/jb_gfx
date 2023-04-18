@@ -156,7 +156,7 @@ pub struct PipelineCreateInfo {
     pub vertex_shader: String,
     pub fragment_shader: String,
     pub vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
-    pub color_attachment_formats: Vec<vk::Format>,
+    pub color_attachment_formats: Vec<PipelineColorAttachment>,
     pub depth_attachment_format: Option<vk::Format>,
     pub depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
     pub cull_mode: vk::CullModeFlags,
@@ -165,11 +165,30 @@ pub struct PipelineCreateInfo {
 pub struct PipelineBuildInfo {
     pub shader_stages: Vec<vk::PipelineShaderStageCreateInfo>,
     pub vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
-    pub color_attachment_formats: Vec<vk::Format>,
+    pub color_attachment_formats: Vec<PipelineColorAttachment>,
     pub depth_attachment_format: Option<vk::Format>,
     pub depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
     pub pipeline_layout: vk::PipelineLayout,
     pub cull_mode: vk::CullModeFlags,
+}
+
+#[derive(Clone)]
+pub struct PipelineColorAttachment {
+    pub format: vk::Format,
+    pub blend: bool,
+    pub src_blend_factor_color: vk::BlendFactor,
+    pub dst_blend_factor_color: vk::BlendFactor,
+}
+
+impl Default for PipelineColorAttachment {
+    fn default() -> Self {
+        Self {
+            format: vk::Format::default(),
+            blend: false,
+            src_blend_factor_color: vk::BlendFactor::ONE,
+            dst_blend_factor_color: vk::BlendFactor::ONE,
+        }
+    }
 }
 
 pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -> vk::Pipeline {
@@ -185,8 +204,12 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
     let mut attachments = Vec::new();
     for attachment in build_info.color_attachment_formats.iter() {
         let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
-            .blend_enable(false)
-            .color_write_mask(vk::ColorComponentFlags::RGBA);
+            .blend_enable(attachment.blend)
+            .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .src_color_blend_factor(attachment.src_blend_factor_color)
+            //.src_alpha_blend_factor(attachment.blend_factor_alpha);
+            .dst_color_blend_factor(attachment.dst_blend_factor_color);
+        //.dst_alpha_blend_factor(attachment.blend_factor_alpha);
         attachments.push(*color_blend_attachment_state);
     }
 
@@ -202,11 +225,7 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
     let tess_state = vk::PipelineTessellationStateCreateInfo::builder();
 
     let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
-        .rasterization_samples(vk::SampleCountFlags::TYPE_1)
-        .sample_shading_enable(false)
-        .min_sample_shading(1.0f32)
-        .alpha_to_coverage_enable(false)
-        .alpha_to_one_enable(false);
+        .rasterization_samples(vk::SampleCountFlags::TYPE_1);
 
     let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
         .polygon_mode(vk::PolygonMode::FILL)
@@ -218,14 +237,19 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
         .depth_bias_slope_factor(0.0f32)
         .line_width(1.0f32);
 
+    let color_attachment_formats: Vec<vk::Format> = build_info
+        .color_attachment_formats
+        .iter()
+        .map(|attachment| attachment.format)
+        .collect();
     let mut dynamic_rendering_info = {
         if let Some(depth_format) = build_info.depth_attachment_format {
             vk::PipelineRenderingCreateInfo::builder()
-                .color_attachment_formats(&build_info.color_attachment_formats)
+                .color_attachment_formats(&color_attachment_formats)
                 .depth_attachment_format(depth_format)
         } else {
             vk::PipelineRenderingCreateInfo::builder()
-                .color_attachment_formats(&build_info.color_attachment_formats)
+                .color_attachment_formats(&color_attachment_formats)
         }
     };
 

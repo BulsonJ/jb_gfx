@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
-use egui::{Context, TextureId};
 use egui::epaint::Primitive;
+use egui::{Context, TextureId};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -11,10 +11,10 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
-use jb_gfx::{Camera, Colour, Light};
 use jb_gfx::device::ImageFormatType;
+use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
 use jb_gfx::resource::ImageHandle;
+use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
@@ -215,7 +215,11 @@ fn main() {
     });
 }
 
-fn paint_egui(renderer: &mut Renderer, ctx: &Context, stored_textures: &mut HashMap<TextureId, ImageHandle>) {
+fn paint_egui(
+    renderer: &mut Renderer,
+    ctx: &Context,
+    stored_textures: &mut HashMap<TextureId, ImageHandle>,
+) {
     let raw_input = egui::RawInput::default();
     let full_output = ctx.run(raw_input, |ctx| {
         egui::CentralPanel::default().show(&ctx, |ui| {
@@ -227,8 +231,7 @@ fn paint_egui(renderer: &mut Renderer, ctx: &Context, stored_textures: &mut Hash
     });
     //handle_platform_output(full_output.platform_output);
     let clipped_primitives = ctx.tessellate(full_output.shapes); // create triangles to paint
-    //paint(full_output.textures_delta, clipped_primitives);
-
+                                                                 //paint(full_output.textures_delta, clipped_primitives);
     for (id, delta) in full_output.textures_delta.set.iter() {
         let data: Vec<u8> = match &delta.image {
             egui::ImageData::Color(image) => {
@@ -237,18 +240,29 @@ fn paint_egui(renderer: &mut Renderer, ctx: &Context, stored_textures: &mut Hash
                     image.pixels.len(),
                     "Mismatch between texture size and texel count"
                 );
-                image.pixels.iter().flat_map(|color| color.to_array()).collect()
+                image
+                    .pixels
+                    .iter()
+                    .flat_map(|color| color.to_array())
+                    .collect()
             }
-            egui::ImageData::Font(image) => {
-                image.srgba_pixels(None).flat_map(|color| color.to_array()).collect()
-            }
+            egui::ImageData::Font(image) => image
+                .srgba_pixels(None)
+                .flat_map(|color| color.to_array())
+                .collect(),
         };
 
-        if stored_textures.contains_key(id){
+        if stored_textures.contains_key(id) {
             continue;
         }
 
-        let image = renderer.load_texture_from_bytes(&data, delta.image.width()as u32, delta.image.height() as u32, &ImageFormatType::Default, 1);
+        let image = renderer.load_texture_from_bytes(
+            &data,
+            delta.image.width() as u32,
+            delta.image.height() as u32,
+            &ImageFormatType::Default,
+            1,
+        );
         stored_textures.insert(*id, image.unwrap());
     }
 
@@ -256,14 +270,18 @@ fn paint_egui(renderer: &mut Renderer, ctx: &Context, stored_textures: &mut Hash
     for prim in clipped_primitives.into_iter() {
         match prim.primitive {
             Primitive::Mesh(mesh) => {
-                let ui_verts = mesh.vertices.iter().map(|vert| UIVertex{
-                    pos: vert.pos.into(),
-                    uv: vert.uv.into(),
-                    colour: vert.color.to_array().map(|colour| colour as f32),
-                }).collect();
+                let ui_verts = mesh
+                    .vertices
+                    .iter()
+                    .map(|vert| UIVertex {
+                        pos: vert.pos.into(),
+                        uv: vert.uv.into(),
+                        colour: vert.color.to_array().map(|colour| colour as f32 / 255f32),
+                    })
+                    .collect();
 
                 let texture_id = {
-                    if let Some(image) = stored_textures.get(&mesh.texture_id){
+                    if let Some(image) = stored_textures.get(&mesh.texture_id) {
                         *image
                     } else {
                         Default::default()

@@ -25,7 +25,9 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
     UIVertexData,
 };
-use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
+use crate::pipeline::{
+    PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager,
+};
 use crate::renderpass::{AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
@@ -198,7 +200,11 @@ impl Renderer {
                 vertex_shader: "assets/shaders/default.vert".to_string(),
                 fragment_shader: "assets/shaders/default.frag".to_string(),
                 vertex_input_state: *vertex_input_state,
-                color_attachment_formats: vec![render_image_format],
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: render_image_format,
+                    blend: false,
+                    ..Default::default()
+                }],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::BACK,
@@ -277,7 +283,7 @@ impl Renderer {
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
                 .depth_test_enable(false)
                 .depth_write_enable(false)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_compare_op(vk::CompareOp::ALWAYS)
                 .depth_bounds_test_enable(false)
                 .stencil_test_enable(false)
                 .min_depth_bounds(0.0f32)
@@ -288,7 +294,12 @@ impl Renderer {
                 vertex_shader: "assets/shaders/ui.vert".to_string(),
                 fragment_shader: "assets/shaders/ui.frag".to_string(),
                 vertex_input_state: *vertex_input_state,
-                color_attachment_formats: vec![render_image_format],
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: render_image_format,
+                    blend: true,
+                    src_blend_factor_color: vk::BlendFactor::ONE,
+                    dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                }],
                 depth_attachment_format: None,
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::NONE,
@@ -1284,8 +1295,13 @@ impl Renderer {
         let img_bytes = rgba_img.as_bytes();
         let mip_levels = (img.width().max(img.height()) as f32).log2().floor() as u32 + 1u32;
 
-        let image =
-            self.load_texture_from_bytes(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
+        let image = self.load_texture_from_bytes(
+            img_bytes,
+            img.width(),
+            img.height(),
+            image_type,
+            mip_levels,
+        )?;
 
         // Debug name image
         {
