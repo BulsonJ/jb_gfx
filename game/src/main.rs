@@ -169,6 +169,20 @@ fn main() {
             camera,
         }
     };
+    let camera_two = {
+        let camera = Camera {
+            position: (-50.0, 100.0, 20.0).into(),
+            direction: (1.0, 0.25, -0.5).into(),
+            aspect: screen_width as f32 / screen_height as f32,
+            fovy: 90.0,
+            znear: 0.1,
+            zfar: 4000.0,
+        };
+        CameraComponent {
+            handle: renderer.create_camera(&camera),
+            camera,
+        }
+    };
     renderer.active_camera = Some(camera_component.handle);
 
     let mut initial_resize = true;
@@ -187,6 +201,12 @@ fn main() {
                 if input.is_just_pressed(VirtualKeyCode::F5) {
                     renderer.reload_shaders().unwrap();
                 }
+                if input.is_just_pressed(VirtualKeyCode::Key1) {
+                    renderer.active_camera = Some(camera_component.handle);
+                }
+                if input.is_just_pressed(VirtualKeyCode::Key2) {
+                    renderer.active_camera = Some(camera_two.handle);
+                }
 
                 while frame_time > 0.0f32 {
                     let delta_time = frame_time.min(target_dt);
@@ -202,7 +222,11 @@ fn main() {
                 }
 
                 // Update render objects & then render
-                update_renderer_object_states(&mut renderer, &light_components, &camera_component);
+                update_renderer_object_states(
+                    &mut renderer,
+                    &light_components,
+                    &vec![camera_component, camera_two],
+                );
                 renderer.render().unwrap();
             }
             Event::NewEvents(_) => {
@@ -257,16 +281,18 @@ fn main() {
 fn update_renderer_object_states(
     renderer: &mut Renderer,
     light_components: &[LightComponent],
-    camera_component: &CameraComponent,
+    camera_component: &[CameraComponent],
 ) {
     for component in light_components.iter() {
         renderer
             .set_light(component.handle, &component.light)
             .unwrap();
     }
-    renderer
-        .set_camera(camera_component.handle, &camera_component.camera)
-        .unwrap();
+    for component in camera_component.iter() {
+        renderer
+            .set_camera(component.handle, &component.camera)
+            .unwrap();
+    }
 }
 
 #[profiling::function]
