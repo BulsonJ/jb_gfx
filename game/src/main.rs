@@ -1,6 +1,9 @@
+use std::collections::HashMap;
 use std::time::Instant;
 
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
+use egui::{Context, TextureId};
+use egui::epaint::Primitive;
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -10,6 +13,8 @@ use winit::window::WindowBuilder;
 use jb_gfx::asset::AssetManager;
 use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
 use jb_gfx::{Camera, Colour, Light};
+use jb_gfx::device::ImageFormatType;
+use jb_gfx::resource::ImageHandle;
 
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
@@ -47,66 +52,66 @@ fn main() {
     renderer.render().unwrap();
     let mut asset_manager = AssetManager::default();
     // Load cube
-    {
-        let models = asset_manager
-            .load_gltf(&mut renderer, "assets/models/Cube/glTF/Cube.gltf")
-            .unwrap();
-        for model in models.iter() {
-            let render_model =
-                renderer.add_render_model(model.mesh, model.material_instance.clone());
-            renderer.light_mesh = Some(model.mesh);
-        }
-    }
+    //{
+    //    let models = asset_manager
+    //        .load_gltf(&mut renderer, "assets/models/Cube/glTF/Cube.gltf")
+    //        .unwrap();
+    //    for model in models.iter() {
+    //        let render_model =
+    //            renderer.add_render_model(model.mesh, model.material_instance.clone());
+    //        renderer.light_mesh = Some(model.mesh);
+    //    }
+    //}
     // Load sponza
-    {
-        let models = asset_manager
-            .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-            .unwrap();
-        for model in models.iter() {
-            let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
-            renderer
-                .set_render_model_transform(
-                    handle,
-                    from_transforms(
-                        Vector3::new(0f32, 80f32, 0.0f32),
-                        Quaternion::from_axis_angle(
-                            Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-                            Deg(180f32),
-                        ),
-                        Vector3::from_value(0.1f32),
-                    ),
-                )
-                .unwrap();
-        }
-    }
+    //{
+    //    let models = asset_manager
+    //        .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+    //        .unwrap();
+    //    for model in models.iter() {
+    //        let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
+    //        renderer
+    //            .set_render_model_transform(
+    //                handle,
+    //                from_transforms(
+    //                    Vector3::new(0f32, 80f32, 0.0f32),
+    //                    Quaternion::from_axis_angle(
+    //                        Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+    //                        Deg(180f32),
+    //                    ),
+    //                    Vector3::from_value(0.1f32),
+    //                ),
+    //            )
+    //            .unwrap();
+    //    }
+    //}
     // Load helmet
-    {
-        let models = asset_manager
-            .load_gltf(
-                &mut renderer,
-                "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
-            )
-            .unwrap();
-        for model in models.iter() {
-            let helmet = renderer.add_render_model(model.mesh, model.material_instance.clone());
-            renderer
-                .set_render_model_transform(
-                    helmet,
-                    from_transforms(
-                        Vector3::new(10f32, 100f32, 0.0f32),
-                        Quaternion::from_axis_angle(
-                            Vector3::new(1f32, 0f32, 0.0f32).normalize(),
-                            Deg(100f32),
-                        ) * Quaternion::from_axis_angle(
-                            Vector3::new(0f32, 0f32, 1.0f32).normalize(),
-                            Deg(60f32),
-                        ),
-                        Vector3::from_value(6f32),
-                    ),
-                )
-                .unwrap();
-        }
-    }
+    //{
+    //    let models = asset_manager
+    //        .load_gltf(
+    //            &mut renderer,
+    //            "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
+    //        )
+    //        .unwrap();
+    //    for model in models.iter() {
+    //        let helmet = renderer.add_render_model(model.mesh, model.material_instance.clone());
+    //        renderer
+    //            .set_render_model_transform(
+    //                helmet,
+    //                from_transforms(
+    //                    Vector3::new(10f32, 100f32, 0.0f32),
+    //                    Quaternion::from_axis_angle(
+    //                        Vector3::new(1f32, 0f32, 0.0f32).normalize(),
+    //                        Deg(100f32),
+    //                    ) * Quaternion::from_axis_angle(
+    //                        Vector3::new(0f32, 0f32, 1.0f32).normalize(),
+    //                        Deg(60f32),
+    //                    ),
+    //                    Vector3::from_value(6f32),
+    //                ),
+    //            )
+    //            .unwrap();
+    //    }
+    //}
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
     let (mut lights, cameras) =
@@ -117,6 +122,9 @@ fn main() {
     let mut frame_start_time = Instant::now();
     let mut t = 0.0;
     let target_dt = 1.0 / 60.0;
+
+    let mut ctx = egui::Context::default();
+    let mut stored_textures = HashMap::default();
 
     event_loop.run(move |event, _, control_flow| {
         profiling::scope!("Game Event Loop");
@@ -151,6 +159,9 @@ fn main() {
                     frame_time -= delta_time;
                     t += delta_time;
                 }
+
+                // Test EGUI
+                paint_egui(&mut renderer, &ctx, &mut stored_textures);
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);
@@ -202,6 +213,73 @@ fn main() {
         };
         profiling::finish_frame!()
     });
+}
+
+fn paint_egui(renderer: &mut Renderer, ctx: &Context, stored_textures: &mut HashMap<TextureId, ImageHandle>) {
+    let raw_input = egui::RawInput::default();
+    let full_output = ctx.run(raw_input, |ctx| {
+        egui::CentralPanel::default().show(&ctx, |ui| {
+            ui.label("Hello world!");
+            if ui.button("Click me").clicked() {
+                // take some action here
+            }
+        });
+    });
+    //handle_platform_output(full_output.platform_output);
+    let clipped_primitives = ctx.tessellate(full_output.shapes); // create triangles to paint
+    //paint(full_output.textures_delta, clipped_primitives);
+
+    for (id, delta) in full_output.textures_delta.set.iter() {
+        let data: Vec<u8> = match &delta.image {
+            egui::ImageData::Color(image) => {
+                assert_eq!(
+                    image.width() * image.height(),
+                    image.pixels.len(),
+                    "Mismatch between texture size and texel count"
+                );
+                image.pixels.iter().flat_map(|color| color.to_array()).collect()
+            }
+            egui::ImageData::Font(image) => {
+                image.srgba_pixels(None).flat_map(|color| color.to_array()).collect()
+            }
+        };
+
+        if stored_textures.contains_key(id){
+            continue;
+        }
+
+        let image = renderer.load_texture_from_bytes(&data, delta.image.width()as u32, delta.image.height() as u32, &ImageFormatType::Default, 1);
+        stored_textures.insert(*id, image.unwrap());
+    }
+
+    // Paint meshes
+    for prim in clipped_primitives.into_iter() {
+        match prim.primitive {
+            Primitive::Mesh(mesh) => {
+                let ui_verts = mesh.vertices.iter().map(|vert| UIVertex{
+                    pos: vert.pos.into(),
+                    uv: vert.uv.into(),
+                    colour: vert.color.to_array().map(|colour| colour as f32),
+                }).collect();
+
+                let texture_id = {
+                    if let Some(image) = stored_textures.get(&mesh.texture_id){
+                        *image
+                    } else {
+                        Default::default()
+                    }
+                };
+
+                let ui_mesh = UIMesh {
+                    indices: mesh.indices,
+                    vertices: ui_verts,
+                    texture_id,
+                };
+                renderer.draw_ui(ui_mesh).unwrap();
+            }
+            Primitive::Callback(_) => {}
+        }
+    }
 }
 
 #[profiling::function]

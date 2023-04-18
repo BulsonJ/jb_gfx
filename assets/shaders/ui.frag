@@ -11,7 +11,7 @@ void main()
 {
     if (inTexHandle > 0){
         vec4 texture = SampleBindlessTexture(0, inTexHandle, inTexCoords);
-        outFragColor = vec4(texture.rgb, 1.0f);
+        outFragColor = inColor * vec4(texture.rgb, 1.0f);
     } else {
         outFragColor = vec4(inColor);
     }

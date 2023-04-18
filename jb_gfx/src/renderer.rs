@@ -936,7 +936,10 @@ impl Renderer {
             let mut ui_indices = Vec::new();
             for element in self.ui_to_draw.iter_mut() {
                 let texture_id = {
-                    if let Some(index) = self.device.get_descriptor_index(&BindlessImage::Image(element.texture_id)){
+                    if let Some(index) = self
+                        .device
+                        .get_descriptor_index(&BindlessImage::Image(element.texture_id))
+                    {
                         index as i32
                     } else {
                         0
@@ -1282,8 +1285,7 @@ impl Renderer {
         let mip_levels = (img.width().max(img.height()) as f32).log2().floor() as u32 + 1u32;
 
         let image =
-            self.device
-                .load_image(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
+            self.load_texture_from_bytes(img_bytes, img.width(), img.height(), image_type, mip_levels)?;
 
         // Debug name image
         {
@@ -1307,6 +1309,23 @@ impl Renderer {
                 mip_levels
             );
         }
+
+        Ok(image)
+    }
+
+    pub fn load_texture_from_bytes(
+        &mut self,
+        img_bytes: &[u8],
+        img_width: u32,
+        img_height: u32,
+        image_type: &ImageFormatType,
+        mip_levels: u32,
+    ) -> Result<ImageHandle> {
+        profiling::scope!("Renderer: Load Texture(From Bytes)");
+
+        let image = self
+            .device
+            .load_image(img_bytes, img_width, img_height, image_type, mip_levels)?;
 
         Ok(image)
     }
