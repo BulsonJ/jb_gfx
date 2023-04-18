@@ -109,81 +109,8 @@ fn main() {
     }
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
-    let initial_lights = vec![
-        Light::new(
-            Point3::new(10.0f32, 95.0f32, -16.0f32),
-            Vector3::new(3.0f32, 0.0f32, 0.0f32),
-        ),
-        Light::new(
-            Point3::new(-10.0f32, 105.0f32, 16.0f32),
-            Vector3::new(0.0f32, 3.0f32, 0.0f32),
-        ),
-        Light::new(
-            Point3::new(10.0f32, 105.0f32, -16.0f32),
-            Vector3::new(1.0f32, 1.0f32, 1.0f32),
-        ),
-        Light::new(
-            Point3::new(-10.0f32, 95.0f32, 16.0f32),
-            Vector3::new(1.0f32, 1.0f32, 1.0f32),
-        ),
-    ];
-
-    let mut light_components = vec![
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(0).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(0).unwrap(),
-        },
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(1).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(1).unwrap(),
-        },
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(2).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(2).unwrap(),
-        },
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(3).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(3).unwrap(),
-        },
-    ];
-
-    let mut camera_component = {
-        let camera = Camera {
-            position: (-8.0, 100.0, 0.0).into(),
-            direction: (1.0, 0.0, 0.0).into(),
-            aspect: screen_width as f32 / screen_height as f32,
-            fovy: 90.0,
-            znear: 0.1,
-            zfar: 4000.0,
-        };
-        CameraComponent {
-            handle: renderer.create_camera(&camera),
-            camera,
-        }
-    };
-    let camera_two = {
-        let camera = Camera {
-            position: (-50.0, 100.0, 20.0).into(),
-            direction: (1.0, 0.25, -0.5).into(),
-            aspect: screen_width as f32 / screen_height as f32,
-            fovy: 90.0,
-            znear: 0.1,
-            zfar: 4000.0,
-        };
-        CameraComponent {
-            handle: renderer.create_camera(&camera),
-            camera,
-        }
-    };
-    renderer.active_camera = Some(camera_component.handle);
+    let (mut lights, cameras) =
+        setup_scene(&mut renderer, (screen_width as u32, screen_height as u32));
 
     let mut initial_resize = true;
 
@@ -202,17 +129,21 @@ fn main() {
                     renderer.reload_shaders().unwrap();
                 }
                 if input.is_just_pressed(VirtualKeyCode::Key1) {
-                    renderer.active_camera = Some(camera_component.handle);
+                    if let Some(camera) = cameras.get(0) {
+                        renderer.active_camera = Some(camera.handle);
+                    }
                 }
                 if input.is_just_pressed(VirtualKeyCode::Key2) {
-                    renderer.active_camera = Some(camera_two.handle);
+                    if let Some(camera) = cameras.get(1) {
+                        renderer.active_camera = Some(camera.handle);
+                    }
                 }
 
                 while frame_time > 0.0f32 {
                     let delta_time = frame_time.min(target_dt);
 
                     // Update
-                    for (i, component) in light_components.iter_mut().enumerate() {
+                    for (i, component) in lights.iter_mut().enumerate() {
                         let position = 10f32 + ((i as f32 + 3f32 * t).sin() * 5f32);
                         component.light.position.x = position;
                     }
@@ -222,11 +153,7 @@ fn main() {
                 }
 
                 // Update render objects & then render
-                update_renderer_object_states(
-                    &mut renderer,
-                    &light_components,
-                    &vec![camera_component, camera_two],
-                );
+                update_renderer_object_states(&mut renderer, &lights, &cameras);
                 renderer.render().unwrap();
             }
             Event::NewEvents(_) => {
@@ -275,6 +202,92 @@ fn main() {
         };
         profiling::finish_frame!()
     });
+}
+
+#[profiling::function]
+fn setup_scene(
+    renderer: &mut Renderer,
+    screen_size: (u32, u32),
+) -> (Vec<LightComponent>, Vec<CameraComponent>) {
+    let initial_lights = vec![
+        Light::new(
+            Point3::new(10.0f32, 95.0f32, -16.0f32),
+            Vector3::new(3.0f32, 0.0f32, 0.0f32),
+        ),
+        Light::new(
+            Point3::new(-10.0f32, 105.0f32, 16.0f32),
+            Vector3::new(0.0f32, 3.0f32, 0.0f32),
+        ),
+        Light::new(
+            Point3::new(10.0f32, 105.0f32, -16.0f32),
+            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+        ),
+        Light::new(
+            Point3::new(-10.0f32, 95.0f32, 16.0f32),
+            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+        ),
+    ];
+
+    let mut light_components = vec![
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(0).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(0).unwrap(),
+        },
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(1).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(1).unwrap(),
+        },
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(2).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(2).unwrap(),
+        },
+        LightComponent {
+            handle: renderer
+                .create_light(initial_lights.get(3).unwrap())
+                .unwrap(),
+            light: *initial_lights.get(3).unwrap(),
+        },
+    ];
+
+    let cameras = vec![
+        {
+            let camera = Camera {
+                position: (-8.0, 100.0, 0.0).into(),
+                direction: (1.0, 0.0, 0.0).into(),
+                aspect: screen_size.0 as f32 / screen_size.1 as f32,
+                fovy: 90.0,
+                znear: 0.1,
+                zfar: 4000.0,
+            };
+            CameraComponent {
+                handle: renderer.create_camera(&camera),
+                camera,
+            }
+        },
+        {
+            let camera = Camera {
+                position: (-50.0, 100.0, 20.0).into(),
+                direction: (1.0, 0.25, -0.5).into(),
+                aspect: screen_size.0 as f32 / screen_size.1 as f32,
+                fovy: 90.0,
+                znear: 0.1,
+                zfar: 4000.0,
+            };
+            CameraComponent {
+                handle: renderer.create_camera(&camera),
+                camera,
+            }
+        },
+    ];
+    renderer.active_camera = Some(cameras.get(0).unwrap().handle);
+
+    (light_components, cameras)
 }
 
 #[profiling::function]
