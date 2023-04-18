@@ -196,7 +196,8 @@ impl GraphicsDevice {
             unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface) }?
                 .into_iter()
                 .find(|&x| {
-                    x.format == vk::Format::B8G8R8A8_SRGB || x.format == vk::Format::R8G8B8A8_SRGB
+                    (x.format == vk::Format::B8G8R8A8_SRGB || x.format == vk::Format::R8G8B8A8_SRGB)
+                        && x.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
                 })
                 .unwrap();
 
