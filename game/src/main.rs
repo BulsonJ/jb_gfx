@@ -152,36 +152,6 @@ fn main() {
                     t += delta_time;
                 }
 
-                // UI Test
-                renderer
-                    .draw_ui(UIMesh {
-                        indices: vec![0, 1, 2, 0, 2, 3],
-                        vertices: vec![
-                            UIVertex {
-                                pos: [0.0f32, 0.0f32],
-                                uv: [0.0, 0.0],
-                                colour: [1.0, 0.0, 0.0, 1.0],
-                            },
-                            UIVertex {
-                                pos: [1920.0f32, 0.0f32],
-                                uv: [1.0, 0.0],
-                                colour: [0.0, 1.0, 0.0, 1.0],
-                            },
-                            UIVertex {
-                                pos: [1920.0f32, 1080.0f32],
-                                uv: [1.0, 0.0],
-                                colour: [0.0, 0.0, 1.0, 1.0],
-                            },
-                            UIVertex {
-                                pos: [0f32, 1080.0f32],
-                                uv: [0.0, 1.0],
-                                colour: [1.0, 1.0, 1.0, 1.0],
-                            },
-                        ],
-                        texture_id: Default::default(),
-                    })
-                    .unwrap();
-
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);
                 renderer.render().unwrap();
