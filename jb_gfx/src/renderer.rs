@@ -882,6 +882,7 @@ impl Renderer {
                             float32: clear_colour.extend(0f32).into(),
                         },
                     },
+                    load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
                 })
                 .start(
@@ -900,7 +901,7 @@ impl Renderer {
                 self.device.vk_device.cmd_bind_descriptor_sets(
                     self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                     vk::PipelineBindPoint::GRAPHICS,
-                    self.pso_layout,
+                    self.ui_pso_layout,
                     0u32,
                     &[self.device.bindless_descriptor_set()
                         [self.device.buffered_resource_number()]],
@@ -909,7 +910,7 @@ impl Renderer {
                 self.device.vk_device.cmd_bind_descriptor_sets(
                     self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                     vk::PipelineBindPoint::GRAPHICS,
-                    self.pso_layout,
+                    self.ui_pso_layout,
                     1u32,
                     &[self.ui_descriptor_set[self.device.buffered_resource_number()]],
                     &[],
