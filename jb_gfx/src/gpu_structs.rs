@@ -90,3 +90,11 @@ impl From<Light> for LightUniform {
         LightUniform::new(value.position, value.colour)
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct UIVertex {
+    pub pos: [f32; 2],
+    pub uv: [f32; 2],
+    pub colour: [f32; 2],
+}

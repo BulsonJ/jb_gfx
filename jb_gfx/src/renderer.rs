@@ -22,7 +22,7 @@ use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 use crate::gpu_structs::{
-    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
+    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIVertex,
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::renderpass::{AttachmentInfo, RenderPassBuilder};
@@ -30,6 +30,7 @@ use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHa
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
+const MAX_QUADS: u64 = 1000u64;
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -56,6 +57,12 @@ pub struct Renderer {
     pub active_camera: Option<CameraHandle>,
     shadow_pso: PipelineHandle,
     pub sun: DirectionalLight,
+    ui_pso_layout: vk::PipelineLayout,
+    ui_pso: PipelineHandle,
+    ui_descriptor_set_layout: vk::DescriptorSetLayout,
+    ui_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    quad_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
 }
 
 impl Renderer {
@@ -219,6 +226,66 @@ impl Renderer {
             };
 
             pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
+        };
+
+        let ui_descriptor_set_layout = {
+            let descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
+                .binding(0u32)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1u32)
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)];
+
+            let descriptor_set_layout_create_info =
+                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
+
+            unsafe {
+                device
+                    .vk_device
+                    .create_descriptor_set_layout(&descriptor_set_layout_create_info, None)
+            }?
+        };
+
+        let (ui_pso, ui_pso_layout) = {
+            let layouts = [
+                *device.bindless_descriptor_set_layout(),
+                ui_descriptor_set_layout,
+            ];
+            let pipeline_layout_info =
+                vk::PipelineLayoutCreateInfo::builder().set_layouts(&layouts);
+
+            let pso_layout = unsafe {
+                device
+                    .vk_device
+                    .create_pipeline_layout(&pipeline_layout_info, None)
+            }?;
+
+            let vertex_input_desc = Vertex::get_ui_vertex_input_desc();
+            let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+                .vertex_binding_descriptions(&vertex_input_desc.bindings)
+                .vertex_attribute_descriptions(&vertex_input_desc.attributes);
+
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(false)
+                .depth_write_enable(false)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/ui.vert".to_string(),
+                fragment_shader: "assets/shaders/ui.frag".to_string(),
+                vertex_input_state: *vertex_input_state,
+                color_attachment_formats: vec![render_image_format],
+                depth_attachment_format: None,
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::NONE,
+            };
+
+            let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info)?;
+            (pso, pso_layout)
         };
 
         let camera = Camera {
@@ -416,6 +483,80 @@ impl Renderer {
             };
         }
 
+        let ui_descriptor_set = {
+            let set_layouts = [ui_descriptor_set_layout];
+            let create_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&set_layouts);
+
+            let descriptor_sets =
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
+            let first = *descriptor_sets.get(0).unwrap();
+            let descriptor_sets =
+                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
+            let second = *descriptor_sets.get(0).unwrap();
+
+            [first, second]
+        };
+
+        for set in ui_descriptor_set.iter() {
+            device.set_vulkan_debug_name(
+                set.as_raw(),
+                ObjectType::DESCRIPTOR_SET,
+                "UI Descriptor Set(1)",
+            )?;
+        }
+
+        let quad_buffer = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<UIVertex>() * MAX_QUADS as usize,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                storage_type: BufferStorageType::HostLocal,
+            };
+
+            [
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+            ]
+        };
+
+        let index_buffer = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<u32>() * MAX_QUADS as usize,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                storage_type: BufferStorageType::HostLocal,
+            };
+
+            [
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+            ]
+        };
+
+        for (i, set) in ui_descriptor_set.iter().enumerate() {
+            let quad_buffer = quad_buffer.get(i).unwrap();
+
+            let quad_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(*quad_buffer).unwrap();
+
+                vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())
+            };
+
+            let desc_set_writes = [*vk::WriteDescriptorSet::builder()
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .dst_binding(0)
+                .dst_set(*set)
+                .buffer_info(&[*quad_buffer_write])];
+
+            unsafe {
+                device
+                    .vk_device
+                    .update_descriptor_sets(&desc_set_writes, &[])
+            };
+        }
+
         info!("Renderer Created");
         Ok(Self {
             device,
@@ -440,6 +581,12 @@ impl Renderer {
             active_camera: None,
             shadow_pso,
             sun,
+            ui_pso,
+            ui_pso_layout,
+            ui_descriptor_set_layout,
+            ui_descriptor_set,
+            quad_buffer,
+            index_buffer,
         })
     }
 
@@ -724,6 +871,54 @@ impl Renderer {
             // Draw commands
 
             self.draw_objects(&draw_data)?;
+        }
+
+        if let Ok(_ui_pass) =
+            RenderPassBuilder::new((self.device.size.width, self.device.size.height))
+                .add_colour_attachment(AttachmentInfo {
+                    target: self.device.render_image,
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: clear_colour.extend(0f32).into(),
+                        },
+                    },
+                    ..Default::default()
+                })
+                .start(
+                    &self.device,
+                    &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                )
+        {
+            let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
+
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pso_layout,
+                    0u32,
+                    &[self.device.bindless_descriptor_set()
+                        [self.device.buffered_resource_number()]],
+                    &[],
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pso_layout,
+                    1u32,
+                    &[self.ui_descriptor_set[self.device.buffered_resource_number()]],
+                    &[],
+                );
+            };
+
+            // Draw commands
+
+
         }
 
         // Transition render image to transfer src
@@ -1244,6 +1439,9 @@ impl Drop for Renderer {
                 .destroy_descriptor_pool(self.descriptor_pool, None);
             self.device
                 .vk_device
+                .destroy_pipeline_layout(self.ui_pso_layout, None);
+            self.device
+                .vk_device
                 .destroy_pipeline_layout(self.pso_layout, None);
         }
     }
@@ -1255,6 +1453,13 @@ struct VertexInputDescription {
 }
 
 impl Vertex {
+    fn get_ui_vertex_input_desc() -> VertexInputDescription {
+        VertexInputDescription {
+            bindings: vec![],
+            attributes: vec![],
+        }
+    }
+
     fn get_vertex_input_desc() -> VertexInputDescription {
         let main_binding = vk::VertexInputBindingDescription::builder()
             .input_rate(vk::VertexInputRate::VERTEX)
