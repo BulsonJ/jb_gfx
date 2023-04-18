@@ -52,16 +52,23 @@ float ShadowCalculation(vec4 fragPosLightSpace)
 {
 	// perform perspective divide
 	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+
+	if(projCoords.z > 1.0)
+		return 0.0;
+
 	// transform to [0,1] range
 	//projCoords = projCoords * 0.5 + 0.5;
 	projCoords.x = projCoords.x * 0.5 + 0.5;
 	projCoords.y = -projCoords.y * 0.5 + 0.5;
+
 	// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
 	float closestDepth = SampleBindlessTexture(1, pushConstants.handles.b, projCoords.xy).r;
 	// get depth of current fragment from light's perspective
 	float currentDepth = projCoords.z;
 	// check whether current frag pos is in shadow
-	float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
+	float bias = 0.000001;
+	float ambient = 0.1;
+	float shadow = currentDepth - bias > closestDepth ? 1.0 - ambient : 0.0;
 
 	return shadow;
 }
