@@ -1554,6 +1554,9 @@ impl Drop for Renderer {
             self.pipeline_manager.deinit(&mut self.device.vk_device);
             self.device
                 .vk_device
+                .destroy_descriptor_set_layout(self.ui_descriptor_set_layout, None);
+            self.device
+                .vk_device
                 .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
             self.device
                 .vk_device
