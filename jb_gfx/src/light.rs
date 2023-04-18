@@ -28,7 +28,7 @@ impl DirectionalLight {
             direction: direction.normalize(),
             colour,
             znear: 0.1f32,
-            zfar: 15000.0f32,
+            zfar: 4000.0f32,
         }
     }
 

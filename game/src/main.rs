@@ -12,10 +12,17 @@ use jb_gfx::renderer::Renderer;
 use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
+use crate::input::Input;
 
 mod components;
+mod input;
 
 fn main() {
+    let mut input = Input {
+        now_keys: [false; 255],
+        prev_keys: [false; 255],
+    };
+
     // TODO: Fix this config flag not being set for some reason
     //#[cfg(feature = "profile-with-tracy")]
     profiling::tracy_client::Client::start();
@@ -177,6 +184,10 @@ fn main() {
                 let mut frame_time = frame_start_time.elapsed().as_secs_f32();
                 frame_start_time = Instant::now();
 
+                if input.is_just_pressed(VirtualKeyCode::F5) {
+                    renderer.reload_shaders().unwrap();
+                }
+
                 while frame_time > 0.0f32 {
                     let delta_time = frame_time.min(target_dt);
 
@@ -194,6 +205,9 @@ fn main() {
                 update_renderer_object_states(&mut renderer, &light_components, &camera_component);
                 renderer.render().unwrap();
             }
+            Event::NewEvents(_) => {
+                input.prev_keys.copy_from_slice(&input.now_keys);
+            }
             Event::WindowEvent { ref event, .. } => match event {
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {
@@ -205,6 +219,22 @@ fn main() {
                         },
                     ..
                 } => *control_flow = ControlFlow::Exit,
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state,
+                            virtual_keycode: Some(keycode),
+                            ..
+                        },
+                    ..
+                } => match state {
+                    ElementState::Pressed => {
+                        input.now_keys[*keycode as usize] = true;
+                    }
+                    ElementState::Released => {
+                        input.now_keys[*keycode as usize] = false;
+                    }
+                },
                 WindowEvent::Resized(physical_size) => {
                     if initial_resize {
                         initial_resize = false;

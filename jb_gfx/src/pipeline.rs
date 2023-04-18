@@ -31,7 +31,7 @@ impl PipelineManager {
         let pso = PipelineManager::create_pipeline_internal(
             &mut self.shader_compiler,
             device,
-            build_info.clone(),
+            build_info,
         )?;
         Ok(self.pipelines.insert(Pipeline {
             pso,
@@ -42,7 +42,7 @@ impl PipelineManager {
     fn create_pipeline_internal(
         shader_compiler: &mut shaderc::Compiler,
         device: &mut GraphicsDevice,
-        build_info: PipelineCreateInfo,
+        build_info: &PipelineCreateInfo,
     ) -> Result<vk::Pipeline> {
         let vertex_file = fs::read_to_string(&build_info.vertex_shader)?;
         let frag_file = fs::read_to_string(&build_info.fragment_shader)?;
@@ -85,7 +85,7 @@ impl PipelineManager {
         let info = PipelineBuildInfo {
             shader_stages: vec![vertex_stage_info, fragment_stage_info],
             vertex_input_state: build_info.vertex_input_state,
-            color_attachment_formats: build_info.color_attachment_formats,
+            color_attachment_formats: build_info.color_attachment_formats.clone(),
             depth_attachment_format: build_info.depth_attachment_format,
             depth_stencil_state: build_info.depth_stencil_state,
             pipeline_layout: build_info.pipeline_layout,
@@ -127,7 +127,7 @@ impl PipelineManager {
             pipeline.pso = PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,
                 device,
-                pipeline.create_info.clone(),
+                &pipeline.create_info,
             )?
         }
         Ok(())
