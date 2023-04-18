@@ -8,7 +8,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
 use jb_gfx::asset::AssetManager;
-use jb_gfx::renderer::Renderer;
+use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
 use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
@@ -151,6 +151,29 @@ fn main() {
                     frame_time -= delta_time;
                     t += delta_time;
                 }
+
+                // UI Test
+                renderer.draw_ui(UIMesh {
+                    indices: vec![0, 1, 2],
+                    vertices: vec![
+                        UIVertex {
+                            pos: [0.0f32, 0.0f32],
+                            uv: [0.0, 0.0],
+                            colour: [0.0, 0.0, 0.0, 0.0],
+                        },
+                        UIVertex {
+                            pos: [0.5f32, 0.0f32],
+                            uv: [0.0, 0.0],
+                            colour: [0.0, 0.0, 0.0, 0.0],
+                        },
+                        UIVertex {
+                            pos: [0.5f32, 0.5f32],
+                            uv: [0.0, 0.0],
+                            colour: [0.0, 0.0, 0.0, 0.0],
+                        },
+                    ],
+                    texture_id: Default::default(),
+                }).unwrap();
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);

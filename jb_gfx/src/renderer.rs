@@ -22,7 +22,7 @@ use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 use crate::gpu_structs::{
-    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIVertex,
+    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIVertexData,
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::renderpass::{AttachmentInfo, RenderPassBuilder};
@@ -63,6 +63,7 @@ pub struct Renderer {
     ui_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     quad_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    ui_to_draw: Vec<UIMesh>,
 }
 
 impl Renderer {
@@ -509,7 +510,7 @@ impl Renderer {
 
         let quad_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<UIVertex>() * MAX_QUADS as usize,
+                size: size_of::<UIVertexData>() * MAX_QUADS as usize,
                 usage: vk::BufferUsageFlags::STORAGE_BUFFER,
                 storage_type: BufferStorageType::HostLocal,
             };
@@ -523,7 +524,7 @@ impl Renderer {
         let index_buffer = {
             let buffer_create_info = BufferCreateInfo {
                 size: size_of::<u32>() * MAX_QUADS as usize,
-                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                usage: vk::BufferUsageFlags::INDEX_BUFFER,
                 storage_type: BufferStorageType::HostLocal,
             };
 
@@ -587,6 +588,7 @@ impl Renderer {
             ui_descriptor_set,
             quad_buffer,
             index_buffer,
+            ui_to_draw: Vec::new(),
         })
     }
 
@@ -873,6 +875,44 @@ impl Renderer {
             self.draw_objects(&draw_data)?;
         }
 
+        // Copy UI
+
+        let ui_draw_count = {
+            let mut ui_vertices = Vec::new();
+            let mut ui_indices = Vec::new();
+            for element in self.ui_to_draw.iter_mut() {
+                let mut verts: Vec<UIVertexData> = element
+                    .vertices
+                    .iter()
+                    .map(|vert| UIVertexData {
+                        pos: vert.pos,
+                        uv: vert.uv,
+                        colour: vert.colour,
+                    })
+                    .collect();
+                ui_vertices.append(&mut verts);
+                ui_indices.append(&mut element.indices)
+            }
+
+            self.device
+                .resource_manager
+                .get_buffer_mut(self.quad_buffer[self.device.buffered_resource_number()])
+                .unwrap()
+                .view_custom(0, ui_vertices.len())?
+                .mapped_slice()?
+                .copy_from_slice(&ui_vertices);
+            self.device
+                .resource_manager
+                .get_buffer_mut(self.index_buffer[self.device.buffered_resource_number()])
+                .unwrap()
+                .view_custom(0, ui_indices.len())?
+                .mapped_slice()?
+                .copy_from_slice(&ui_indices);
+
+            self.ui_to_draw.clear();
+            ui_indices.len()
+        };
+
         if let Ok(_ui_pass) =
             RenderPassBuilder::new((self.device.size.width, self.device.size.height))
                 .add_colour_attachment(AttachmentInfo {
@@ -918,8 +958,28 @@ impl Renderer {
             };
 
             // Draw commands
+            let index_buffer = self
+                .device
+                .resource_manager
+                .get_buffer(self.index_buffer[self.device.buffered_resource_number()])
+                .unwrap();
 
-
+            unsafe {
+                self.device.vk_device.cmd_bind_index_buffer(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    index_buffer.buffer(),
+                    0u64,
+                    vk::IndexType::UINT32,
+                );
+                self.device.vk_device.cmd_draw_indexed(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    ui_draw_count as u32,
+                    1u32,
+                    0u32,
+                    0i32,
+                    0u32,
+                );
+            };
         }
 
         // Transition render image to transfer src
@@ -1425,6 +1485,11 @@ impl Renderer {
         }
         Err(anyhow!("No camera exists"))
     }
+
+    pub fn draw_ui(&mut self, ui: UIMesh) -> Result<()> {
+        self.ui_to_draw.push(ui);
+        Ok(())
+    }
 }
 
 impl Drop for Renderer {
@@ -1566,4 +1631,16 @@ struct DrawData {
     mesh_handle: MeshHandle,
     transform_index: usize,
     material_index: usize,
+}
+
+pub struct UIVertex {
+    pub pos: [f32; 2],
+    pub uv: [f32; 2],
+    pub colour: [f32; 4],
+}
+
+pub struct UIMesh {
+    pub indices: Vec<u32>,
+    pub vertices: Vec<UIVertex>,
+    pub texture_id: ImageHandle,
 }

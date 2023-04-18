@@ -93,8 +93,8 @@ impl From<Light> for LightUniform {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct UIVertex {
+pub struct UIVertexData {
     pub pos: [f32; 2],
     pub uv: [f32; 2],
-    pub colour: [f32; 2],
+    pub colour: [f32; 4],
 }
