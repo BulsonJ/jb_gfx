@@ -153,27 +153,29 @@ fn main() {
                 }
 
                 // UI Test
-                renderer.draw_ui(UIMesh {
-                    indices: vec![0, 1, 2],
-                    vertices: vec![
-                        UIVertex {
-                            pos: [0.0f32, 0.0f32],
-                            uv: [0.0, 0.0],
-                            colour: [0.0, 0.0, 0.0, 0.0],
-                        },
-                        UIVertex {
-                            pos: [0.5f32, 0.0f32],
-                            uv: [0.0, 0.0],
-                            colour: [0.0, 0.0, 0.0, 0.0],
-                        },
-                        UIVertex {
-                            pos: [0.5f32, 0.5f32],
-                            uv: [0.0, 0.0],
-                            colour: [0.0, 0.0, 0.0, 0.0],
-                        },
-                    ],
-                    texture_id: Default::default(),
-                }).unwrap();
+                renderer
+                    .draw_ui(UIMesh {
+                        indices: vec![0, 1, 2],
+                        vertices: vec![
+                            UIVertex {
+                                pos: [0.0f32, 0.0f32],
+                                uv: [0.0, 0.0],
+                                colour: [0.0, 0.0, 0.0, 0.0],
+                            },
+                            UIVertex {
+                                pos: [1920.0f32, 0.0f32],
+                                uv: [0.0, 0.0],
+                                colour: [0.0, 0.0, 0.0, 0.0],
+                            },
+                            UIVertex {
+                                pos: [1920.0f32, 100.0f32],
+                                uv: [0.0, 0.0],
+                                colour: [0.0, 0.0, 0.0, 0.0],
+                            },
+                        ],
+                        texture_id: Default::default(),
+                    })
+                    .unwrap();
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);

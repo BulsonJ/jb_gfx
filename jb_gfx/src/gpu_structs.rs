@@ -93,6 +93,12 @@ impl From<Light> for LightUniform {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct UIUniformData {
+    pub screen_size: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct UIVertexData {
     pub pos: [f32; 2],
     pub uv: [f32; 2],

@@ -11,7 +11,11 @@ struct UIVertex {
 	vec4 colour;
 };
 
-layout(std140,set = 1, binding = 0) readonly buffer VertexBuffer{
+layout(std140,set = 1, binding = 0) uniform UIBuffer{
+	vec2 screenSize;
+} uiData;
+
+layout(std140,set = 1, binding = 1) readonly buffer VertexBuffer{
 	UIVertex verts[];
 } uiVertices;
 
@@ -20,5 +24,5 @@ void main()
 	UIVertex vertex = uiVertices.verts[gl_VertexIndex];
 	outTexCoords = vertex.uv;
 	outColor = vertex.colour;
-	gl_Position = vec4(vertex.position.x,vertex.position.y,1.0f, 1.0f);
+	gl_Position = vec4(2.0 * vertex.position.x / uiData.screenSize.x - 1.0,1.0 - 2.0 * vertex.position.y / uiData.screenSize.y ,1.0f, 1.0f);
 }

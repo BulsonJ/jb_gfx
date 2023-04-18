@@ -22,7 +22,8 @@ use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 use crate::gpu_structs::{
-    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIVertexData,
+    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
+    UIVertexData,
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
 use crate::renderpass::{AttachmentInfo, RenderPassBuilder};
@@ -63,6 +64,7 @@ pub struct Renderer {
     ui_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     quad_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    ui_uniform_data: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_to_draw: Vec<UIMesh>,
 }
 
@@ -230,11 +232,18 @@ impl Renderer {
         };
 
         let ui_descriptor_set_layout = {
-            let descriptor_set_bindings = [*vk::DescriptorSetLayoutBinding::builder()
-                .binding(0u32)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)];
+            let descriptor_set_bindings = [
+                *vk::DescriptorSetLayoutBinding::builder()
+                    .binding(0u32)
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .descriptor_count(1u32)
+                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+                *vk::DescriptorSetLayoutBinding::builder()
+                    .binding(1u32)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1u32)
+                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
+            ];
 
             let descriptor_set_layout_create_info =
                 vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
@@ -534,7 +543,30 @@ impl Renderer {
             ]
         };
 
+        let ui_uniform_data = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<UIUniformData>(),
+                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+                storage_type: BufferStorageType::HostLocal,
+            };
+
+            [
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+            ]
+        };
+
         for (i, set) in ui_descriptor_set.iter().enumerate() {
+            let ui_buffer = ui_uniform_data.get(i).unwrap();
+
+            let ui_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(*ui_buffer).unwrap();
+
+                vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())
+            };
+
             let quad_buffer = quad_buffer.get(i).unwrap();
 
             let quad_buffer_write = {
@@ -545,11 +577,18 @@ impl Renderer {
                     .range(buffer.size())
             };
 
-            let desc_set_writes = [*vk::WriteDescriptorSet::builder()
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .dst_binding(0)
-                .dst_set(*set)
-                .buffer_info(&[*quad_buffer_write])];
+            let desc_set_writes = [
+                *vk::WriteDescriptorSet::builder()
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .dst_binding(0)
+                    .dst_set(*set)
+                    .buffer_info(&[*ui_buffer_write]),
+                *vk::WriteDescriptorSet::builder()
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .dst_binding(1)
+                    .dst_set(*set)
+                    .buffer_info(&[*quad_buffer_write]),
+            ];
 
             unsafe {
                 device
@@ -589,6 +628,7 @@ impl Renderer {
             quad_buffer,
             index_buffer,
             ui_to_draw: Vec::new(),
+            ui_uniform_data,
         })
     }
 
@@ -876,6 +916,17 @@ impl Renderer {
         }
 
         // Copy UI
+
+        let ui_uniform = UIUniformData {
+            screen_size: [self.device.size.width as f32, self.device.size.height as f32],
+        };
+        self.device
+            .resource_manager
+            .get_buffer_mut(self.ui_uniform_data[self.device.buffered_resource_number()])
+            .unwrap()
+            .view()
+            .mapped_slice()?
+            .copy_from_slice(&[ui_uniform]);
 
         let ui_draw_count = {
             let mut ui_vertices = Vec::new();
