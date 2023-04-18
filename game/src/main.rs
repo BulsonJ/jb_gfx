@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
 use egui::epaint::Primitive;
-use egui::{Context, TextureId};
+use egui::{ClippedPrimitive, Context, FullOutput, TextureId};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -125,6 +125,7 @@ fn main() {
 
     let mut ctx = egui::Context::default();
     let mut stored_textures = HashMap::default();
+    let mut egui_winit = egui_winit::State::new(&event_loop);
 
     event_loop.run(move |event, _, control_flow| {
         profiling::scope!("Game Event Loop");
@@ -160,8 +161,55 @@ fn main() {
                     t += delta_time;
                 }
 
+                let raw_input = egui_winit.take_egui_input(&window);
+                let full_output = ctx.run(raw_input, |ctx| {
+                    egui::CentralPanel::default().show(&ctx, |ui| {
+                        ui.label("Hello world!");
+                        if ui.button("Click me").clicked() {
+                            println!("Help")
+                        }
+                    });
+                });
+                let output = ctx.end_frame();
+                egui_winit.handle_platform_output(&window, &ctx, output.platform_output.clone());
+                let clipped_primitives = ctx.tessellate(full_output.shapes);
+
+                for (id, delta) in full_output.textures_delta.set.iter() {
+                    let data: Vec<u8> = match &delta.image {
+                        egui::ImageData::Color(image) => {
+                            assert_eq!(
+                                image.width() * image.height(),
+                                image.pixels.len(),
+                                "Mismatch between texture size and texel count"
+                            );
+                            image
+                                .pixels
+                                .iter()
+                                .flat_map(|color| color.to_array())
+                                .collect()
+                        }
+                        egui::ImageData::Font(image) => image
+                            .srgba_pixels(None)
+                            .flat_map(|color| color.to_array())
+                            .collect(),
+                    };
+
+                    if stored_textures.contains_key(id) {
+                        continue;
+                    }
+
+                    let image = renderer.load_texture_from_bytes(
+                        &data,
+                        delta.image.width() as u32,
+                        delta.image.height() as u32,
+                        &ImageFormatType::Default,
+                        1,
+                    );
+                    stored_textures.insert(*id, image.unwrap());
+                }
+
                 // Test EGUI
-                paint_egui(&mut renderer, &ctx, &mut stored_textures);
+                paint_egui(&mut renderer, clipped_primitives, &mut stored_textures);
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);
@@ -207,6 +255,9 @@ fn main() {
                 WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                     renderer.resize(**new_inner_size).unwrap();
                 }
+                event => {
+                    egui_winit.on_event(&ctx, event);
+                }
                 _ => {}
             },
             _ => {}
@@ -217,55 +268,11 @@ fn main() {
 
 fn paint_egui(
     renderer: &mut Renderer,
-    ctx: &Context,
+    clipped_primitives: Vec<ClippedPrimitive>,
     stored_textures: &mut HashMap<TextureId, ImageHandle>,
 ) {
-    let raw_input = egui::RawInput::default();
-    let full_output = ctx.run(raw_input, |ctx| {
-        egui::CentralPanel::default().show(&ctx, |ui| {
-            ui.label("Hello world!");
-            if ui.button("Click me").clicked() {
-                // take some action here
-            }
-        });
-    });
-    //handle_platform_output(full_output.platform_output);
-    let clipped_primitives = ctx.tessellate(full_output.shapes); // create triangles to paint
-                                                                 //paint(full_output.textures_delta, clipped_primitives);
-    for (id, delta) in full_output.textures_delta.set.iter() {
-        let data: Vec<u8> = match &delta.image {
-            egui::ImageData::Color(image) => {
-                assert_eq!(
-                    image.width() * image.height(),
-                    image.pixels.len(),
-                    "Mismatch between texture size and texel count"
-                );
-                image
-                    .pixels
-                    .iter()
-                    .flat_map(|color| color.to_array())
-                    .collect()
-            }
-            egui::ImageData::Font(image) => image
-                .srgba_pixels(None)
-                .flat_map(|color| color.to_array())
-                .collect(),
-        };
-
-        if stored_textures.contains_key(id) {
-            continue;
-        }
-
-        let image = renderer.load_texture_from_bytes(
-            &data,
-            delta.image.width() as u32,
-            delta.image.height() as u32,
-            &ImageFormatType::Default,
-            1,
-        );
-        stored_textures.insert(*id, image.unwrap());
-    }
-
+    // create triangles to paint
+    //paint(full_output.textures_delta, clipped_primitives);
     // Paint meshes
     for prim in clipped_primitives.into_iter() {
         match prim.primitive {
