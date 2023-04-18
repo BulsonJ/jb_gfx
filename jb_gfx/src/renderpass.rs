@@ -1,7 +1,8 @@
+use anyhow::Result;
+use ash::vk;
+
 use crate::device::GraphicsDevice;
 use crate::targets::RenderTargetHandle;
-use anyhow::{bail, Result};
-use ash::vk;
 
 #[derive(Default)]
 pub struct RenderPassBuilder {

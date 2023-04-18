@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
+use anyhow::Result;
 use ash::vk;
 use ash::vk::ImageLayout;
-
-use anyhow::Result;
 
 use crate::device::FRAMES_IN_FLIGHT;
 use crate::resource::{ImageHandle, ResourceManager};

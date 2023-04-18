@@ -1,4 +1,4 @@
-use cgmath::{Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Vector3};
+use cgmath::{Deg, Matrix4, Point3, Vector3};
 
 #[derive(Copy, Clone)]
 pub struct Camera {

@@ -8,8 +8,8 @@ use ash::vk::{
 };
 use bytemuck::{offset_of, Zeroable};
 use cgmath::{
-    Array, Deg, EuclideanSpace, InnerSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix,
-    Vector3, Vector4, Zero,
+    Array, Deg, EuclideanSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3,
+    Vector4, Zero,
 };
 use image::EncodableLayout;
 use log::{error, info, trace, warn};
@@ -25,7 +25,7 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
-use crate::renderpass::{AttachmentInfo, RenderPass, RenderPassBuilder};
+use crate::renderpass::{AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
@@ -603,23 +603,22 @@ impl Renderer {
             )?;
 
         // Shadow pass
-        {
-            let shadow_pass = RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
-                .set_depth_attachment(AttachmentInfo {
-                    target: self.device.directional_light_shadow_image,
-                    clear_value: vk::ClearValue {
-                        depth_stencil: ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
+        if let Ok(_shadow_pass) = RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
+            .set_depth_attachment(AttachmentInfo {
+                target: self.device.directional_light_shadow_image,
+                clear_value: vk::ClearValue {
+                    depth_stencil: ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
                     },
-                    ..Default::default()
-                })
-                .start(
-                    &self.device,
-                    &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                )?;
-
+                },
+                ..Default::default()
+            })
+            .start(
+                &self.device,
+                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+            )
+        {
             let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
 
             unsafe {
@@ -668,36 +667,33 @@ impl Renderer {
             )?;
 
         // Normal Pass
-
+        let clear_colour: Vector3<f32> = self.clear_colour.into();
+        if let Ok(_forward_pass) =
+            RenderPassBuilder::new((self.device.size.width, self.device.size.height))
+                .add_colour_attachment(AttachmentInfo {
+                    target: self.device.render_image,
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: clear_colour.extend(0f32).into(),
+                        },
+                    },
+                    ..Default::default()
+                })
+                .set_depth_attachment(AttachmentInfo {
+                    target: self.device.depth_image,
+                    clear_value: vk::ClearValue {
+                        depth_stencil: ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    },
+                    ..Default::default()
+                })
+                .start(
+                    &self.device,
+                    &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                )
         {
-            let clear_colour: Vector3<f32> = self.clear_colour.into();
-            let forward_pass =
-                RenderPassBuilder::new((self.device.size.width, self.device.size.height))
-                    .add_colour_attachment(AttachmentInfo {
-                        target: self.device.render_image,
-                        clear_value: vk::ClearValue {
-                            color: vk::ClearColorValue {
-                                float32: clear_colour.extend(0f32).into(),
-                            },
-                        },
-                        ..Default::default()
-                    })
-                    .set_depth_attachment(AttachmentInfo {
-                        target: self.device.depth_image,
-                        clear_value: vk::ClearValue {
-                            depth_stencil: ClearDepthStencilValue {
-                                depth: 1.0,
-                                stencil: 0,
-                            },
-                        },
-                        ..Default::default()
-                    })
-                    .start(
-                        &self.device,
-                        &self.device.graphics_command_buffer
-                            [self.device.buffered_resource_number()],
-                    )?;
-
             let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
             unsafe {
