@@ -25,6 +25,7 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO,
 };
 use crate::pipeline::{PipelineCreateInfo, PipelineHandle, PipelineManager};
+use crate::renderpass::{AttachmentInfo, RenderPass, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
@@ -459,42 +460,6 @@ impl Renderer {
 
         let present_index = self.device.start_frame()?;
 
-        // Memory barrier attachments
-
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::SwapchainImage(present_index as usize),
-                dst_stage_mask: PipelineStageFlags2::BLIT,
-                dst_access_mask: AccessFlags2::TRANSFER_WRITE,
-                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.render_image),
-                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.depth_image),
-                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.directional_light_shadow_image),
-                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .build(
-                &self.device,
-                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-            )?;
-
         // Copy camera
         if let Some(camera) = self.active_camera {
             if let Some(found_camera) = self.stored_cameras.get(camera) {
@@ -601,94 +566,63 @@ impl Renderer {
             }
         }
 
+        // Barrier images
+
+        ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::SwapchainImage(present_index as usize),
+                dst_stage_mask: PipelineStageFlags2::BLIT,
+                dst_access_mask: AccessFlags2::TRANSFER_WRITE,
+                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.render_image),
+                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.depth_image),
+                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.directional_light_shadow_image),
+                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .build(
+                &self.device,
+                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+            )?;
+
         // Shadow pass
         {
-            ImageBarrierBuilder::default()
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::RenderTarget(
-                        self.device.directional_light_shadow_image,
-                    ),
-                    src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-                    src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            let shadow_pass = RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
+                .set_depth_attachment(AttachmentInfo {
+                    target: self.device.directional_light_shadow_image,
+                    clear_value: vk::ClearValue {
+                        depth_stencil: ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    },
                     ..Default::default()
                 })
-                .build(
+                .start(
                     &self.device,
                     &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 )?;
 
-            let depth_clear_value = vk::ClearValue {
-                depth_stencil: ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            };
-
-            let viewport = vk::Viewport::builder()
-                .x(0.0f32)
-                .y(SHADOWMAP_SIZE as f32)
-                .width(SHADOWMAP_SIZE as f32)
-                .height(-(SHADOWMAP_SIZE as f32))
-                .min_depth(0.0f32)
-                .max_depth(1.0f32);
-
-            let scissor = vk::Rect2D::builder()
-                .offset(vk::Offset2D { x: 0, y: 0 })
-                .extent(vk::Extent2D {
-                    width: SHADOWMAP_SIZE,
-                    height: SHADOWMAP_SIZE,
-                });
-
-            unsafe {
-                self.device.vk_device.cmd_set_viewport(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    0u32,
-                    &[*viewport],
-                )
-            };
-            unsafe {
-                self.device.vk_device.cmd_set_scissor(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    0u32,
-                    &[*scissor],
-                )
-            };
-
-            let depth_attach_info = vk::RenderingAttachmentInfo::builder()
-                .image_view(
-                    self.device
-                        .resource_manager
-                        .get_image(
-                            self.device
-                                .render_targets()
-                                .get_render_target(self.device.directional_light_shadow_image)
-                                .unwrap()
-                                .image(),
-                        )
-                        .unwrap()
-                        .image_view(),
-                )
-                .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .clear_value(depth_clear_value);
-
-            let render_info = vk::RenderingInfo::builder()
-                .render_area(*scissor)
-                .layer_count(1u32)
-                .depth_attachment(&depth_attach_info);
-
             let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
 
             unsafe {
-                self.device.vk_device.cmd_begin_rendering(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    &render_info,
-                );
                 self.device.vk_device.cmd_bind_pipeline(
                     self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                     vk::PipelineBindPoint::GRAPHICS,
@@ -714,114 +648,59 @@ impl Renderer {
             };
 
             // Draw commands
-
             self.draw_objects(&draw_data)?;
-
-            unsafe {
-                self.device.vk_device.cmd_end_rendering(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                )
-            };
         }
+
+        ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.directional_light_shadow_image),
+                src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                dst_access_mask: AccessFlags2::SHADER_READ,
+                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                ..Default::default()
+            })
+            .build(
+                &self.device,
+                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+            )?;
 
         // Normal Pass
 
         {
             let clear_colour: Vector3<f32> = self.clear_colour.into();
-            let clear_value = vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [clear_colour.x, clear_colour.y, clear_colour.z, 0.0],
-                },
-            };
-            let depth_clear_value = vk::ClearValue {
-                depth_stencil: ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            };
-
-            let viewport = vk::Viewport::builder()
-                .x(0.0f32)
-                .y(self.device.size.height as f32)
-                .width(self.device.size.width as f32)
-                .height(-(self.device.size.height as f32))
-                .min_depth(0.0f32)
-                .max_depth(1.0f32);
-
-            let scissor = vk::Rect2D::builder()
-                .offset(vk::Offset2D { x: 0, y: 0 })
-                .extent(vk::Extent2D {
-                    width: self.device.size.width,
-                    height: self.device.size.height,
-                });
-
-            unsafe {
-                self.device.vk_device.cmd_set_viewport(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    0u32,
-                    &[*viewport],
-                )
-            };
-            unsafe {
-                self.device.vk_device.cmd_set_scissor(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    0u32,
-                    &[*scissor],
-                )
-            };
-
-            let color_attach_info = vk::RenderingAttachmentInfo::builder()
-                .image_view(
-                    self.device
-                        .resource_manager
-                        .get_image(
-                            self.device
-                                .render_targets()
-                                .get_render_target(self.device.render_image)
-                                .unwrap()
-                                .image(),
-                        )
-                        .unwrap()
-                        .image_view(),
-                )
-                .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .clear_value(clear_value);
-
-            let depth_attach_info = vk::RenderingAttachmentInfo::builder()
-                .image_view(
-                    self.device
-                        .resource_manager
-                        .get_image(
-                            self.device
-                                .render_targets()
-                                .get_render_target(self.device.depth_image)
-                                .unwrap()
-                                .image(),
-                        )
-                        .unwrap()
-                        .image_view(),
-                )
-                .image_layout(ImageLayout::ATTACHMENT_OPTIMAL)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .clear_value(depth_clear_value);
-
-            let color_attachments = [*color_attach_info];
-            let render_info = vk::RenderingInfo::builder()
-                .render_area(*scissor)
-                .layer_count(1u32)
-                .color_attachments(&color_attachments)
-                .depth_attachment(&depth_attach_info);
+            let forward_pass =
+                RenderPassBuilder::new((self.device.size.width, self.device.size.height))
+                    .add_colour_attachment(AttachmentInfo {
+                        target: self.device.render_image,
+                        clear_value: vk::ClearValue {
+                            color: vk::ClearColorValue {
+                                float32: clear_colour.extend(0f32).into(),
+                            },
+                        },
+                        ..Default::default()
+                    })
+                    .set_depth_attachment(AttachmentInfo {
+                        target: self.device.depth_image,
+                        clear_value: vk::ClearValue {
+                            depth_stencil: ClearDepthStencilValue {
+                                depth: 1.0,
+                                stencil: 0,
+                            },
+                        },
+                        ..Default::default()
+                    })
+                    .start(
+                        &self.device,
+                        &self.device.graphics_command_buffer
+                            [self.device.buffered_resource_number()],
+                    )?;
 
             let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
             unsafe {
-                self.device.vk_device.cmd_begin_rendering(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    &render_info,
-                );
                 self.device.vk_device.cmd_bind_pipeline(
                     self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                     vk::PipelineBindPoint::GRAPHICS,
@@ -849,12 +728,6 @@ impl Renderer {
             // Draw commands
 
             self.draw_objects(&draw_data)?;
-
-            unsafe {
-                self.device.vk_device.cmd_end_rendering(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                )
-            };
         }
 
         // Transition render image to transfer src

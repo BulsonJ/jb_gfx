@@ -14,5 +14,6 @@ pub mod light;
 pub mod mesh;
 pub mod pipeline;
 pub mod renderer;
+mod renderpass;
 pub mod resource;
 mod targets;
