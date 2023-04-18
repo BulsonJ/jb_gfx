@@ -918,7 +918,10 @@ impl Renderer {
         // Copy UI
 
         let ui_uniform = UIUniformData {
-            screen_size: [self.device.size.width as f32, self.device.size.height as f32],
+            screen_size: [
+                self.device.size.width as f32,
+                self.device.size.height as f32,
+            ],
         };
         self.device
             .resource_manager
@@ -1538,6 +1541,7 @@ impl Renderer {
     }
 
     pub fn draw_ui(&mut self, ui: UIMesh) -> Result<()> {
+        // TODO : Implement drawing textures from UI
         self.ui_to_draw.push(ui);
         Ok(())
     }
