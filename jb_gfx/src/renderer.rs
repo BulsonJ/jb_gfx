@@ -156,7 +156,19 @@ impl Renderer {
                 .create_pipeline_layout(&pipeline_layout_info, None)
         }?;
 
-        let render_image_format = { device.surface_format() };
+        let render_image_format = {
+            device
+                .resource_manager
+                .get_image(
+                    device
+                        .render_targets()
+                        .get_render_target(device.render_image)
+                        .unwrap()
+                        .image(),
+                )
+                .unwrap()
+                .format()
+        };
         let depth_image_format = {
             device
                 .resource_manager
@@ -759,6 +771,13 @@ impl Renderer {
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
                 image: ImageHandleType::SwapchainImage(present_index as usize),
+                dst_stage_mask: PipelineStageFlags2::BLIT,
+                dst_access_mask: AccessFlags2::TRANSFER_WRITE,
+                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.render_image),
                 dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
@@ -854,7 +873,7 @@ impl Renderer {
         if let Ok(_forward_pass) =
             RenderPassBuilder::new((self.device.size.width, self.device.size.height))
                 .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandleType::SwapchainImage(present_index as usize),
+                    target: AttachmentHandleType::RenderTarget(self.device.render_image),
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
                             float32: clear_colour.extend(0f32).into(),
@@ -986,7 +1005,7 @@ impl Renderer {
         if let Ok(ui_pass) =
             RenderPassBuilder::new((self.device.size.width, self.device.size.height))
                 .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandleType::SwapchainImage(present_index as usize),
+                    target: AttachmentHandleType::RenderTarget(self.device.render_image),
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
                             float32: clear_colour.extend(0f32).into(),
@@ -1063,19 +1082,98 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::SwapchainImage(present_index as usize),
+                image: ImageHandleType::RenderTarget(self.device.render_image),
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_stage_mask: PipelineStageFlags2::NONE,
-                dst_access_mask: AccessFlags2::NONE,
+                dst_stage_mask: PipelineStageFlags2::BLIT,
+                dst_access_mask: AccessFlags2::TRANSFER_READ,
                 old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                new_layout: ImageLayout::PRESENT_SRC_KHR,
+                new_layout: ImageLayout::TRANSFER_SRC_OPTIMAL,
                 ..Default::default()
             })
             .build(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
             )?;
+
+        // Blit to swapchain
+
+        let image_blit = vk::ImageBlit::builder()
+            .src_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_offsets([
+                vk::Offset3D { x: 0, y: 0, z: 0 },
+                vk::Offset3D {
+                    x: self.device.size.width as i32,
+                    y: self.device.size.height as i32,
+                    z: 1,
+                },
+            ])
+            .dst_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .dst_offsets([
+                vk::Offset3D { x: 0, y: 0, z: 0 },
+                vk::Offset3D {
+                    x: self.device.size.width as i32,
+                    y: self.device.size.height as i32,
+                    z: 1,
+                },
+            ]);
+        let regions = [*image_blit];
+        unsafe {
+            self.device.vk_device.cmd_blit_image(
+                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                self.device
+                    .resource_manager
+                    .get_image(
+                        self.device
+                            .render_targets()
+                            .get_render_target(self.device.render_image)
+                            .unwrap()
+                            .image(),
+                    )
+                    .unwrap()
+                    .image(),
+                ImageLayout::TRANSFER_SRC_OPTIMAL,
+                self.device.present_images[present_index as usize],
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                &regions,
+                vk::Filter::NEAREST,
+            )
+        }
+        // Transition to present
+        let present_attachment_barrier = vk::ImageMemoryBarrier2::builder()
+            .src_stage_mask(PipelineStageFlags2::BLIT)
+            .src_access_mask(AccessFlags2::TRANSFER_WRITE)
+            .dst_stage_mask(PipelineStageFlags2::NONE)
+            .dst_access_mask(AccessFlags2::NONE)
+            .old_layout(ImageLayout::TRANSFER_DST_OPTIMAL)
+            .new_layout(ImageLayout::PRESENT_SRC_KHR)
+            .image(self.device.present_images[present_index as usize])
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+        let image_memory_barriers = [*present_attachment_barrier];
+        let present_barrier_dependency_info =
+            vk::DependencyInfo::builder().image_memory_barriers(&image_memory_barriers);
+        unsafe {
+            self.device.vk_device.cmd_pipeline_barrier2(
+                self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                &present_barrier_dependency_info,
+            )
+        };
 
         //Submit buffer
 

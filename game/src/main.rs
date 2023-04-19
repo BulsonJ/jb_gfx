@@ -297,7 +297,10 @@ fn paint_egui(
                     .map(|vert| UIVertex {
                         pos: vert.pos.into(),
                         uv: vert.uv.into(),
-                        colour: vert.color.to_srgba_unmultiplied().map(|colour| colour as f32 / 255f32),
+                        colour: vert
+                            .color
+                            .to_srgba_unmultiplied()
+                            .map(|colour| colour as f32 / 255f32),
                     })
                     .collect();
 
