@@ -31,11 +31,12 @@ impl RenderPassBuilder {
     }
 
     /// Be very careful, no lifetimes so make sure to drop the RenderPass when you are done with it.
-    pub fn start(
+    pub fn start<F: Fn(&mut RenderPass) -> Result<()>>(
         mut self,
         device: &GraphicsDevice,
         command_buffer: &vk::CommandBuffer,
-    ) -> Result<RenderPass> {
+        render_pass: F,
+    ) -> Result<()> {
         let viewport = vk::Viewport::builder()
             .x(0.0f32)
             .y(self.viewport_size.1 as f32)
@@ -93,19 +94,29 @@ impl RenderPassBuilder {
             };
         }
 
-        Ok(RenderPass {
-            device: device.vk_device.clone(),
-            command_buffer: command_buffer.clone(),
-        })
+        {
+            let mut pass = RenderPass {
+                device: &device.vk_device,
+                command_buffer: &command_buffer,
+            };
+
+            render_pass(&mut pass)?;
+
+            unsafe {
+                device.vk_device.cmd_end_rendering(*command_buffer);
+            }
+        }
+
+        Ok(())
     }
 }
 
-pub struct RenderPass {
-    device: ash::Device,
-    command_buffer: vk::CommandBuffer,
+pub struct RenderPass<'a> {
+    device: &'a ash::Device,
+    command_buffer: &'a vk::CommandBuffer,
 }
 
-impl RenderPass {
+impl<'a> RenderPass<'a> {
     pub fn set_scissor(&self, offset: [f32; 2], extent: [f32; 2]) {
         let scissor = vk::Rect2D::builder()
             .offset(vk::Offset2D {
@@ -119,14 +130,8 @@ impl RenderPass {
 
         unsafe {
             self.device
-                .cmd_set_scissor(self.command_buffer, 0u32, &[*scissor])
+                .cmd_set_scissor(*self.command_buffer, 0u32, &[*scissor])
         };
-    }
-}
-
-impl Drop for RenderPass {
-    fn drop(&mut self) {
-        unsafe { self.device.cmd_end_rendering(self.command_buffer) };
     }
 }
 

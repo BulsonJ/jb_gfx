@@ -119,7 +119,7 @@ impl PipelineManager {
         Ok(pipeline)
     }
 
-    pub fn get_pipeline(&mut self, handle: PipelineHandle) -> vk::Pipeline {
+    pub fn get_pipeline(&self, handle: PipelineHandle) -> vk::Pipeline {
         self.pipelines.get(handle).unwrap().pso
     }
 
