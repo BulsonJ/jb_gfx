@@ -834,17 +834,11 @@ impl Renderer {
                             vk::PipelineBindPoint::GRAPHICS,
                             self.pso_layout,
                             0u32,
-                            &[self.device.bindless_descriptor_set()
-                                [self.device.buffered_resource_number()]],
-                            &[],
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer
-                                [self.device.buffered_resource_number()],
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pso_layout,
-                            1u32,
-                            &[self.descriptor_set[self.device.buffered_resource_number()]],
+                            &[
+                                self.device.bindless_descriptor_set()
+                                    [self.device.buffered_resource_number()],
+                                self.descriptor_set[self.device.buffered_resource_number()],
+                            ],
                             &[],
                         );
                     };
@@ -912,17 +906,11 @@ impl Renderer {
                             vk::PipelineBindPoint::GRAPHICS,
                             self.pso_layout,
                             0u32,
-                            &[self.device.bindless_descriptor_set()
-                                [self.device.buffered_resource_number()]],
-                            &[],
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer
-                                [self.device.buffered_resource_number()],
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pso_layout,
-                            1u32,
-                            &[self.descriptor_set[self.device.buffered_resource_number()]],
+                            &[
+                                self.device.bindless_descriptor_set()
+                                    [self.device.buffered_resource_number()],
+                                self.descriptor_set[self.device.buffered_resource_number()],
+                            ],
                             &[],
                         );
                     };
@@ -1039,17 +1027,11 @@ impl Renderer {
                             vk::PipelineBindPoint::GRAPHICS,
                             self.ui_pso_layout,
                             0u32,
-                            &[self.device.bindless_descriptor_set()
-                                [self.device.buffered_resource_number()]],
-                            &[],
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer
-                                [self.device.buffered_resource_number()],
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.ui_pso_layout,
-                            1u32,
-                            &[self.ui_descriptor_set[self.device.buffered_resource_number()]],
+                            &[
+                                self.device.bindless_descriptor_set()
+                                    [self.device.buffered_resource_number()],
+                                self.ui_descriptor_set[self.device.buffered_resource_number()],
+                            ],
                             &[],
                         );
                     };
@@ -1060,6 +1042,16 @@ impl Renderer {
                         .get_buffer(self.index_buffer[self.device.buffered_resource_number()])
                         .unwrap();
 
+                    unsafe {
+                        self.device.vk_device.cmd_bind_index_buffer(
+                            self.device.graphics_command_buffer
+                                [self.device.buffered_resource_number()],
+                            index_buffer.buffer(),
+                            0u64,
+                            vk::IndexType::UINT32,
+                        );
+                    }
+
                     for draw in ui_draw_calls.iter() {
                         let max = [
                             draw.scissor.1[0] - draw.scissor.0[0],
@@ -1068,13 +1060,6 @@ impl Renderer {
                         render_pass.set_scissor(draw.scissor.0, max);
                         // Draw commands
                         unsafe {
-                            self.device.vk_device.cmd_bind_index_buffer(
-                                self.device.graphics_command_buffer
-                                    [self.device.buffered_resource_number()],
-                                index_buffer.buffer(),
-                                0u64,
-                                vk::IndexType::UINT32,
-                            );
                             self.device.vk_device.cmd_draw_indexed(
                                 self.device.graphics_command_buffer
                                     [self.device.buffered_resource_number()],
