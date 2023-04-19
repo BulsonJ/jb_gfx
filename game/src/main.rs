@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
 use egui::epaint::Primitive;
+use egui::panel::TopBottomSide;
 use egui::{ClippedPrimitive, Context, FullOutput, TextureId};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
@@ -52,66 +53,66 @@ fn main() {
     renderer.render().unwrap();
     let mut asset_manager = AssetManager::default();
     // Load cube
-    //{
-    //    let models = asset_manager
-    //        .load_gltf(&mut renderer, "assets/models/Cube/glTF/Cube.gltf")
-    //        .unwrap();
-    //    for model in models.iter() {
-    //        let render_model =
-    //            renderer.add_render_model(model.mesh, model.material_instance.clone());
-    //        renderer.light_mesh = Some(model.mesh);
-    //    }
-    //}
+    {
+        let models = asset_manager
+            .load_gltf(&mut renderer, "assets/models/Cube/glTF/Cube.gltf")
+            .unwrap();
+        for model in models.iter() {
+            let render_model =
+                renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer.light_mesh = Some(model.mesh);
+        }
+    }
     // Load sponza
-    //{
-    //    let models = asset_manager
-    //        .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-    //        .unwrap();
-    //    for model in models.iter() {
-    //        let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
-    //        renderer
-    //            .set_render_model_transform(
-    //                handle,
-    //                from_transforms(
-    //                    Vector3::new(0f32, 80f32, 0.0f32),
-    //                    Quaternion::from_axis_angle(
-    //                        Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-    //                        Deg(180f32),
-    //                    ),
-    //                    Vector3::from_value(0.1f32),
-    //                ),
-    //            )
-    //            .unwrap();
-    //    }
-    //}
+    {
+        let models = asset_manager
+            .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+            .unwrap();
+        for model in models.iter() {
+            let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer
+                .set_render_model_transform(
+                    handle,
+                    from_transforms(
+                        Vector3::new(0f32, 80f32, 0.0f32),
+                        Quaternion::from_axis_angle(
+                            Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+                            Deg(180f32),
+                        ),
+                        Vector3::from_value(0.1f32),
+                    ),
+                )
+                .unwrap();
+        }
+    }
     // Load helmet
-    //{
-    //    let models = asset_manager
-    //        .load_gltf(
-    //            &mut renderer,
-    //            "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
-    //        )
-    //        .unwrap();
-    //    for model in models.iter() {
-    //        let helmet = renderer.add_render_model(model.mesh, model.material_instance.clone());
-    //        renderer
-    //            .set_render_model_transform(
-    //                helmet,
-    //                from_transforms(
-    //                    Vector3::new(10f32, 100f32, 0.0f32),
-    //                    Quaternion::from_axis_angle(
-    //                        Vector3::new(1f32, 0f32, 0.0f32).normalize(),
-    //                        Deg(100f32),
-    //                    ) * Quaternion::from_axis_angle(
-    //                        Vector3::new(0f32, 0f32, 1.0f32).normalize(),
-    //                        Deg(60f32),
-    //                    ),
-    //                    Vector3::from_value(6f32),
-    //                ),
-    //            )
-    //            .unwrap();
-    //    }
-    //}
+    {
+        let models = asset_manager
+            .load_gltf(
+                &mut renderer,
+                "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
+            )
+            .unwrap();
+        for model in models.iter() {
+            let helmet = renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer
+                .set_render_model_transform(
+                    helmet,
+                    from_transforms(
+                        Vector3::new(10f32, 100f32, 0.0f32),
+                        Quaternion::from_axis_angle(
+                            Vector3::new(1f32, 0f32, 0.0f32).normalize(),
+                            Deg(100f32),
+                        ) * Quaternion::from_axis_angle(
+                            Vector3::new(0f32, 0f32, 1.0f32).normalize(),
+                            Deg(60f32),
+                        ),
+                        Vector3::from_value(6f32),
+                    ),
+                )
+                .unwrap();
+        }
+    }
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
     let (mut lights, cameras) =
@@ -163,11 +164,20 @@ fn main() {
 
                 let raw_input = egui_winit.take_egui_input(&window);
                 let full_output = ctx.run(raw_input, |ctx| {
-                    egui::CentralPanel::default().show(&ctx, |ui| {
-                        ui.label("Hello world!");
-                        if ui.button("Click me").clicked() {
-                            println!("Help")
-                        }
+                    egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button("Camera One").clicked() {
+                                if let Some(camera) = cameras.get(0) {
+                                    renderer.active_camera = Some(camera.handle);
+                                }
+                            }
+                            if ui.button("Camera Two").clicked() {
+                                if let Some(camera) = cameras.get(1) {
+                                    renderer.active_camera = Some(camera.handle);
+                                }
+                            }
+                            ui.color_edit_button_rgb(&mut lights[0].light.colour.into())
+                        });
                     });
                 });
                 let output = ctx.end_frame();
@@ -258,7 +268,6 @@ fn main() {
                 event => {
                     egui_winit.on_event(&ctx, event);
                 }
-                _ => {}
             },
             _ => {}
         };
@@ -302,7 +311,7 @@ fn paint_egui(
                 };
                 renderer.draw_ui(ui_mesh).unwrap();
             }
-            Primitive::Callback(_) => {}
+            Primitive::Callback(_) => {todo!()}
         }
     }
 }

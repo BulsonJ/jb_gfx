@@ -113,17 +113,23 @@ impl Drop for RenderPass {
 
 #[derive(Copy, Clone)]
 pub struct AttachmentInfo {
-    pub target: RenderTargetHandle,
+    pub target: AttachmentHandleType,
     pub image_layout: vk::ImageLayout,
     pub load_op: vk::AttachmentLoadOp,
     pub store_op: vk::AttachmentStoreOp,
     pub clear_value: vk::ClearValue,
 }
 
+#[derive(Copy, Clone)]
+pub enum AttachmentHandleType {
+    RenderTarget(RenderTargetHandle),
+    SwapchainImage(usize),
+}
+
 impl Default for AttachmentInfo {
     fn default() -> Self {
         Self {
-            target: RenderTargetHandle::default(),
+            target: AttachmentHandleType::RenderTarget(RenderTargetHandle::default()),
             image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
             load_op: vk::AttachmentLoadOp::CLEAR,
             store_op: vk::AttachmentStoreOp::STORE,
@@ -136,20 +142,25 @@ fn convert_attach_info(
     device: &GraphicsDevice,
     attachment: &AttachmentInfo,
 ) -> vk::RenderingAttachmentInfo {
-    let attach_info = vk::RenderingAttachmentInfo::builder()
-        .image_view(
-            device
+    let image_view = {
+        match attachment.target {
+            AttachmentHandleType::RenderTarget(render_target) => device
                 .resource_manager
                 .get_image(
                     device
                         .render_targets()
-                        .get_render_target(attachment.target)
+                        .get_render_target(render_target)
                         .unwrap()
                         .image(),
                 )
                 .unwrap()
                 .image_view(),
-        )
+            AttachmentHandleType::SwapchainImage(index) => device.present_image_views[index],
+        }
+    };
+
+    let attach_info = vk::RenderingAttachmentInfo::builder()
+        .image_view(image_view)
         .image_layout(attachment.image_layout)
         .load_op(attachment.load_op)
         .store_op(attachment.store_op)

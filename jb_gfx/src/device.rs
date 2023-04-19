@@ -553,6 +553,10 @@ impl GraphicsDevice {
         Ok(device)
     }
 
+    pub fn surface_format(&self) -> vk::Format {
+        self.surface_format.format
+    }
+
     pub fn frame_number(&self) -> usize {
         self.frame_number
     }
