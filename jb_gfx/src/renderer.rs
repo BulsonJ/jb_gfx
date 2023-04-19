@@ -68,6 +68,8 @@ pub struct Renderer {
     index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_uniform_data: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_to_draw: Vec<UIMesh>,
+    blur_pso: PipelineHandle,
+    quad_mesh: Option<MeshHandle>,
 }
 
 impl Renderer {
@@ -200,11 +202,18 @@ impl Renderer {
                 vertex_shader: "assets/shaders/default.vert".to_string(),
                 fragment_shader: "assets/shaders/default.frag".to_string(),
                 vertex_input_state: *vertex_input_state,
-                color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
-                    blend: false,
-                    ..Default::default()
-                }],
+                color_attachment_formats: vec![
+                    PipelineColorAttachment {
+                        format: render_image_format,
+                        blend: false,
+                        ..Default::default()
+                    },
+                    PipelineColorAttachment {
+                        format: render_image_format,
+                        blend: false,
+                        ..Default::default()
+                    },
+                ],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::BACK,
@@ -232,6 +241,34 @@ impl Renderer {
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::FRONT,
+            };
+
+            pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
+        };
+
+        let blur_pso = {
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(false)
+                .depth_write_enable(false)
+                .depth_compare_op(vk::CompareOp::ALWAYS)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/blur.vert".to_string(),
+                fragment_shader: "assets/shaders/blur.frag".to_string(),
+                vertex_input_state: *vertex_input_state,
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: render_image_format,
+                    blend: false,
+                    ..Default::default()
+                }],
+                depth_attachment_format: None,
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::NONE,
             };
 
             pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
@@ -605,7 +642,7 @@ impl Renderer {
         }
 
         info!("Renderer Created");
-        Ok(Self {
+        let mut renderer = Self {
             device,
             pso_layout,
             pso,
@@ -636,7 +673,13 @@ impl Renderer {
             index_buffer,
             ui_to_draw: Vec::new(),
             ui_uniform_data,
-        })
+            blur_pso,
+            quad_mesh: None,
+        };
+
+        renderer.quad_mesh = Some(renderer.load_mesh(&MeshData::quad())?);
+
+        Ok(renderer)
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
@@ -793,6 +836,13 @@ impl Renderer {
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.bloom_image),
+                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
             .build(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
@@ -875,6 +925,15 @@ impl Renderer {
                 },
                 ..Default::default()
             })
+            .add_colour_attachment(AttachmentInfo {
+                target: AttachmentHandleType::RenderTarget(self.device.bloom_image),
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+                ..Default::default()
+            })
             .set_depth_attachment(AttachmentInfo {
                 target: AttachmentHandleType::RenderTarget(self.device.depth_image),
                 clear_value: vk::ClearValue {
@@ -920,6 +979,191 @@ impl Renderer {
                     Ok(())
                 },
             )?;
+
+        ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.bloom_image),
+                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                dst_access_mask: AccessFlags2::SHADER_READ,
+                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.blur_images[0]),
+                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                old_layout: ImageLayout::UNDEFINED,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::RenderTarget(self.device.blur_images[1]),
+                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                dst_access_mask: AccessFlags2::SHADER_READ,
+                old_layout: ImageLayout::UNDEFINED,
+                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                ..Default::default()
+            })
+            .build(
+                &self.device,
+                &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+            )?;
+
+        // Draw commands
+
+        if let Some(mesh) = self.meshes.get(self.quad_mesh.unwrap()) {
+            let mut horizontal = false;
+            for i in 0..10 {
+                RenderPassBuilder::new((self.device.size.width, self.device.size.height))
+                    .add_colour_attachment(AttachmentInfo {
+                        target: AttachmentHandleType::RenderTarget(
+                            self.device.blur_images[horizontal as usize],
+                        ),
+                        clear_value: vk::ClearValue {
+                            color: vk::ClearColorValue {
+                                float32: [0.0, 0.0, 0.0, 1.0],
+                            },
+                        },
+                        ..Default::default()
+                    })
+                    .start(
+                        &self.device,
+                        &self.device.graphics_command_buffer
+                            [self.device.buffered_resource_number()],
+                        |render_pass| {
+                            profiling::scope!("Blur Bloom Pass");
+
+                            let pipeline = self.pipeline_manager.get_pipeline(self.blur_pso);
+
+                            unsafe {
+                                self.device.vk_device.cmd_bind_pipeline(
+                                    self.device.graphics_command_buffer
+                                        [self.device.buffered_resource_number()],
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    pipeline,
+                                );
+                                self.device.vk_device.cmd_bind_descriptor_sets(
+                                    self.device.graphics_command_buffer
+                                        [self.device.buffered_resource_number()],
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    self.pso_layout,
+                                    0u32,
+                                    &[
+                                        self.device.bindless_descriptor_set()
+                                            [self.device.buffered_resource_number()],
+                                        self.descriptor_set[self.device.buffered_resource_number()],
+                                    ],
+                                    &[],
+                                );
+                            }
+
+                            let push_constants = PushConstants {
+                                handles: [
+                                    horizontal as i32,
+                                    self.device
+                                        .get_descriptor_index(&BindlessImage::RenderTarget({
+                                            if i == 0 {
+                                                self.device.bloom_image
+                                            } else {
+                                                self.device.blur_images[!horizontal as usize]
+                                            }
+                                        }))
+                                        .unwrap() as i32,
+                                    0,
+                                    0,
+                                ],
+                            };
+                            unsafe {
+                                self.device.vk_device.cmd_push_constants(
+                                    self.device.graphics_command_buffer
+                                        [self.device.buffered_resource_number()],
+                                    self.pso_layout,
+                                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                                    0u32,
+                                    bytemuck::cast_slice(&[push_constants]),
+                                )
+                            };
+
+                            // Draw Quad
+
+                            let vertex_buffer = self
+                                .device
+                                .resource_manager
+                                .get_buffer(mesh.vertex_buffer)
+                                .unwrap()
+                                .buffer();
+                            let index_buffer = self
+                                .device
+                                .resource_manager
+                                .get_buffer(mesh.index_buffer.unwrap())
+                                .unwrap()
+                                .buffer();
+
+                            unsafe {
+                                self.device.vk_device.cmd_bind_vertex_buffers(
+                                    self.device.graphics_command_buffer
+                                        [self.device.buffered_resource_number()],
+                                    0u32,
+                                    &[vertex_buffer],
+                                    &[0u64],
+                                );
+                                self.device.vk_device.cmd_bind_index_buffer(
+                                    self.device.graphics_command_buffer
+                                        [self.device.buffered_resource_number()],
+                                    index_buffer,
+                                    DeviceSize::zero(),
+                                    IndexType::UINT32,
+                                );
+                                self.device.vk_device.cmd_draw_indexed(
+                                    self.device.graphics_command_buffer
+                                        [self.device.buffered_resource_number()],
+                                    mesh.vertex_count,
+                                    1u32,
+                                    0u32,
+                                    0i32,
+                                    0u32,
+                                );
+                            }
+                            Ok(())
+                        },
+                    )?;
+                horizontal = !horizontal;
+
+                ImageBarrierBuilder::default()
+                    .add_image_barrier(ImageBarrier {
+                        image: ImageHandleType::RenderTarget(
+                            self.device.blur_images[!horizontal as usize],
+                        ),
+                        src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                        src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                        dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                        dst_access_mask: AccessFlags2::SHADER_READ,
+                        old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                        new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        ..Default::default()
+                    })
+                    .add_image_barrier(ImageBarrier {
+                        image: ImageHandleType::RenderTarget(
+                            self.device.blur_images[horizontal as usize],
+                        ),
+                        src_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                        src_access_mask: AccessFlags2::SHADER_READ,
+                        dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                        dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                        old_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                        ..Default::default()
+                    })
+                    .build(
+                        &self.device,
+                        &self.device.graphics_command_buffer
+                            [self.device.buffered_resource_number()],
+                    )?;
+            }
+        }
 
         // Copy UI
 

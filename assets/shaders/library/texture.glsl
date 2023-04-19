@@ -11,3 +11,12 @@ vec4 SampleBindlessTexture(int samplerHandle, int handle, vec2 texCoords)
     }
     return result;
 }
+
+vec2 BindlessTextureSize(int handle)
+{
+    vec2 result = vec2(0);
+    if (handle > 0){
+        result = textureSize(sampler2D(bindlessTextures[nonuniformEXT(handle - 1)], samplers[nonuniformEXT(0)]), 0);
+    }
+    return result;
+}

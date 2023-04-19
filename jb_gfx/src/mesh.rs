@@ -14,6 +14,37 @@ pub struct MeshData {
     pub faces: Vec<Face>,
 }
 
+impl MeshData {
+    pub fn quad() -> Self {
+        Self {
+            vertices: vec![
+                Vertex {
+                    position: [-1.0, -1.0, 0.0],
+                    tex_coords: [0.0, 0.0],
+                    ..Default::default()
+                },
+                Vertex {
+                    position: [-1.0, 1.0, 0.0],
+                    tex_coords: [0.0, 1.0],
+                    ..Default::default()
+                },
+                Vertex {
+                    position: [1.0, -1.0, 0.0],
+                    tex_coords: [1.0, 0.0],
+                    ..Default::default()
+                },
+                Vertex {
+                    position: [1.0, 1.0, 0.0],
+                    tex_coords: [1.0, 1.0],
+                    ..Default::default()
+                },
+            ],
+            indices: Some(vec![0, 1, 2, 2, 3, 1]),
+            faces: vec![],
+        }
+    }
+}
+
 pub type Face = [u32; 3];
 
 fn vertex(mesh: &MeshData, face: usize, vert: usize) -> &Vertex {
