@@ -1,5 +1,5 @@
-use std::ops::Neg;
 use cgmath::{Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Vector3};
+use std::ops::Neg;
 
 #[derive(Copy, Clone)]
 pub struct Light {
@@ -23,7 +23,7 @@ pub struct DirectionalLight {
 }
 
 impl DirectionalLight {
-    pub fn new(direction: Vector3<f32>, colour: Vector3<f32>, render_offset: f32,) -> Self {
+    pub fn new(direction: Vector3<f32>, colour: Vector3<f32>, render_offset: f32) -> Self {
         Self {
             direction: direction.normalize(),
             colour,
@@ -35,7 +35,6 @@ impl DirectionalLight {
 
     pub(crate) fn build_view_matrix(&self) -> Matrix4<f32> {
         let position = Point3::from_vec(self.direction.normalize().neg()) * self.render_offset;
-        println!("{}", self.direction.normalize().y);
         Matrix4::look_to_rh(position, self.direction.normalize(), Vector3::unit_y())
     }
 

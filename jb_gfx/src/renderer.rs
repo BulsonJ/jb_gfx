@@ -318,11 +318,7 @@ impl Renderer {
             zfar: 4000.0,
         };
 
-        let sun = DirectionalLight::new(
-            (0.0, -1.0, -0.1).into(),
-            (1.0, 1.0, 1.0).into(),
-            400f32,
-        );
+        let sun = DirectionalLight::new((0.0, -1.0, -0.1).into(), (1.0, 1.0, 1.0).into(), 400f32);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_proj(&camera);
