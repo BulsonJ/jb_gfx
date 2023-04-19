@@ -66,27 +66,27 @@ fn main() {
         }
     }
     // Load sponza
-    //{
-    //    let models = asset_manager
-    //        .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-    //        .unwrap();
-    //    for model in models.iter() {
-    //        let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
-    //        renderer
-    //            .set_render_model_transform(
-    //                handle,
-    //                from_transforms(
-    //                    Vector3::new(0f32, 80f32, 0.0f32),
-    //                    Quaternion::from_axis_angle(
-    //                        Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-    //                        Deg(180f32),
-    //                    ),
-    //                    Vector3::from_value(0.1f32),
-    //                ),
-    //            )
-    //            .unwrap();
-    //    }
-    //}
+    {
+        let models = asset_manager
+            .load_gltf(&mut renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+            .unwrap();
+        for model in models.iter() {
+            let handle = renderer.add_render_model(model.mesh, model.material_instance.clone());
+            renderer
+                .set_render_model_transform(
+                    handle,
+                    from_transforms(
+                        Vector3::new(0f32, 80f32, 0.0f32),
+                        Quaternion::from_axis_angle(
+                            Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+                            Deg(180f32),
+                        ),
+                        Vector3::from_value(0.1f32),
+                    ),
+                )
+                .unwrap();
+        }
+    }
     // Load helmet
     {
         let models = asset_manager
@@ -116,6 +116,7 @@ fn main() {
         }
     }
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
+    let mut test = [0.0f32;3];
 
     let (mut lights, cameras) =
         setup_scene(&mut renderer, (screen_width as u32, screen_height as u32));
@@ -178,7 +179,8 @@ fn main() {
                                     renderer.active_camera = Some(camera.handle);
                                 }
                             }
-                            ui.color_edit_button_rgb(&mut lights[0].light.colour.into())
+                            ui.color_edit_button_rgb(&mut test);
+                            lights[0].light.colour = test.into();
                         });
                     });
                 });
@@ -294,7 +296,7 @@ fn paint_egui(
                     .map(|vert| UIVertex {
                         pos: vert.pos.into(),
                         uv: vert.uv.into(),
-                        colour: vert.color.to_array().map(|colour| colour as f32 / 255f32),
+                        colour: vert.color.to_srgba_unmultiplied().map(|colour| colour as f32 / 255f32),
                     })
                     .collect();
 

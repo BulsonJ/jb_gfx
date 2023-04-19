@@ -33,7 +33,7 @@ use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHa
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
-const MAX_QUADS: u64 = 500000u64;
+const MAX_QUADS: u64 = 100000u64;
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -531,7 +531,7 @@ impl Renderer {
 
         let index_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<u32>() * MAX_QUADS as usize,
+                size: size_of::<u32>() * MAX_QUADS as usize * 3,
                 usage: vk::BufferUsageFlags::INDEX_BUFFER,
                 storage_type: BufferStorageType::HostLocal,
             };
@@ -970,13 +970,14 @@ impl Renderer {
                     .copy_from_slice(&element.indices);
 
                 ui_draw_calls.push(UIDrawCall {
-                    index_offset: index_offset,
+                    vertex_offset,
+                    index_offset,
                     amount: element.indices.len(),
                     scissor: element.scissor,
                 });
 
                 vertex_offset += verts.len();
-                index_offset += element.indices.len();
+                index_offset += element.indices.len() + 16000;
             }
             self.ui_to_draw.clear();
             ui_draw_calls
@@ -1051,7 +1052,7 @@ impl Renderer {
                         draw.amount as u32,
                         1u32,
                         draw.index_offset as u32,
-                        0i32,
+                        draw.vertex_offset as i32,
                         0u32,
                     );
                 };
@@ -1666,6 +1667,7 @@ pub struct UIMesh {
 }
 
 struct UIDrawCall {
+    vertex_offset: usize,
     index_offset: usize,
     amount: usize,
     scissor: ([f32; 2], [f32; 2]),
