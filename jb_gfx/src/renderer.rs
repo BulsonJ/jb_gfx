@@ -820,6 +820,8 @@ impl Renderer {
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 |render_pass| {
+                    profiling::scope!("Shadow Pass");
+
                     let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
@@ -891,6 +893,7 @@ impl Renderer {
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 |render_pass| {
+                    profiling::scope!("Forward Pass");
                     let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
                     unsafe {
@@ -1012,6 +1015,7 @@ impl Renderer {
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 |render_pass| {
+                    profiling::scope!("UI Pass");
                     let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
 
                     unsafe {

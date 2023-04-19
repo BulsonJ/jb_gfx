@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
     ext::DebugUtils,
@@ -203,6 +203,7 @@ impl GraphicsDevice {
 
         let surface_capabilities =
             unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface) }?;
+        ensure!(surface_capabilities.supported_usage_flags.contains(vk::ImageUsageFlags::STORAGE));
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
             && desired_image_count > surface_capabilities.max_image_count
