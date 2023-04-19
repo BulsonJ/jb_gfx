@@ -67,7 +67,7 @@ float ShadowCalculation(vec4 fragPosLightSpace)
 	float currentDepth = projCoords.z;
 	// check whether current frag pos is in shadow
 	float bias = 0.000001;
-	float ambient = 0.1;
+	float ambient = 0.01;
 	float shadow = currentDepth - bias > closestDepth ? 1.0 - ambient : 0.0;
 
 	return shadow;
@@ -101,6 +101,9 @@ void main()
 		normal = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
 	}
 
+	// calculate shadow
+	float shadow = ShadowCalculation(inWorldPosLightSpace);
+
 	vec3 diffuseResult = vec3(0);
 	vec3 specularResult = vec3(0);
 	// Scene directional light
@@ -123,9 +126,11 @@ void main()
 		diffuseResult += diffuse;
 		specularResult += specular;
 	}
+	vec3 lighting = (1.0 - shadow) * (diffuseResult + specularResult);
 
 	// Point lights
-
+	diffuseResult = vec3(0);
+	specularResult = vec3(0);
 	for (int i = 0; i < 4; i++){
 		// Diffuse
 		Light currentLight = lightData.lights[i];
@@ -157,11 +162,10 @@ void main()
 		diffuseResult += diffuse;
 		specularResult += specular;
 	}
+	vec3 pointLightsResult = (diffuseResult + specularResult);
+	lighting += pointLightsResult;
 
-	// calculate shadow
-	float shadow = ShadowCalculation(inWorldPosLightSpace);
-
-	vec3 result = (ambient + (1.0 - shadow) * (diffuseResult + specularResult)) * objectColour;
+	vec3 result = (ambient + lighting) * objectColour;
 
 	// Emissive
 	if (emissiveTexIndex > 0){

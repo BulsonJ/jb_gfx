@@ -1,4 +1,4 @@
-use cgmath::{Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Vector3};
+use cgmath::{relative_eq, AbsDiffEq, Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, RelativeEq, UlpsEq, Vector3, abs_diff_eq};
 use std::ops::Neg;
 
 #[derive(Copy, Clone)]
@@ -35,7 +35,12 @@ impl DirectionalLight {
 
     pub(crate) fn build_view_matrix(&self) -> Matrix4<f32> {
         let position = Point3::from_vec(self.direction.normalize().neg()) * self.render_offset;
-        Matrix4::look_to_rh(position, self.direction.normalize(), Vector3::unit_y())
+        // Temp workaround for look at returning NAN when direction aligned with UP
+        if abs_diff_eq!(self.direction.normalize(), Vector3::unit_y()) || abs_diff_eq!(-self.direction.normalize(), Vector3::unit_y()) {
+            Matrix4::look_to_rh(position, self.direction, Vector3::unit_z())
+        } else {
+            Matrix4::look_to_rh(position, self.direction, Vector3::unit_y())
+        }
     }
 
     pub(crate) fn build_projection_matrix(&self) -> Matrix4<f32> {

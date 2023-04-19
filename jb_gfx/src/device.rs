@@ -367,12 +367,13 @@ impl GraphicsDevice {
             let sampler_info = vk::SamplerCreateInfo::builder()
                 .mag_filter(vk::Filter::NEAREST)
                 .min_filter(vk::Filter::NEAREST)
-                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
                 .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                 .min_lod(0.0f32)
-                .max_lod(1.0f32);
+                .max_lod(1.0f32)
+                .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE);
 
             unsafe { device.create_sampler(&sampler_info, None)? }
         };
