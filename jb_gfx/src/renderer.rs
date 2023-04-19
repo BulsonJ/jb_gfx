@@ -8,8 +8,8 @@ use ash::vk::{
 };
 use bytemuck::{offset_of, Zeroable};
 use cgmath::{
-    Array, Deg, EuclideanSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3,
-    Vector4, Zero,
+    Array, Deg, EuclideanSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector2,
+    Vector3, Vector4, Zero,
 };
 use image::EncodableLayout;
 use log::{error, info, trace, warn};
@@ -925,9 +925,11 @@ impl Renderer {
             .mapped_slice()?
             .copy_from_slice(&[ui_uniform]);
 
-        let ui_draw_count = {
-            let mut ui_vertices = Vec::new();
-            let mut ui_indices = Vec::new();
+        let ui_draw_calls = {
+            let mut ui_draw_calls = Vec::new();
+
+            let mut vertex_offset = 0usize;
+            let mut index_offset = 0usize;
             for element in self.ui_to_draw.iter_mut() {
                 let texture_id = {
                     if let Some(index) = self
@@ -940,7 +942,7 @@ impl Renderer {
                     }
                 };
 
-                let mut verts: Vec<UIVertexData> = element
+                let verts: Vec<UIVertexData> = element
                     .vertices
                     .iter()
                     .map(|vert| UIVertexData {
@@ -950,30 +952,37 @@ impl Renderer {
                         texture_id: [texture_id, 0, 0, 0],
                     })
                     .collect();
-                ui_vertices.append(&mut verts);
-                ui_indices.append(&mut element.indices)
+
+                self.device
+                    .resource_manager
+                    .get_buffer_mut(self.quad_buffer[self.device.buffered_resource_number()])
+                    .unwrap()
+                    .view_custom(vertex_offset, verts.len())?
+                    .mapped_slice()?
+                    .copy_from_slice(&verts);
+
+                self.device
+                    .resource_manager
+                    .get_buffer_mut(self.index_buffer[self.device.buffered_resource_number()])
+                    .unwrap()
+                    .view_custom(index_offset, element.indices.len())?
+                    .mapped_slice()?
+                    .copy_from_slice(&element.indices);
+
+                ui_draw_calls.push(UIDrawCall {
+                    index_offset: index_offset,
+                    amount: element.indices.len(),
+                    scissor: element.scissor,
+                });
+
+                vertex_offset += verts.len();
+                index_offset += element.indices.len();
             }
-
-            self.device
-                .resource_manager
-                .get_buffer_mut(self.quad_buffer[self.device.buffered_resource_number()])
-                .unwrap()
-                .view_custom(0, ui_vertices.len())?
-                .mapped_slice()?
-                .copy_from_slice(&ui_vertices);
-            self.device
-                .resource_manager
-                .get_buffer_mut(self.index_buffer[self.device.buffered_resource_number()])
-                .unwrap()
-                .view_custom(0, ui_indices.len())?
-                .mapped_slice()?
-                .copy_from_slice(&ui_indices);
-
             self.ui_to_draw.clear();
-            ui_indices.len()
+            ui_draw_calls
         };
 
-        if let Ok(_ui_pass) =
+        if let Ok(ui_pass) =
             RenderPassBuilder::new((self.device.size.width, self.device.size.height))
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandleType::SwapchainImage(present_index as usize),
@@ -1017,29 +1026,36 @@ impl Renderer {
                 );
             };
 
-            // Draw commands
             let index_buffer = self
                 .device
                 .resource_manager
                 .get_buffer(self.index_buffer[self.device.buffered_resource_number()])
                 .unwrap();
 
-            unsafe {
-                self.device.vk_device.cmd_bind_index_buffer(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    index_buffer.buffer(),
-                    0u64,
-                    vk::IndexType::UINT32,
-                );
-                self.device.vk_device.cmd_draw_indexed(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                    ui_draw_count as u32,
-                    1u32,
-                    0u32,
-                    0i32,
-                    0u32,
-                );
-            };
+            for draw in ui_draw_calls.iter() {
+                let max = [
+                    draw.scissor.1[0] - draw.scissor.0[0],
+                    draw.scissor.1[1] - draw.scissor.0[1],
+                ];
+                ui_pass.set_scissor(draw.scissor.0, max);
+                // Draw commands
+                unsafe {
+                    self.device.vk_device.cmd_bind_index_buffer(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        index_buffer.buffer(),
+                        0u64,
+                        vk::IndexType::UINT32,
+                    );
+                    self.device.vk_device.cmd_draw_indexed(
+                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                        draw.amount as u32,
+                        1u32,
+                        draw.index_offset as u32,
+                        0i32,
+                        0u32,
+                    );
+                };
+            }
         }
 
         // Transition render image to transfer src
@@ -1646,4 +1662,11 @@ pub struct UIMesh {
     pub indices: Vec<u32>,
     pub vertices: Vec<UIVertex>,
     pub texture_id: ImageHandle,
+    pub scissor: ([f32; 2], [f32; 2]),
+}
+
+struct UIDrawCall {
+    index_offset: usize,
+    amount: usize,
+    scissor: ([f32; 2], [f32; 2]),
 }

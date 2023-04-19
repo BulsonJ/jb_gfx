@@ -105,6 +105,25 @@ pub struct RenderPass {
     command_buffer: vk::CommandBuffer,
 }
 
+impl RenderPass {
+    pub fn set_scissor(&self, offset: [f32; 2], extent: [f32; 2]) {
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D {
+                x: offset[0] as i32,
+                y: offset[1] as i32,
+            })
+            .extent(vk::Extent2D {
+                width: extent[0] as u32,
+                height: extent[1] as u32,
+            });
+
+        unsafe {
+            self.device
+                .cmd_set_scissor(self.command_buffer, 0u32, &[*scissor])
+        };
+    }
+}
+
 impl Drop for RenderPass {
     fn drop(&mut self) {
         unsafe { self.device.cmd_end_rendering(self.command_buffer) };
