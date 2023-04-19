@@ -319,9 +319,9 @@ impl Renderer {
         };
 
         let sun = DirectionalLight::new(
-            (8.0, 400.0, 20.0).into(),
             (0.0, -1.0, -0.1).into(),
             (1.0, 1.0, 1.0).into(),
+            400f32,
         );
 
         let mut camera_uniform = CameraUniform::new();

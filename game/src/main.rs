@@ -182,6 +182,11 @@ fn main() {
                             ui.color_edit_button_rgb(lights[1].light.colour.as_mut());
                             ui.color_edit_button_rgb(lights[2].light.colour.as_mut());
                             ui.color_edit_button_rgb(lights[3].light.colour.as_mut());
+                            let mut direction = renderer.sun.direction;
+                            ui.drag_angle(&mut direction.x);
+                            ui.drag_angle(&mut direction.y);
+                            ui.drag_angle(&mut direction.z);
+                            renderer.sun.direction = direction;
                         });
                     });
                 });

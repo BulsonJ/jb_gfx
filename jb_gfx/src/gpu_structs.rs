@@ -1,4 +1,4 @@
-use cgmath::{EuclideanSpace, Matrix4, Point3, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{EuclideanSpace, InnerSpace, Matrix4, Point3, SquareMatrix, Vector3, Vector4, Zero};
 
 use crate::light::Light;
 use crate::{Camera, DirectionalLight};
@@ -62,7 +62,7 @@ impl CameraUniform {
         self.directional_light_proj = light.build_projection_matrix().into();
         self.directional_light_view = light.build_view_matrix().into();
         self.directional_light_colour = light.colour.extend(0f32).into();
-        self.directional_light_direction = light.direction().extend(0f32).into();
+        self.directional_light_direction = light.direction.normalize().extend(0f32).into();
     }
 }
 
