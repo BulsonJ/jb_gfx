@@ -61,8 +61,6 @@ pub struct GraphicsDevice {
     pub directional_light_shadow_image: RenderTargetHandle,
     pub shadow_sampler: vk::Sampler,
     pub ui_sampler: vk::Sampler,
-    pub bloom_image: RenderTargetHandle,
-    pub blur_images: [RenderTargetHandle; 2],
 }
 
 impl GraphicsDevice {
@@ -507,44 +505,6 @@ impl GraphicsDevice {
             &render_targets,
             &BindlessImage::RenderTarget(directional_light_shadow_image),
         );
-        let bloom_image = render_targets.create_render_target(
-            &mut resource_manager,
-            vk::Format::R8G8B8A8_SRGB,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
-        bindless_manager.add_image_to_bindless(
-            &device,
-            &resource_manager,
-            &render_targets,
-            &BindlessImage::RenderTarget(bloom_image),
-        );
-        let blur_images = [
-            render_targets.create_render_target(
-                &mut resource_manager,
-                vk::Format::R8G8B8A8_SRGB,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?,
-            render_targets.create_render_target(
-                &mut resource_manager,
-                vk::Format::R8G8B8A8_SRGB,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?,
-        ];
-        bindless_manager.add_image_to_bindless(
-            &device,
-            &resource_manager,
-            &render_targets,
-            &BindlessImage::RenderTarget(blur_images[0]),
-        );
-        bindless_manager.add_image_to_bindless(
-            &device,
-            &resource_manager,
-            &render_targets,
-            &BindlessImage::RenderTarget(blur_images[1]),
-        );
 
         let mut device = Self {
             instance,
@@ -583,8 +543,6 @@ impl GraphicsDevice {
             directional_light_shadow_image,
             shadow_sampler,
             ui_sampler,
-            bloom_image,
-            blur_images,
         };
 
         for set in device.bindless_descriptor_set.iter() {
