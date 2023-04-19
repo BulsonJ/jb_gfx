@@ -116,7 +116,6 @@ fn main() {
         }
     }
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
-    let mut test = [0.0f32;3];
 
     let (mut lights, cameras) =
         setup_scene(&mut renderer, (screen_width as u32, screen_height as u32));
@@ -179,8 +178,10 @@ fn main() {
                                     renderer.active_camera = Some(camera.handle);
                                 }
                             }
-                            ui.color_edit_button_rgb(&mut test);
-                            lights[0].light.colour = test.into();
+                            ui.color_edit_button_rgb(lights[0].light.colour.as_mut());
+                            ui.color_edit_button_rgb(lights[1].light.colour.as_mut());
+                            ui.color_edit_button_rgb(lights[2].light.colour.as_mut());
+                            ui.color_edit_button_rgb(lights[3].light.colour.as_mut());
                         });
                     });
                 });
