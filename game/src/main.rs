@@ -195,6 +195,11 @@ fn main() {
                 let clipped_primitives = ctx.tessellate(full_output.shapes);
 
                 for (id, delta) in full_output.textures_delta.set.iter() {
+                    // TODO : Implement changing texture properties
+                    if stored_textures.contains_key(id) {
+                        continue;
+                    }
+
                     let data: Vec<u8> = match &delta.image {
                         egui::ImageData::Color(image) => {
                             assert_eq!(
@@ -213,10 +218,6 @@ fn main() {
                             .flat_map(|color| color.to_array())
                             .collect(),
                     };
-
-                    if stored_textures.contains_key(id) {
-                        continue;
-                    }
 
                     let image = renderer.load_texture_from_bytes(
                         &data,
