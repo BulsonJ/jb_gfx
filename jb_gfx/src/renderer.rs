@@ -25,9 +25,7 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
     UIVertexData,
 };
-use crate::pipeline::{
-    PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager,
-};
+use crate::pipeline::{PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager, VertexInputDescription};
 use crate::renderpass::{AttachmentHandleType, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
@@ -75,12 +73,6 @@ impl Renderer {
         profiling::scope!("Renderer::new");
 
         let mut device = GraphicsDevice::new(window)?;
-
-        let vertex_input_desc = Vertex::get_vertex_input_desc();
-
-        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&vertex_input_desc.bindings)
-            .vertex_attribute_descriptions(&vertex_input_desc.attributes);
 
         let pool_sizes = [
             *vk::DescriptorPoolSize::builder()
@@ -199,7 +191,7 @@ impl Renderer {
                 pipeline_layout: pso_layout,
                 vertex_shader: "assets/shaders/default.vert".to_string(),
                 fragment_shader: "assets/shaders/default.frag".to_string(),
-                vertex_input_state: *vertex_input_state,
+                vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
                     format: render_image_format,
                     blend: false,
@@ -227,7 +219,7 @@ impl Renderer {
                 pipeline_layout: pso_layout,
                 vertex_shader: "assets/shaders/shadow.vert".to_string(),
                 fragment_shader: "assets/shaders/shadow.frag".to_string(),
-                vertex_input_state: *vertex_input_state,
+                vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
@@ -275,11 +267,6 @@ impl Renderer {
                     .create_pipeline_layout(&pipeline_layout_info, None)
             }?;
 
-            let vertex_input_desc = Vertex::get_ui_vertex_input_desc();
-            let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
-                .vertex_binding_descriptions(&vertex_input_desc.bindings)
-                .vertex_attribute_descriptions(&vertex_input_desc.attributes);
-
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
                 .depth_test_enable(false)
                 .depth_write_enable(false)
@@ -293,7 +280,7 @@ impl Renderer {
                 pipeline_layout: pso_layout,
                 vertex_shader: "assets/shaders/ui.vert".to_string(),
                 fragment_shader: "assets/shaders/ui.frag".to_string(),
-                vertex_input_state: *vertex_input_state,
+                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
                     format: render_image_format,
                     blend: true,
@@ -1626,11 +1613,6 @@ impl Drop for Renderer {
                 .destroy_pipeline_layout(self.pso_layout, None);
         }
     }
-}
-
-struct VertexInputDescription {
-    bindings: Vec<vk::VertexInputBindingDescription>,
-    attributes: Vec<vk::VertexInputAttributeDescription>,
 }
 
 impl Vertex {

@@ -84,7 +84,7 @@ impl PipelineManager {
 
         let info = PipelineBuildInfo {
             shader_stages: vec![vertex_stage_info, fragment_stage_info],
-            vertex_input_state: build_info.vertex_input_state,
+            vertex_input_state: build_info.vertex_input_state.clone(),
             color_attachment_formats: build_info.color_attachment_formats.clone(),
             depth_attachment_format: build_info.depth_attachment_format,
             depth_stencil_state: build_info.depth_stencil_state,
@@ -155,7 +155,7 @@ pub struct PipelineCreateInfo {
     pub pipeline_layout: vk::PipelineLayout,
     pub vertex_shader: String,
     pub fragment_shader: String,
-    pub vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
+    pub vertex_input_state: VertexInputDescription,
     pub color_attachment_formats: Vec<PipelineColorAttachment>,
     pub depth_attachment_format: Option<vk::Format>,
     pub depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
@@ -164,7 +164,7 @@ pub struct PipelineCreateInfo {
 
 pub struct PipelineBuildInfo {
     pub shader_stages: Vec<vk::PipelineShaderStageCreateInfo>,
-    pub vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
+    pub vertex_input_state: VertexInputDescription,
     pub color_attachment_formats: Vec<PipelineColorAttachment>,
     pub depth_attachment_format: Option<vk::Format>,
     pub depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
@@ -218,6 +218,10 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
         .logic_op(vk::LogicOp::COPY)
         .attachments(&attachments);
 
+    let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(&build_info.vertex_input_state.bindings)
+        .vertex_attribute_descriptions(&build_info.vertex_input_state.attributes);
+
     let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .primitive_restart_enable(false);
@@ -256,7 +260,7 @@ pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -
     let pso_create_info = vk::GraphicsPipelineCreateInfo::builder()
         .push_next(&mut dynamic_rendering_info)
         .stages(&build_info.shader_stages)
-        .vertex_input_state(&build_info.vertex_input_state)
+        .vertex_input_state(&vertex_input_state)
         .input_assembly_state(&input_assembly_state)
         .tessellation_state(&tess_state)
         .viewport_state(&viewport_state)
@@ -298,4 +302,10 @@ fn include_resolve_callback(
         resolved_name: requested_file_name.to_string(),
         content,
     })
+}
+
+#[derive(Clone)]
+pub struct VertexInputDescription {
+    pub bindings: Vec<vk::VertexInputBindingDescription>,
+    pub attributes: Vec<vk::VertexInputAttributeDescription>,
 }
