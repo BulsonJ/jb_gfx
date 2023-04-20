@@ -8,14 +8,14 @@ use winit::event_loop::EventLoopWindowTarget;
 use jb_gfx::device::ImageFormatType;
 use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
 
-pub struct Editor {
+pub struct EguiContext {
     pub egui_ctx: Context,
     pub egui_winit: egui_winit::State,
     pub stored_textures: HashMap<egui::TextureId, ImageHandle>,
     pub last_output: Option<FullOutput>,
 }
 
-impl Editor {
+impl EguiContext {
     pub fn new<T>(event_loop: &EventLoopWindowTarget<T>) -> Self {
         Self {
             egui_ctx: Context::default(),

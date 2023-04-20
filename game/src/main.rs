@@ -22,12 +22,12 @@ use jb_gfx::resource::ImageHandle;
 use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
-use crate::editor::Editor;
+use crate::egui_context::EguiContext;
 use crate::input::Input;
 
 mod asset;
 mod components;
-mod editor;
+mod egui_context;
 mod input;
 
 fn main() {
@@ -131,7 +131,7 @@ fn main() {
     let mut t = 0.0;
     let target_dt = 1.0 / 60.0;
 
-    let mut editor = Editor::new(&event_loop);
+    let mut egui = EguiContext::new(&event_loop);
 
     let mut camera_controls_show = false;
     let mut light_controls_show = false;
@@ -171,7 +171,7 @@ fn main() {
                     t += delta_time;
                 }
 
-                editor.run(&window, |ctx| {
+                egui.run(&window, |ctx| {
                     egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
                         ui.horizontal(|ui| {
                             if ui.button("Camera").clicked() {
@@ -253,7 +253,7 @@ fn main() {
                             });
                     });
                 });
-                editor.paint(&mut renderer);
+                egui.paint(&mut renderer);
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);
@@ -300,7 +300,7 @@ fn main() {
                     renderer.resize(**new_inner_size).unwrap();
                 }
                 event => {
-                    editor.on_event(event);
+                    egui.on_event(event);
                 }
             },
             _ => {}
