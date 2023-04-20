@@ -11,7 +11,7 @@ use egui::{ClippedPrimitive, Context, FullOutput, TextureId};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget};
 use winit::window::WindowBuilder;
 
 use crate::asset::AssetManager;
@@ -128,9 +128,7 @@ fn main() {
     let mut t = 0.0;
     let target_dt = 1.0 / 60.0;
 
-    let mut ctx = egui::Context::default();
-    let mut stored_textures = HashMap::default();
-    let mut egui_winit = egui_winit::State::new(&event_loop);
+    let mut editor = Editor::new(&event_loop);
 
     let mut camera_controls_show = false;
     let mut light_controls_show = false;
@@ -170,8 +168,8 @@ fn main() {
                     t += delta_time;
                 }
 
-                let raw_input = egui_winit.take_egui_input(&window);
-                let full_output = ctx.run(raw_input, |ctx| {
+                let raw_input = editor.egui_winit.take_egui_input(&window);
+                let full_output = editor.egui_ctx.run(raw_input, |ctx| {
                     egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
                         ui.horizontal(|ui| {
                             if ui.button("Camera").clicked() {
@@ -253,13 +251,13 @@ fn main() {
                             });
                     });
                 });
-                let output = ctx.end_frame();
-                egui_winit.handle_platform_output(&window, &ctx, output.platform_output.clone());
-                let clipped_primitives = ctx.tessellate(full_output.shapes);
+                let output = editor.egui_ctx.end_frame();
+                editor.egui_winit.handle_platform_output(&window, &editor.egui_ctx, output.platform_output.clone());
+                let clipped_primitives = editor.egui_ctx.tessellate(full_output.shapes);
 
                 for (id, delta) in full_output.textures_delta.set.iter() {
                     // TODO : Implement changing texture properties
-                    if stored_textures.contains_key(id) {
+                    if editor.stored_textures.contains_key(id) {
                         continue;
                     }
 
@@ -289,11 +287,11 @@ fn main() {
                         &ImageFormatType::Default,
                         1,
                     );
-                    stored_textures.insert(*id, image.unwrap());
+                    editor.stored_textures.insert(*id, image.unwrap());
                 }
 
                 // Test EGUI
-                paint_egui(&mut renderer, clipped_primitives, &mut stored_textures);
+                paint_egui(&mut renderer, clipped_primitives, &mut editor.stored_textures);
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);
@@ -340,7 +338,7 @@ fn main() {
                     renderer.resize(**new_inner_size).unwrap();
                 }
                 event => {
-                    egui_winit.on_event(&ctx, event);
+                    editor.egui_winit.on_event(&editor.egui_ctx, event);
                 }
             },
             _ => {}
@@ -514,4 +512,20 @@ fn from_transforms(
     let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     translation * rotation * scale
+}
+
+struct Editor {
+    egui_ctx: egui::Context,
+    egui_winit: egui_winit::State,
+    stored_textures: HashMap<egui::TextureId, ImageHandle>,
+}
+
+impl Editor {
+    pub fn new<T>(event_loop: &EventLoopWindowTarget<T>) -> Self {
+        Self {
+            egui_ctx: Context::default(),
+            egui_winit: egui_winit::State::new(event_loop),
+            stored_textures: HashMap::default(),
+        }
+    }
 }
