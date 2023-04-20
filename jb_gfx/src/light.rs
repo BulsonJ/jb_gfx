@@ -23,6 +23,7 @@ pub struct DirectionalLight {
     znear: f32,
     zfar: f32,
     render_offset: f32,
+    ortho_size: f32,
 }
 
 impl DirectionalLight {
@@ -30,9 +31,10 @@ impl DirectionalLight {
         Self {
             direction: direction.normalize(),
             colour,
-            znear: 0.1f32,
+            znear: -4000.0f32,
             zfar: 4000.0f32,
             render_offset,
+            ortho_size: 300f32,
         }
     }
 
@@ -49,6 +51,13 @@ impl DirectionalLight {
     }
 
     pub(crate) fn build_projection_matrix(&self) -> Matrix4<f32> {
-        cgmath::perspective(Deg(45.0f32), 1f32, self.znear, self.zfar)
+        cgmath::ortho(
+            -self.ortho_size,
+            self.ortho_size,
+            -self.ortho_size,
+            self.ortho_size,
+            self.znear,
+            self.zfar,
+        )
     }
 }
