@@ -173,7 +173,7 @@ fn main() {
                 egui.run(&window, |ctx| {
                     editor.run(
                         ctx,
-                        EditorDependencies {
+                        &mut EditorDependencies {
                             renderer: &mut renderer,
                             cameras: &cameras,
                             lights: &mut lights,
