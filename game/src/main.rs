@@ -14,18 +14,18 @@ use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
+use crate::asset::AssetManager;
 use jb_gfx::device::ImageFormatType;
 use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
 use jb_gfx::resource::ImageHandle;
 use jb_gfx::{Camera, Colour, Light};
-use crate::asset::AssetManager;
 
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
 
+mod asset;
 mod components;
 mod input;
-mod asset;
 
 fn main() {
     let mut input = Input {

@@ -12,6 +12,13 @@ pub struct RenderPassBuilder {
 }
 
 impl RenderPassBuilder {
+    /// Start constructing a new RenderPass.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// RenderPassBuilder::new((1920.0,1080.0))
+    /// ```
     pub fn new(viewport_size: (u32, u32)) -> Self {
         Self {
             viewport_size,
@@ -20,17 +27,37 @@ impl RenderPassBuilder {
         }
     }
 
+    /// Adds a Color Attachment to the RenderPass.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///
+    /// ```
     pub fn add_colour_attachment(mut self, attachment: AttachmentInfo) -> Self {
         self.colour_attachments.push(attachment);
         self
     }
 
+    /// Sets the Depth Attachment for the RenderPass
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///
+    /// ```
     pub fn set_depth_attachment(mut self, attachment: AttachmentInfo) -> Self {
         self.depth_attachment = Some(attachment);
         self
     }
 
-    /// Be very careful, no lifetimes so make sure to drop the RenderPass when you are done with it.
+    /// Consumes the RenderPassBuilder, starting the 'RenderPass' which will live for the duration of the closure.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///
+    /// ```
     pub fn start<F: Fn(&mut RenderPass) -> Result<()>>(
         mut self,
         device: &GraphicsDevice,
@@ -117,6 +144,14 @@ pub struct RenderPass<'a> {
 }
 
 impl<'a> RenderPass<'a> {
+    /// Updates the Scissor of the RenderPass, starting from
+    /// position: offset and size: extent.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// render_pass.set_scissor([0.0,0.0], [1920.0, 1080.0])
+    /// ```
     pub fn set_scissor(&self, offset: [f32; 2], extent: [f32; 2]) {
         let scissor = vk::Rect2D::builder()
             .offset(vk::Offset2D {
@@ -135,17 +170,47 @@ impl<'a> RenderPass<'a> {
     }
 }
 
+/// A RenderPass Attachment
+///
+/// This represents an attachment to a [RenderPass]. It contains
+/// an AttachmentHandle which is the handle to the image of the attachment.
+/// It also determines the [vk::ImageLayout] the image must be in, the
+/// load [vk::AttachmentLoadOp] and store [vk::AttachmentStoreOp] operations that take place.
+/// Finally, it contains the [vk::ClearValue] of the attachment.
+///
+/// # Usage
+///
+/// This is fed into a [RenderPassBuilder] to create a [RenderPass]
+///
+/// ```
+/// use ash::vk::{ClearColorValue, ClearValue};
+///
+/// RenderPassBuilder::new((1920.0,1080.0))
+/// .add_colour_attachment(AttachmentInfo {
+///     target: AttachmentHandle::RenderTarget(device.render_image),
+///            clear_value: ClearValue {
+///                color: ClearColorValue {
+///                    float32: clear_colour.extend(0.0).into(),
+///                },
+///            },
+///            ..Default::default()
+///     });
+///
+/// ```
 #[derive(Copy, Clone)]
 pub struct AttachmentInfo {
-    pub target: AttachmentHandleType,
+    pub target: AttachmentHandle,
     pub image_layout: vk::ImageLayout,
     pub load_op: vk::AttachmentLoadOp,
     pub store_op: vk::AttachmentStoreOp,
     pub clear_value: vk::ClearValue,
 }
 
+/// A RenderPass Attachment
+///
+/// A handle to either a [RenderTargetHandle] or a SwapchainImage(index)
 #[derive(Copy, Clone)]
-pub enum AttachmentHandleType {
+pub enum AttachmentHandle {
     RenderTarget(RenderTargetHandle),
     SwapchainImage(usize),
 }
@@ -153,7 +218,7 @@ pub enum AttachmentHandleType {
 impl Default for AttachmentInfo {
     fn default() -> Self {
         Self {
-            target: AttachmentHandleType::RenderTarget(RenderTargetHandle::default()),
+            target: AttachmentHandle::RenderTarget(RenderTargetHandle::default()),
             image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
             load_op: vk::AttachmentLoadOp::CLEAR,
             store_op: vk::AttachmentStoreOp::STORE,
@@ -168,7 +233,7 @@ fn convert_attach_info(
 ) -> vk::RenderingAttachmentInfo {
     let image_view = {
         match attachment.target {
-            AttachmentHandleType::RenderTarget(render_target) => device
+            AttachmentHandle::RenderTarget(render_target) => device
                 .resource_manager
                 .get_image(
                     device
@@ -179,7 +244,7 @@ fn convert_attach_info(
                 )
                 .unwrap()
                 .image_view(),
-            AttachmentHandleType::SwapchainImage(index) => device.present_image_views[index],
+            AttachmentHandle::SwapchainImage(index) => device.present_image_views[index],
         }
     };
 

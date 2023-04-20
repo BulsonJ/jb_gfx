@@ -29,7 +29,7 @@ use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager,
     VertexInputDescription,
 };
-use crate::renderpass::{AttachmentHandleType, AttachmentInfo, RenderPassBuilder};
+use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
@@ -771,9 +771,7 @@ impl Renderer {
         // Shadow pass
         RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
             .set_depth_attachment(AttachmentInfo {
-                target: AttachmentHandleType::RenderTarget(
-                    self.device.directional_light_shadow_image,
-                ),
+                target: AttachmentHandle::RenderTarget(self.device.directional_light_shadow_image),
                 clear_value: vk::ClearValue {
                     depth_stencil: ClearDepthStencilValue {
                         depth: 1.0,
@@ -837,7 +835,7 @@ impl Renderer {
         let clear_colour: Vector3<f32> = self.clear_colour.into();
         RenderPassBuilder::new((self.device.size.width, self.device.size.height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandleType::RenderTarget(self.device.render_image),
+                target: AttachmentHandle::RenderTarget(self.device.render_image),
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
@@ -846,7 +844,7 @@ impl Renderer {
                 ..Default::default()
             })
             .set_depth_attachment(AttachmentInfo {
-                target: AttachmentHandleType::RenderTarget(self.device.depth_image),
+                target: AttachmentHandle::RenderTarget(self.device.depth_image),
                 clear_value: vk::ClearValue {
                     depth_stencil: ClearDepthStencilValue {
                         depth: 1.0,
@@ -968,7 +966,7 @@ impl Renderer {
         // UI Pass
         RenderPassBuilder::new((self.device.size.width, self.device.size.height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandleType::RenderTarget(self.device.render_image),
+                target: AttachmentHandle::RenderTarget(self.device.render_image),
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
