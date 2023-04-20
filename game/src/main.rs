@@ -8,6 +8,7 @@ use cgmath::{
 use egui::epaint::Primitive;
 use egui::panel::TopBottomSide;
 use egui::{ClippedPrimitive, Context, FullOutput, TextureId};
+use egui_winit::EventResponse;
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -21,10 +22,12 @@ use jb_gfx::resource::ImageHandle;
 use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
+use crate::editor::Editor;
 use crate::input::Input;
 
 mod asset;
 mod components;
+mod editor;
 mod input;
 
 fn main() {
@@ -168,8 +171,7 @@ fn main() {
                     t += delta_time;
                 }
 
-                let raw_input = editor.egui_winit.take_egui_input(&window);
-                let full_output = editor.egui_ctx.run(raw_input, |ctx| {
+                editor.run(&window, |ctx| {
                     egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
                         ui.horizontal(|ui| {
                             if ui.button("Camera").clicked() {
@@ -251,47 +253,7 @@ fn main() {
                             });
                     });
                 });
-                let output = editor.egui_ctx.end_frame();
-                editor.egui_winit.handle_platform_output(&window, &editor.egui_ctx, output.platform_output.clone());
-                let clipped_primitives = editor.egui_ctx.tessellate(full_output.shapes);
-
-                for (id, delta) in full_output.textures_delta.set.iter() {
-                    // TODO : Implement changing texture properties
-                    if editor.stored_textures.contains_key(id) {
-                        continue;
-                    }
-
-                    let data: Vec<u8> = match &delta.image {
-                        egui::ImageData::Color(image) => {
-                            assert_eq!(
-                                image.width() * image.height(),
-                                image.pixels.len(),
-                                "Mismatch between texture size and texel count"
-                            );
-                            image
-                                .pixels
-                                .iter()
-                                .flat_map(|color| color.to_array())
-                                .collect()
-                        }
-                        egui::ImageData::Font(image) => image
-                            .srgba_pixels(None)
-                            .flat_map(|color| color.to_array())
-                            .collect(),
-                    };
-
-                    let image = renderer.load_texture_from_bytes(
-                        &data,
-                        delta.image.width() as u32,
-                        delta.image.height() as u32,
-                        &ImageFormatType::Default,
-                        1,
-                    );
-                    editor.stored_textures.insert(*id, image.unwrap());
-                }
-
-                // Test EGUI
-                paint_egui(&mut renderer, clipped_primitives, &mut editor.stored_textures);
+                editor.paint(&mut renderer);
 
                 // Update render objects & then render
                 update_renderer_object_states(&mut renderer, &lights, &cameras);
@@ -338,63 +300,13 @@ fn main() {
                     renderer.resize(**new_inner_size).unwrap();
                 }
                 event => {
-                    editor.egui_winit.on_event(&editor.egui_ctx, event);
+                    editor.on_event(event);
                 }
             },
             _ => {}
         };
         profiling::finish_frame!()
     });
-}
-
-fn paint_egui(
-    renderer: &mut Renderer,
-    clipped_primitives: Vec<ClippedPrimitive>,
-    stored_textures: &mut HashMap<TextureId, ImageHandle>,
-) {
-    // create triangles to paint
-    //paint(full_output.textures_delta, clipped_primitives);
-    // Paint meshes
-    for prim in clipped_primitives.into_iter() {
-        match prim.primitive {
-            Primitive::Mesh(mesh) => {
-                let ui_verts = mesh
-                    .vertices
-                    .iter()
-                    .map(|vert| UIVertex {
-                        pos: vert.pos.into(),
-                        uv: vert.uv.into(),
-                        colour: vert
-                            .color
-                            .to_srgba_unmultiplied()
-                            .map(|colour| colour as f32 / 255f32),
-                    })
-                    .collect();
-
-                let texture_id = {
-                    if let Some(image) = stored_textures.get(&mesh.texture_id) {
-                        *image
-                    } else {
-                        Default::default()
-                    }
-                };
-
-                let ui_mesh = UIMesh {
-                    indices: mesh.indices,
-                    vertices: ui_verts,
-                    texture_id,
-                    scissor: (
-                        prim.clip_rect.min.to_vec2().into(),
-                        prim.clip_rect.max.to_vec2().into(),
-                    ),
-                };
-                renderer.draw_ui(ui_mesh).unwrap();
-            }
-            Primitive::Callback(_) => {
-                todo!()
-            }
-        }
-    }
 }
 
 #[profiling::function]
@@ -512,20 +424,4 @@ fn from_transforms(
     let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     translation * rotation * scale
-}
-
-struct Editor {
-    egui_ctx: egui::Context,
-    egui_winit: egui_winit::State,
-    stored_textures: HashMap<egui::TextureId, ImageHandle>,
-}
-
-impl Editor {
-    pub fn new<T>(event_loop: &EventLoopWindowTarget<T>) -> Self {
-        Self {
-            egui_ctx: Context::default(),
-            egui_winit: egui_winit::State::new(event_loop),
-            stored_textures: HashMap::default(),
-        }
-    }
 }
