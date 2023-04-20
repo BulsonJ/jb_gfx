@@ -25,7 +25,10 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
     UIVertexData,
 };
-use crate::pipeline::{PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager, VertexInputDescription};
+use crate::pipeline::{
+    PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager,
+    VertexInputDescription,
+};
 use crate::renderpass::{AttachmentHandleType, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
@@ -148,33 +151,6 @@ impl Renderer {
                 .create_pipeline_layout(&pipeline_layout_info, None)
         }?;
 
-        let render_image_format = {
-            device
-                .resource_manager
-                .get_image(
-                    device
-                        .render_targets()
-                        .get_render_target(device.render_image)
-                        .unwrap()
-                        .image(),
-                )
-                .unwrap()
-                .format()
-        };
-        let depth_image_format = {
-            device
-                .resource_manager
-                .get_image(
-                    device
-                        .render_targets()
-                        .get_render_target(device.depth_image)
-                        .unwrap()
-                        .image(),
-                )
-                .unwrap()
-                .format()
-        };
-
         let mut pipeline_manager = PipelineManager::new();
 
         let pso = {
@@ -193,11 +169,11 @@ impl Renderer {
                 fragment_shader: "assets/shaders/default.frag".to_string(),
                 vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
+                    format: device.render_image_format(),
                     blend: false,
                     ..Default::default()
                 }],
-                depth_attachment_format: Some(depth_image_format),
+                depth_attachment_format: Some(device.depth_image_format()),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::BACK,
             };
@@ -221,7 +197,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/shadow.frag".to_string(),
                 vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![],
-                depth_attachment_format: Some(depth_image_format),
+                depth_attachment_format: Some(device.depth_image_format()),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::FRONT,
             };
@@ -282,7 +258,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/ui.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
+                    format: device.render_image_format(),
                     blend: true,
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,

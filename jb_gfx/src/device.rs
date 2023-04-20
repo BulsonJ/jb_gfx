@@ -8,7 +8,8 @@ use ash::extensions::{
     khr::{DynamicRendering, Swapchain},
 };
 use ash::vk::{
-    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType, SwapchainKHR,
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Format, Handle, ImageLayout, ObjectType,
+    SwapchainKHR,
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -61,6 +62,8 @@ pub struct GraphicsDevice {
     pub directional_light_shadow_image: RenderTargetHandle,
     pub shadow_sampler: vk::Sampler,
     pub ui_sampler: vk::Sampler,
+    render_image_format: vk::Format,
+    depth_image_format: vk::Format,
 }
 
 impl GraphicsDevice {
@@ -481,21 +484,23 @@ impl GraphicsDevice {
 
         let mut render_targets = RenderTargets::new((size.width, size.height));
 
+        let render_image_format = vk::Format::R8G8B8A8_SRGB;
+        let depth_image_format = vk::Format::D32_SFLOAT;
         let render_image = render_targets.create_render_target(
             &mut resource_manager,
-            vk::Format::R8G8B8A8_SRGB,
+            render_image_format,
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
         let depth_image = render_targets.create_render_target(
             &mut resource_manager,
-            vk::Format::D32_SFLOAT,
+            depth_image_format,
             RenderTargetSize::Fullscreen,
             RenderImageType::Depth,
         )?;
         let directional_light_shadow_image = render_targets.create_render_target(
             &mut resource_manager,
-            vk::Format::D32_SFLOAT,
+            depth_image_format,
             RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
             RenderImageType::Depth,
         )?;
@@ -543,6 +548,8 @@ impl GraphicsDevice {
             directional_light_shadow_image,
             shadow_sampler,
             ui_sampler,
+            render_image_format,
+            depth_image_format,
         };
 
         for set in device.bindless_descriptor_set.iter() {
@@ -1082,6 +1089,14 @@ impl GraphicsDevice {
 
     pub fn get_descriptor_index(&self, image: &BindlessImage) -> Option<usize> {
         self.bindless_manager.get_bindless_index(image)
+    }
+
+    pub fn render_image_format(&self) -> Format {
+        self.render_image_format
+    }
+
+    pub fn depth_image_format(&self) -> Format {
+        self.depth_image_format
     }
 }
 
