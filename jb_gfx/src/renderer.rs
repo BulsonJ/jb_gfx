@@ -689,7 +689,7 @@ impl Renderer {
         // Push light materials
         for light in self.stored_lights.values() {
             materials.push(self.get_material_ssbo_from_instance(&MaterialInstance {
-                diffuse: Vector3::zero(),
+                diffuse: Vector4::zero(),
                 emissive: light.colour,
                 ..Default::default()
             }));
@@ -707,21 +707,28 @@ impl Renderer {
         let mut draw_data: Vec<DrawData> = Vec::new();
         for (i, model) in self.render_models.keys().enumerate() {
             let model = self.render_models.get(model).unwrap();
-            draw_data.push(DrawData {
-                mesh_handle: model.mesh_handle,
-                transform_index: i,
-                material_index: i,
-            });
+            if let Some(mesh) = self.meshes.get(model.mesh_handle) {
+                draw_data.push(DrawData {
+                    vertex_buffer: mesh.vertex_buffer,
+                    index_buffer: mesh.index_buffer,
+                    index_count: mesh.vertex_count,
+                    transform_index: i,
+                    material_index: i,
+                });
+            }
         }
         if let Some(light_model) = self.light_mesh {
             for i in 0..self.stored_lights.len() {
                 let i = i + self.render_models.len();
-
-                draw_data.push(DrawData {
-                    mesh_handle: light_model,
-                    transform_index: i,
-                    material_index: i,
-                });
+                if let Some(mesh) = self.meshes.get(self.light_mesh.unwrap()) {
+                    draw_data.push(DrawData {
+                        vertex_buffer: mesh.vertex_buffer,
+                        index_buffer: mesh.index_buffer,
+                        index_count: mesh.vertex_count,
+                        transform_index: i,
+                        material_index: i,
+                    });
+                }
             }
         }
 
@@ -1174,64 +1181,62 @@ impl Renderer {
 
     fn draw_objects(&self, draws: &[DrawData]) -> Result<()> {
         for draw in draws.iter() {
-            if let Some(mesh) = self.meshes.get(draw.mesh_handle) {
-                let push_constants = PushConstants {
-                    handles: [
-                        draw.transform_index as i32,
-                        draw.material_index as i32,
-                        self.device
-                            .get_descriptor_index(&BindlessImage::RenderTarget(
-                                self.device.directional_light_shadow_image,
-                            ))
-                            .unwrap() as i32,
-                        0,
-                    ],
-                };
-                unsafe {
-                    self.device.vk_device.cmd_push_constants(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        self.pso_layout,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        0u32,
-                        bytemuck::cast_slice(&[push_constants]),
-                    )
-                };
+            let push_constants = PushConstants {
+                handles: [
+                    draw.transform_index as i32,
+                    draw.material_index as i32,
+                    self.device
+                        .get_descriptor_index(&BindlessImage::RenderTarget(
+                            self.device.directional_light_shadow_image,
+                        ))
+                        .unwrap() as i32,
+                    0,
+                ],
+            };
+            unsafe {
+                self.device.vk_device.cmd_push_constants(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    self.pso_layout,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0u32,
+                    bytemuck::cast_slice(&[push_constants]),
+                )
+            };
 
-                let vertex_buffer = self
-                    .device
-                    .resource_manager
-                    .get_buffer(mesh.vertex_buffer)
-                    .unwrap()
-                    .buffer();
-                let index_buffer = self
-                    .device
-                    .resource_manager
-                    .get_buffer(mesh.index_buffer.unwrap())
-                    .unwrap()
-                    .buffer();
+            let vertex_buffer = self
+                .device
+                .resource_manager
+                .get_buffer(draw.vertex_buffer)
+                .unwrap()
+                .buffer();
+            let index_buffer = self
+                .device
+                .resource_manager
+                .get_buffer(draw.index_buffer.unwrap())
+                .unwrap()
+                .buffer();
 
-                unsafe {
-                    self.device.vk_device.cmd_bind_vertex_buffers(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        0u32,
-                        &[vertex_buffer],
-                        &[0u64],
-                    );
-                    self.device.vk_device.cmd_bind_index_buffer(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        index_buffer,
-                        DeviceSize::zero(),
-                        IndexType::UINT32,
-                    );
-                    self.device.vk_device.cmd_draw_indexed(
-                        self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                        mesh.vertex_count,
-                        1u32,
-                        0u32,
-                        0i32,
-                        0u32,
-                    );
-                }
+            unsafe {
+                self.device.vk_device.cmd_bind_vertex_buffers(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    0u32,
+                    &[vertex_buffer],
+                    &[0u64],
+                );
+                self.device.vk_device.cmd_bind_index_buffer(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    index_buffer,
+                    DeviceSize::zero(),
+                    IndexType::UINT32,
+                );
+                self.device.vk_device.cmd_draw_indexed(
+                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    draw.index_count,
+                    1u32,
+                    0u32,
+                    0i32,
+                    0u32,
+                );
             }
         }
         Ok(())
@@ -1486,7 +1491,7 @@ impl Renderer {
         };
 
         MaterialParamSSBO {
-            diffuse: instance.diffuse.extend(0f32).into(),
+            diffuse: instance.diffuse.into(),
             emissive: instance.emissive.extend(0f32).into(),
             textures: [
                 diffuse_tex as i32,
@@ -1670,7 +1675,7 @@ fn from_transforms(
 
 #[derive(Clone)]
 pub struct MaterialInstance {
-    pub diffuse: Vector3<f32>,
+    pub diffuse: Vector4<f32>,
     pub emissive: Vector3<f32>,
 
     pub diffuse_texture: Option<ImageHandle>,
@@ -1683,7 +1688,7 @@ pub struct MaterialInstance {
 impl Default for MaterialInstance {
     fn default() -> Self {
         Self {
-            diffuse: Vector3::from_value(1.0f32),
+            diffuse: Vector4::from_value(1.0f32),
             emissive: Vector3::from_value(0.0f32),
             diffuse_texture: None,
             normal_texture: None,
@@ -1701,7 +1706,9 @@ struct RenderModel {
 }
 
 struct DrawData {
-    mesh_handle: MeshHandle,
+    vertex_buffer: BufferHandle,
+    index_buffer: Option<BufferHandle>,
+    index_count: u32,
     transform_index: usize,
     material_index: usize,
 }

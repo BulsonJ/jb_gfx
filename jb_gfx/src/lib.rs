@@ -3,7 +3,6 @@ pub use colour::*;
 pub use light::*;
 pub use mesh::*;
 
-pub mod asset;
 mod barrier;
 mod bindless;
 pub mod camera;

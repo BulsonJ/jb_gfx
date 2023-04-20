@@ -14,6 +14,12 @@ pub struct MeshData {
     pub faces: Vec<Face>,
 }
 
+impl MeshData {
+    pub fn generate_tangents(&mut self) -> bool {
+        mikktspace::generate_tangents(self)
+    }
+}
+
 pub type Face = [u32; 3];
 
 fn vertex(mesh: &MeshData, face: usize, vert: usize) -> &Vertex {

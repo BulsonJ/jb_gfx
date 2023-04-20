@@ -2,12 +2,11 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use gltf::image::Source;
+use jb_gfx::device::ImageFormatType;
+use jb_gfx::{MeshData, Vertex};
+use jb_gfx::renderer::{MaterialInstance, MeshHandle, Renderer};
+use jb_gfx::resource::ImageHandle;
 use log::info;
-
-use crate::device::ImageFormatType;
-use crate::renderer::{MaterialInstance, MeshHandle, Renderer};
-use crate::resource::ImageHandle;
-use crate::{MeshData, Vertex};
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -250,14 +249,16 @@ impl AssetManager {
                     faces,
                 };
                 if tangents.is_empty() {
-                    let ret = mikktspace::generate_tangents(&mut mesh);
+                    let ret = mesh.generate_tangents();
                 }
 
                 let mesh_handle = renderer.load_mesh(&mesh)?;
                 let model = Model {
                     mesh: mesh_handle,
                     material_instance: MaterialInstance {
+                        diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
                         diffuse_texture: diffuse_tex,
+                        emissive: material.emissive_factor().into(),
                         emissive_texture: emissive_tex,
                         normal_texture: normal_tex,
                         metallic_roughness_texture: metallic_roughness_tex,
