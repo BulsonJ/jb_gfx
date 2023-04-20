@@ -291,6 +291,20 @@ fn setup_scene(
                 camera,
             }
         },
+        {
+            let camera = Camera {
+                position: (-75.0, 200.0, 20.0).into(),
+                direction: (1.0, -0.75, -0.5).into(),
+                aspect: screen_size.0 as f32 / screen_size.1 as f32,
+                fovy: 90.0,
+                znear: 0.1,
+                zfar: 4000.0,
+            };
+            CameraComponent {
+                handle: renderer.create_camera(&camera),
+                camera,
+            }
+        },
     ];
     renderer.active_camera = Some(cameras.get(0).unwrap().handle);
 

@@ -85,13 +85,8 @@ impl Editor {
     }
 
     pub fn camera_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
-        if ui.button("Camera One").clicked() {
-            if let Some(camera) = dependencies.cameras.get(0) {
-                dependencies.renderer.active_camera = Some(camera.handle);
-            }
-        }
-        if ui.button("Camera Two").clicked() {
-            if let Some(camera) = dependencies.cameras.get(1) {
+        for (i, camera) in dependencies.cameras.iter().enumerate() {
+            if ui.button(String::from("Camera ") + &i.to_string()).clicked() {
                 dependencies.renderer.active_camera = Some(camera.handle);
             }
         }
