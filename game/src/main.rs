@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::RangeInclusive;
 use std::time::Instant;
 
 use cgmath::{
@@ -215,13 +216,25 @@ fn main() {
                                 ui.horizontal(|ui| {
                                     ui.label("Sun");
                                     ui.color_edit_button_rgb(renderer.sun.colour.as_mut());
-                                    ui.drag_angle(&mut direction.x);
-                                    ui.drag_angle(&mut direction.y);
-                                    ui.drag_angle(&mut direction.z);
+                                    ui.add(
+                                        egui::DragValue::new(&mut direction.x)
+                                            .clamp_range(RangeInclusive::new(-1, 1))
+                                            .speed(0.005),
+                                    );
+                                    ui.add(
+                                        egui::DragValue::new(&mut direction.y)
+                                            .clamp_range(RangeInclusive::new(-1, 1))
+                                            .speed(0.005),
+                                    );
+                                    ui.add(
+                                        egui::DragValue::new(&mut direction.z)
+                                            .clamp_range(RangeInclusive::new(-1, 1))
+                                            .speed(0.005),
+                                    );
                                 });
                                 renderer.sun.direction = direction;
 
-                                let mut colour : Vector3<f32> = renderer.clear_colour.into();
+                                let mut colour: Vector3<f32> = renderer.clear_colour.into();
                                 ui.horizontal(|ui| {
                                     ui.label("Sky");
                                     ui.color_edit_button_rgb(colour.as_mut());
