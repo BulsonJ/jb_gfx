@@ -98,42 +98,52 @@ impl Editor {
     }
 
     pub fn light_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
-        ui.horizontal(|ui| {
+        ui.vertical(|ui| {
             ui.label("Point Lights");
-            ui.color_edit_button_rgb(dependencies.lights[0].light.colour.as_mut());
-            ui.color_edit_button_rgb(dependencies.lights[1].light.colour.as_mut());
-            ui.color_edit_button_rgb(dependencies.lights[2].light.colour.as_mut());
-            ui.color_edit_button_rgb(dependencies.lights[3].light.colour.as_mut());
+            for (i, light) in dependencies.lights.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(String::from("Light ") + &i.to_string() + ":");
+                    ui.color_edit_button_rgb(light.light.colour.as_mut());
+                });
+            }
         });
+        ui.separator();
 
-        let mut direction = dependencies.renderer.sun.direction;
+        ui.label("Sky");
         ui.horizontal(|ui| {
-            ui.label("Sun");
+            let mut colour: Vector3<f32> = dependencies.renderer.clear_colour.into();
+            ui.horizontal(|ui| {
+                ui.label("Colour");
+                ui.color_edit_button_rgb(colour.as_mut());
+            });
+            dependencies.renderer.clear_colour = colour.into();
+        });
+        ui.separator();
+
+        ui.label("Sun");
+        ui.horizontal(|ui| {
+            ui.label("Colour");
             ui.color_edit_button_rgb(dependencies.renderer.sun.colour.as_mut());
-            ui.add(
-                egui::DragValue::new(&mut direction.x)
-                    .clamp_range(RangeInclusive::new(-1, 1))
-                    .speed(0.005),
-            );
-            ui.add(
-                egui::DragValue::new(&mut direction.y)
-                    .clamp_range(RangeInclusive::new(-1, 1))
-                    .speed(0.005),
-            );
-            ui.add(
-                egui::DragValue::new(&mut direction.z)
-                    .clamp_range(RangeInclusive::new(-1, 1))
-                    .speed(0.005),
-            );
         });
-        dependencies.renderer.sun.direction = direction;
-
-        let mut colour: Vector3<f32> = dependencies.renderer.clear_colour.into();
         ui.horizontal(|ui| {
-            ui.label("Sky");
-            ui.color_edit_button_rgb(colour.as_mut());
+            ui.label("Direction");
+            ui.add(
+                egui::DragValue::new(&mut dependencies.renderer.sun.direction.x)
+                    .clamp_range(RangeInclusive::new(-1, 1))
+                    .speed(0.005),
+            );
+            ui.add(
+                egui::DragValue::new(&mut dependencies.renderer.sun.direction.y)
+                    .clamp_range(RangeInclusive::new(-1, 1))
+                    .speed(0.005),
+            );
+            ui.add(
+                egui::DragValue::new(&mut dependencies.renderer.sun.direction.z)
+                    .clamp_range(RangeInclusive::new(-1, 1))
+                    .speed(0.005),
+            );
         });
-        dependencies.renderer.clear_colour = colour.into();
+        ui.separator();
     }
 
     fn engine_utils_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {

@@ -50,7 +50,7 @@ impl AssetManager {
             match location {
                 Source::View { .. } => {}
                 Source::Uri {
-                    uri : _uri,
+                    uri: _uri,
                     mime_type: _mime_type,
                 } => {}
             };

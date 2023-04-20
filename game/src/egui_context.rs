@@ -31,11 +31,8 @@ impl EguiContext {
         let raw_input = self.egui_winit.take_egui_input(window);
         self.last_output = Some(self.egui_ctx.run(raw_input, run_ui));
         let output = self.egui_ctx.end_frame();
-        self.egui_winit.handle_platform_output(
-            window,
-            &self.egui_ctx,
-            output.platform_output,
-        );
+        self.egui_winit
+            .handle_platform_output(window, &self.egui_ctx, output.platform_output);
     }
 
     pub fn paint(&mut self, renderer: &mut Renderer) {
