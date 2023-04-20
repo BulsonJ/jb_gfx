@@ -187,6 +187,9 @@ fn main() {
                             ui.drag_angle(&mut direction.y);
                             ui.drag_angle(&mut direction.z);
                             renderer.sun.direction = direction;
+                            if ui.button("Reload Shaders").clicked() {
+                                renderer.reload_shaders().unwrap();
+                            }
                         });
                     });
                 });
