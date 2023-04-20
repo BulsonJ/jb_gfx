@@ -8,8 +8,8 @@ use ash::vk::{
 };
 use bytemuck::{offset_of, Zeroable};
 use cgmath::{
-    Array, Deg, EuclideanSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector2,
-    Vector3, Vector4, Zero,
+    Array, Deg, EuclideanSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3,
+    Vector4, Zero,
 };
 use image::EncodableLayout;
 use log::{error, info, trace, warn};

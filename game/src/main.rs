@@ -1,26 +1,16 @@
-use std::collections::HashMap;
-use std::ops::RangeInclusive;
 use std::time::Instant;
 
-use cgmath::{
-    Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector2, Vector3, Zero,
-};
-use egui::epaint::Primitive;
-use egui::panel::TopBottomSide;
-use egui::{ClippedPrimitive, Context, FullOutput, TextureId};
-use egui_winit::EventResponse;
+use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget};
+use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
-use crate::asset::AssetManager;
-use jb_gfx::device::ImageFormatType;
-use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
-use jb_gfx::resource::ImageHandle;
+use jb_gfx::renderer::Renderer;
 use jb_gfx::{Camera, Colour, Light};
 
+use crate::asset::AssetManager;
 use crate::components::{CameraComponent, LightComponent};
 use crate::editor::{Editor, EditorDependencies};
 use crate::egui_context::EguiContext;
@@ -143,20 +133,6 @@ fn main() {
                 let mut frame_time = frame_start_time.elapsed().as_secs_f32();
                 frame_start_time = Instant::now();
 
-                if input.is_just_pressed(VirtualKeyCode::F5) {
-                    renderer.reload_shaders().unwrap();
-                }
-                if input.is_just_pressed(VirtualKeyCode::Key1) {
-                    if let Some(camera) = cameras.get(0) {
-                        renderer.active_camera = Some(camera.handle);
-                    }
-                }
-                if input.is_just_pressed(VirtualKeyCode::Key2) {
-                    if let Some(camera) = cameras.get(1) {
-                        renderer.active_camera = Some(camera.handle);
-                    }
-                }
-
                 while frame_time > 0.0f32 {
                     let delta_time = frame_time.min(target_dt);
 
@@ -174,6 +150,7 @@ fn main() {
                     editor.run(
                         ctx,
                         &mut EditorDependencies {
+                            input: &input,
                             renderer: &mut renderer,
                             cameras: &cameras,
                             lights: &mut lights,

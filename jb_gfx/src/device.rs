@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{
     ext::DebugUtils,

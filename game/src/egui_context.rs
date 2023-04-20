@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+
 use egui::epaint::Primitive;
 use egui::{Context, FullOutput};
 use egui_winit::EventResponse;
+use winit::event::WindowEvent;
+use winit::event_loop::EventLoopWindowTarget;
+
 use jb_gfx::device::ImageFormatType;
 use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
 use jb_gfx::resource::ImageHandle;
-use std::collections::HashMap;
-use winit::event::WindowEvent;
-use winit::event_loop::EventLoopWindowTarget;
 
 pub struct EguiContext {
     pub egui_ctx: Context,

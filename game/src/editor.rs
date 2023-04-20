@@ -1,9 +1,14 @@
-use crate::components::{CameraComponent, LightComponent};
+use std::ops::RangeInclusive;
+
 use cgmath::Vector3;
 use egui::panel::TopBottomSide;
 use egui::{Context, Ui};
+use winit::event::VirtualKeyCode;
+
 use jb_gfx::renderer::Renderer;
-use std::ops::RangeInclusive;
+
+use crate::components::{CameraComponent, LightComponent};
+use crate::input::Input;
 
 pub struct Editor {
     camera_controls_show: bool,
@@ -20,7 +25,25 @@ impl Editor {
         }
     }
 
+    pub fn handle_input(dependencies: &mut EditorDependencies) {
+        if dependencies.input.is_just_pressed(VirtualKeyCode::F5) {
+            dependencies.renderer.reload_shaders().unwrap();
+        }
+        if dependencies.input.is_just_pressed(VirtualKeyCode::Key1) {
+            if let Some(camera) = dependencies.cameras.get(0) {
+                dependencies.renderer.active_camera = Some(camera.handle);
+            }
+        }
+        if dependencies.input.is_just_pressed(VirtualKeyCode::Key2) {
+            if let Some(camera) = dependencies.cameras.get(1) {
+                dependencies.renderer.active_camera = Some(camera.handle);
+            }
+        }
+    }
+
     pub fn run(&mut self, ctx: &Context, dependencies: &mut EditorDependencies) {
+        Editor::handle_input(dependencies);
+
         egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
             ui.horizontal(|ui| {
                 self.top_bar(ui);
@@ -121,6 +144,7 @@ impl Editor {
 }
 
 pub struct EditorDependencies<'a> {
+    pub input: &'a Input,
     pub renderer: &'a mut Renderer,
     pub cameras: &'a [CameraComponent],
     pub lights: &'a mut [LightComponent],

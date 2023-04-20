@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use gltf::image::Source;
+use log::info;
+
 use jb_gfx::device::ImageFormatType;
 use jb_gfx::renderer::{MaterialInstance, MeshHandle, Renderer};
 use jb_gfx::resource::ImageHandle;
 use jb_gfx::{MeshData, Vertex};
-use log::info;
 
 #[derive(Default)]
 pub struct AssetManager {
