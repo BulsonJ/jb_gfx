@@ -22,11 +22,13 @@ use jb_gfx::resource::ImageHandle;
 use jb_gfx::{Camera, Colour, Light};
 
 use crate::components::{CameraComponent, LightComponent};
+use crate::editor::{Editor, EditorDependencies};
 use crate::egui_context::EguiContext;
 use crate::input::Input;
 
 mod asset;
 mod components;
+mod editor;
 mod egui_context;
 mod input;
 
@@ -132,10 +134,7 @@ fn main() {
     let target_dt = 1.0 / 60.0;
 
     let mut egui = EguiContext::new(&event_loop);
-
-    let mut camera_controls_show = false;
-    let mut light_controls_show = false;
-    let mut engine_utils_show = false;
+    let mut editor = Editor::new();
 
     event_loop.run(move |event, _, control_flow| {
         profiling::scope!("Game Event Loop");
@@ -172,86 +171,14 @@ fn main() {
                 }
 
                 egui.run(&window, |ctx| {
-                    egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
-                        ui.horizontal(|ui| {
-                            if ui.button("Camera").clicked() {
-                                camera_controls_show = !camera_controls_show;
-                            }
-                            if ui.button("Lights").clicked() {
-                                light_controls_show = !light_controls_show;
-                            }
-                            if ui.button("Utils").clicked() {
-                                engine_utils_show = !engine_utils_show;
-                            }
-                        });
-                        egui::Window::new("Camera Controls")
-                            .vscroll(false)
-                            .resizable(false)
-                            .open(&mut camera_controls_show)
-                            .show(ctx, |ui| {
-                                if ui.button("Camera One").clicked() {
-                                    if let Some(camera) = cameras.get(0) {
-                                        renderer.active_camera = Some(camera.handle);
-                                    }
-                                }
-                                if ui.button("Camera Two").clicked() {
-                                    if let Some(camera) = cameras.get(1) {
-                                        renderer.active_camera = Some(camera.handle);
-                                    }
-                                }
-                            });
-                        egui::Window::new("Light Controls")
-                            .vscroll(false)
-                            .resizable(false)
-                            .open(&mut light_controls_show)
-                            .show(ctx, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label("Point Lights");
-                                    ui.color_edit_button_rgb(lights[0].light.colour.as_mut());
-                                    ui.color_edit_button_rgb(lights[1].light.colour.as_mut());
-                                    ui.color_edit_button_rgb(lights[2].light.colour.as_mut());
-                                    ui.color_edit_button_rgb(lights[3].light.colour.as_mut());
-                                });
-
-                                let mut direction = renderer.sun.direction;
-                                ui.horizontal(|ui| {
-                                    ui.label("Sun");
-                                    ui.color_edit_button_rgb(renderer.sun.colour.as_mut());
-                                    ui.add(
-                                        egui::DragValue::new(&mut direction.x)
-                                            .clamp_range(RangeInclusive::new(-1, 1))
-                                            .speed(0.005),
-                                    );
-                                    ui.add(
-                                        egui::DragValue::new(&mut direction.y)
-                                            .clamp_range(RangeInclusive::new(-1, 1))
-                                            .speed(0.005),
-                                    );
-                                    ui.add(
-                                        egui::DragValue::new(&mut direction.z)
-                                            .clamp_range(RangeInclusive::new(-1, 1))
-                                            .speed(0.005),
-                                    );
-                                });
-                                renderer.sun.direction = direction;
-
-                                let mut colour: Vector3<f32> = renderer.clear_colour.into();
-                                ui.horizontal(|ui| {
-                                    ui.label("Sky");
-                                    ui.color_edit_button_rgb(colour.as_mut());
-                                });
-                                renderer.clear_colour = colour.into();
-                            });
-                        egui::Window::new("Engine Utils")
-                            .vscroll(false)
-                            .resizable(false)
-                            .open(&mut engine_utils_show)
-                            .show(ctx, |ui| {
-                                if ui.button("Reload Shaders").clicked() {
-                                    renderer.reload_shaders().unwrap();
-                                }
-                            });
-                    });
+                    editor.run(
+                        ctx,
+                        EditorDependencies {
+                            renderer: &mut renderer,
+                            cameras: &cameras,
+                            lights: &mut lights,
+                        },
+                    )
                 });
                 egui.paint(&mut renderer);
 
