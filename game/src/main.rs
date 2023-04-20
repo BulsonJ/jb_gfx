@@ -112,7 +112,7 @@ fn main() {
     }
     renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
-    let (mut lights, cameras) =
+    let (mut lights, mut cameras) =
         setup_scene(&mut renderer, (screen_width as u32, screen_height as u32));
 
     let mut initial_resize = true;
@@ -150,7 +150,7 @@ fn main() {
                         &mut EditorDependencies {
                             input: &input,
                             renderer: &mut renderer,
-                            cameras: &cameras,
+                            cameras: &mut cameras,
                             lights: &mut lights,
                         },
                     )

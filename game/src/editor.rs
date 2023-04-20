@@ -5,7 +5,7 @@ use egui::panel::TopBottomSide;
 use egui::{Context, Ui};
 use winit::event::VirtualKeyCode;
 
-use jb_gfx::renderer::Renderer;
+use jb_gfx::renderer::{CameraHandle, Renderer};
 
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
@@ -14,6 +14,7 @@ pub struct Editor {
     camera_controls_show: bool,
     light_controls_show: bool,
     engine_utils_show: bool,
+    camera_panel: CameraPanel,
 }
 
 impl Editor {
@@ -22,6 +23,7 @@ impl Editor {
             camera_controls_show: false,
             light_controls_show: false,
             engine_utils_show: false,
+            camera_panel: CameraPanel::default(),
         }
     }
 
@@ -48,12 +50,13 @@ impl Editor {
             ui.horizontal(|ui| {
                 self.top_bar(ui);
             });
+
             egui::Window::new("Camera Controls")
                 .vscroll(false)
                 .resizable(false)
                 .open(&mut self.camera_controls_show)
                 .show(ctx, |ui| {
-                    Editor::camera_panel(ui, dependencies);
+                    self.camera_panel.draw(ui, dependencies);
                 });
             egui::Window::new("Light Controls")
                 .vscroll(false)
@@ -81,14 +84,6 @@ impl Editor {
         }
         if ui.button("Utils").clicked() {
             self.engine_utils_show = !self.engine_utils_show;
-        }
-    }
-
-    pub fn camera_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
-        for (i, camera) in dependencies.cameras.iter().enumerate() {
-            if ui.button(String::from("Camera ") + &i.to_string()).clicked() {
-                dependencies.renderer.active_camera = Some(camera.handle);
-            }
         }
     }
 
@@ -151,6 +146,64 @@ impl Editor {
 pub struct EditorDependencies<'a> {
     pub input: &'a Input,
     pub renderer: &'a mut Renderer,
-    pub cameras: &'a [CameraComponent],
+    pub cameras: &'a mut [CameraComponent],
     pub lights: &'a mut [LightComponent],
+}
+
+#[derive(Default)]
+struct CameraPanel {
+    visible: bool,
+    selected_camera_index: usize,
+}
+
+impl CameraPanel {
+    fn draw(&mut self, ui: &mut Ui, dependencies: &mut EditorDependencies) {
+        ui.label("Camera Selection");
+        egui::ComboBox::from_label("Take your pick")
+            .selected_text(format!("{:?}", self.selected_camera_index))
+            .show_ui(ui, |ui| {
+                ui.style_mut().wrap = Some(false);
+                ui.set_min_width(60.0);
+                for i in 0..dependencies.cameras.len() {
+                    ui.selectable_value(&mut self.selected_camera_index, i, i.to_string());
+                }
+            });
+
+        ui.separator();
+        ui.label("Controls");
+        if let Some(camera) = dependencies.cameras.get_mut(self.selected_camera_index) {
+            dependencies.renderer.active_camera = Some(camera.handle);
+            ui.horizontal(|ui| {
+                ui.label("Position: ");
+                ui.add(egui::DragValue::new(&mut camera.camera.position.x).speed(0.1));
+                ui.add(egui::DragValue::new(&mut camera.camera.position.y).speed(0.1));
+                ui.add(egui::DragValue::new(&mut camera.camera.position.z).speed(0.1));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Direction: ");
+                ui.add(
+                    egui::DragValue::new(&mut camera.camera.direction.x)
+                        .speed(0.01)
+                        .clamp_range(RangeInclusive::new(-1, 1)),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut camera.camera.direction.y)
+                        .speed(0.01)
+                        .clamp_range(RangeInclusive::new(-1, 1)),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut camera.camera.direction.z)
+                        .speed(0.01)
+                        .clamp_range(RangeInclusive::new(-1, 1)),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("FOV: ");
+                ui.add(
+                    egui::DragValue::new(&mut camera.camera.fovy)
+                        .clamp_range(RangeInclusive::new(45, 120)),
+                );
+            });
+        }
+    }
 }
