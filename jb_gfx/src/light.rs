@@ -1,8 +1,6 @@
 use std::ops::Neg;
 
-use cgmath::{
-    abs_diff_eq, AbsDiffEq, EuclideanSpace, InnerSpace, Matrix4, Point3, RelativeEq, Vector3,
-};
+use cgmath::{abs_diff_eq, EuclideanSpace, InnerSpace, Matrix4, Point3, Vector3};
 
 #[derive(Copy, Clone)]
 pub struct Light {

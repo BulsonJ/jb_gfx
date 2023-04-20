@@ -50,7 +50,7 @@ impl AssetManager {
             match location {
                 Source::View { .. } => {}
                 Source::Uri {
-                    uri,
+                    uri : _uri,
                     mime_type: _mime_type,
                 } => {}
             };
@@ -161,7 +161,6 @@ impl AssetManager {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
-                                let format_type = ImageFormatType::Default;
                                 Some(self.load_texture(
                                     renderer,
                                     &image_asset,
@@ -179,7 +178,6 @@ impl AssetManager {
                             Source::View { .. } => None,
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
-                                let format_type = ImageFormatType::Default;
                                 Some(self.load_texture(
                                     renderer,
                                     &image_asset,
@@ -250,7 +248,7 @@ impl AssetManager {
                     faces,
                 };
                 if tangents.is_empty() {
-                    let ret = mesh.generate_tangents();
+                    let _ret = mesh.generate_tangents();
                 }
 
                 let mesh_handle = renderer.load_mesh(&mesh)?;

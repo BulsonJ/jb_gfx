@@ -511,7 +511,7 @@ impl GraphicsDevice {
             &BindlessImage::RenderTarget(directional_light_shadow_image),
         );
 
-        let mut device = Self {
+        let device = Self {
             instance,
             size,
             surface,

@@ -85,7 +85,7 @@ impl RenderPassBuilder {
     ///
     /// ```
     pub fn start<F: Fn(&mut RenderPass) -> Result<()>>(
-        mut self,
+        self,
         device: &GraphicsDevice,
         command_buffer: &vk::CommandBuffer,
         render_pass: F,
@@ -150,7 +150,7 @@ impl RenderPassBuilder {
         {
             let mut pass = RenderPass {
                 device: &device.vk_device,
-                command_buffer: &command_buffer,
+                command_buffer,
             };
 
             render_pass(&mut pass)?;

@@ -37,15 +37,15 @@ impl mikktspace::Geometry for MeshData {
     }
 
     fn position(&self, face: usize, vert: usize) -> [f32; 3] {
-        vertex(self, face, vert).position.into()
+        vertex(self, face, vert).position
     }
 
     fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
-        vertex(self, face, vert).normal.into()
+        vertex(self, face, vert).normal
     }
 
     fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
-        vertex(self, face, vert).tex_coords.into()
+        vertex(self, face, vert).tex_coords
     }
 
     fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {

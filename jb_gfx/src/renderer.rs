@@ -717,18 +717,16 @@ impl Renderer {
                 });
             }
         }
-        if let Some(light_model) = self.light_mesh {
-            for i in 0..self.stored_lights.len() {
-                let i = i + self.render_models.len();
-                if let Some(mesh) = self.meshes.get(self.light_mesh.unwrap()) {
-                    draw_data.push(DrawData {
-                        vertex_buffer: mesh.vertex_buffer,
-                        index_buffer: mesh.index_buffer,
-                        index_count: mesh.vertex_count,
-                        transform_index: i,
-                        material_index: i,
-                    });
-                }
+        for i in 0..self.stored_lights.len() {
+            let i = i + self.render_models.len();
+            if let Some(mesh) = self.meshes.get(self.light_mesh.unwrap()) {
+                draw_data.push(DrawData {
+                    vertex_buffer: mesh.vertex_buffer,
+                    index_buffer: mesh.index_buffer,
+                    index_count: mesh.vertex_count,
+                    transform_index: i,
+                    material_index: i,
+                });
             }
         }
 
@@ -783,7 +781,7 @@ impl Renderer {
             .start(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                |render_pass| {
+                |_render_pass| {
                     profiling::scope!("Shadow Pass");
 
                     let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
@@ -856,7 +854,7 @@ impl Renderer {
             .start(
                 &self.device,
                 &self.device.graphics_command_buffer[self.device.buffered_resource_number()],
-                |render_pass| {
+                |_render_pass| {
                     profiling::scope!("Forward Pass");
                     let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 

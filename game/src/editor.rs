@@ -44,7 +44,7 @@ impl Editor {
     pub fn run(&mut self, ctx: &Context, dependencies: &mut EditorDependencies) {
         Editor::handle_input(dependencies);
 
-        egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(&ctx, |ui| {
+        egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 self.top_bar(ui);
             });

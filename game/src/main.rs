@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Zero};
+use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
 use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
@@ -57,8 +57,6 @@ fn main() {
             .load_gltf(&mut renderer, "assets/models/Cube/glTF/Cube.gltf")
             .unwrap();
         for model in models.iter() {
-            let render_model =
-                renderer.add_render_model(model.mesh, model.material_instance.clone());
             renderer.light_mesh = Some(model.mesh);
         }
     }
@@ -237,7 +235,7 @@ fn setup_scene(
         ),
     ];
 
-    let mut light_components = vec![
+    let light_components = vec![
         LightComponent {
             handle: renderer
                 .create_light(initial_lights.get(0).unwrap())
