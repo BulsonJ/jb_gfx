@@ -4,6 +4,31 @@ use ash::vk;
 use crate::device::GraphicsDevice;
 use crate::targets::RenderTargetHandle;
 
+/// A builder for a [RenderPass]
+///
+/// This is used to setup the attachments for a [RenderPass].
+///
+/// # Usage
+///
+/// Add either Colour [AttachmentInfo]'s or set the Depth [AttachmentInfo].
+/// Then, call .start(GraphicsDevice, CommandBuffer, RenderPassClosure).
+/// The [RenderPass] can be accessed inside the closure.
+///
+/// ```
+/// use ash::vk::{ClearColorValue, ClearValue};
+///
+/// RenderPassBuilder::new((1920.0,1080.0))
+/// .add_colour_attachment(AttachmentInfo {
+///     target: AttachmentHandle::RenderTarget(device.render_image),
+///            clear_value: ClearValue {
+///                color: ClearColorValue {
+///                    float32: clear_colour.extend(0.0).into(),
+///                },
+///            },
+///            ..Default::default()
+///     });
+///
+/// ```
 #[derive(Default)]
 pub struct RenderPassBuilder {
     colour_attachments: Vec<AttachmentInfo>,
@@ -51,7 +76,8 @@ impl RenderPassBuilder {
         self
     }
 
-    /// Consumes the RenderPassBuilder, starting the 'RenderPass' which will live for the duration of the closure.
+    /// Consumes the RenderPassBuilder, constructing the 'RenderPass'
+    /// which can be accessed during the closure.
     ///
     /// # Examples
     ///
