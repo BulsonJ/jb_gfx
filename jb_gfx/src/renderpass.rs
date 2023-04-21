@@ -2,6 +2,7 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::device::GraphicsDevice;
+use crate::resource::ImageHandle;
 use crate::targets::RenderTargetHandle;
 
 /// A builder for a [RenderPass]
@@ -237,14 +238,14 @@ pub struct AttachmentInfo {
 /// A handle to either a [RenderTargetHandle] or a SwapchainImage(index)
 #[derive(Copy, Clone)]
 pub enum AttachmentHandle {
-    RenderTarget(RenderTargetHandle),
+    Image(ImageHandle),
     SwapchainImage(),
 }
 
 impl Default for AttachmentInfo {
     fn default() -> Self {
         Self {
-            target: AttachmentHandle::RenderTarget(RenderTargetHandle::default()),
+            target: AttachmentHandle::Image(ImageHandle::default()),
             image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
             load_op: vk::AttachmentLoadOp::CLEAR,
             store_op: vk::AttachmentStoreOp::STORE,
@@ -259,15 +260,9 @@ fn convert_attach_info(
 ) -> vk::RenderingAttachmentInfo {
     let image_view = {
         match attachment.target {
-            AttachmentHandle::RenderTarget(render_target) => device
+            AttachmentHandle::Image(image) => device
                 .resource_manager
-                .get_image(
-                    device
-                        .render_targets()
-                        .get_render_target(render_target)
-                        .unwrap()
-                        .image(),
-                )
+                .get_image(image)
                 .unwrap()
                 .image_view(),
             AttachmentHandle::SwapchainImage() => device.get_present_image_view(),

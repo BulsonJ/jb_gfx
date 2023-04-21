@@ -43,7 +43,6 @@ pub struct GraphicsDevice {
     frame_number: usize,
     images_to_upload: RefCell<Vec<ImageToUpload>>,
     buffers_to_delete: RefCell<Vec<(BufferHandle, usize)>>,
-    render_targets: RenderTargets,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     pub bindless_manager: RefCell<BindlessManager>,
@@ -493,8 +492,6 @@ impl GraphicsDevice {
             .borrow_mut()
             .setup_samplers(&samplers, &device)?;
 
-        let mut render_targets = RenderTargets::new((size.width, size.height));
-
         let device = Self {
             instance,
             size,
@@ -517,7 +514,6 @@ impl GraphicsDevice {
             frame_number: 0usize,
             images_to_upload: RefCell::new(Vec::default()),
             buffers_to_delete: RefCell::new(Vec::default()),
-            render_targets,
             bindless_descriptor_set_layout,
             bindless_descriptor_set,
             bindless_manager,
@@ -921,11 +917,6 @@ impl GraphicsDevice {
             })
             .collect();
 
-        self.render_targets.recreate_render_targets(
-            &mut self.resource_manager,
-            (self.size.width, self.size.height),
-        )?;
-
         info!("Recreating swapchain.");
         Ok(())
     }
@@ -1065,14 +1056,6 @@ impl GraphicsDevice {
                 .set_debug_utils_object_name(self.vk_device.handle(), &pipeline_debug_info)?;
         }
         Ok(())
-    }
-
-    pub fn render_targets(&self) -> &RenderTargets {
-        &self.render_targets
-    }
-
-    pub fn render_targets_mut(&mut self) -> &mut RenderTargets {
-        &mut self.render_targets
     }
 
     pub fn bindless_descriptor_set_layout(&self) -> &vk::DescriptorSetLayout {
