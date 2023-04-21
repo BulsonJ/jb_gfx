@@ -49,7 +49,7 @@ impl PipelineManager {
 
     pub fn create_pipeline(
         &mut self,
-        device: &mut GraphicsDevice,
+        device: &GraphicsDevice,
         build_info: &PipelineCreateInfo,
     ) -> Result<PipelineHandle> {
         let pso = PipelineManager::create_pipeline_internal(
@@ -65,7 +65,7 @@ impl PipelineManager {
 
     fn create_pipeline_internal(
         shader_compiler: &mut shaderc::Compiler,
-        device: &mut GraphicsDevice,
+        device: &GraphicsDevice,
         build_info: &PipelineCreateInfo,
     ) -> Result<vk::Pipeline> {
         let vertex_file = fs::read_to_string(&build_info.vertex_shader)?;
