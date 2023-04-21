@@ -486,8 +486,9 @@ impl GraphicsDevice {
             [first, second]
         };
 
+        let resource_manager =  Arc::new(resource_manager);
         let samplers = vec![default_sampler, shadow_sampler, ui_sampler];
-        let mut bindless_manager = RefCell::new(BindlessManager::new(bindless_descriptor_set));
+        let mut bindless_manager = RefCell::new(BindlessManager::new(device.clone(), resource_manager.clone(), bindless_descriptor_set));
         bindless_manager
             .borrow_mut()
             .setup_samplers(&samplers, &device)?;
@@ -500,7 +501,7 @@ impl GraphicsDevice {
             present_index: 0,
             vk_device: device,
             pdevice,
-            resource_manager: Arc::new(resource_manager),
+            resource_manager,
             debug_utils_loader,
             debug_call_back,
             graphics_queue,
@@ -986,8 +987,6 @@ impl GraphicsDevice {
         });
 
         self.bindless_manager.borrow_mut().add_image_to_bindless(
-            &self.vk_device,
-            &self.resource_manager,
             &image,
         );
 

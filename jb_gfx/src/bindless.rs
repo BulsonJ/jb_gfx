@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk;
@@ -8,18 +9,26 @@ use crate::device::FRAMES_IN_FLIGHT;
 use crate::resource::{ImageHandle, ResourceManager};
 use crate::targets::{RenderTargetHandle, RenderTargets};
 
-#[derive(Default)]
 pub struct BindlessManager {
+    device: Arc<ash::Device>,
+    resource_manager: Arc<ResourceManager>,
     bindless_textures: Vec<ImageHandle>,
     bindless_indexes: HashMap<ImageHandle, usize>,
     pub descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
 }
 
 impl BindlessManager {
-    pub fn new(descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT]) -> Self {
+    pub fn new(
+        device: Arc<ash::Device>,
+        resource_manager: Arc<ResourceManager>,
+        descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    ) -> Self {
         Self {
+            device,
+            resource_manager,
             descriptor_set,
-            ..Default::default()
+            bindless_textures: Vec::default(),
+            bindless_indexes: HashMap::default(),
         }
     }
 
@@ -55,15 +64,13 @@ impl BindlessManager {
 
     pub fn add_image_to_bindless(
         &mut self,
-        device: &ash::Device,
-        resource_manager: &ResourceManager,
         image: &ImageHandle,
     ) {
         self.bindless_textures.push(*image);
         let bindless_index = self.bindless_textures.len();
         self.bindless_indexes.insert(*image, bindless_index);
 
-        let image_view = resource_manager.get_image(*image).unwrap().image_view();
+        let image_view = self.resource_manager.get_image(*image).unwrap().image_view();
 
         let bindless_image_info = vk::DescriptorImageInfo::builder()
             .image_view(image_view)
@@ -84,7 +91,7 @@ impl BindlessManager {
             .image_info(&image_info);
 
         unsafe {
-            device.update_descriptor_sets(&[*desc_write, *desc_write_two], &[]);
+            self.device.update_descriptor_sets(&[*desc_write, *desc_write_two], &[]);
         }
     }
 }

@@ -104,8 +104,6 @@ impl Renderer {
             RenderImageType::Depth,
         )?;
         device.bindless_manager.borrow_mut().add_image_to_bindless(
-            &device.vk_device,
-            &resource_manager,
             &render_targets
                 .get_render_target(directional_light_shadow_image)
                 .unwrap()
@@ -658,15 +656,18 @@ impl Renderer {
         let render_image = self
             .render_targets
             .get_render_target(self.render_image)
-            .unwrap().image();
+            .unwrap()
+            .image();
         let depth_image = self
             .render_targets
             .get_render_target(self.depth_image)
-            .unwrap().image();
+            .unwrap()
+            .image();
         let shadow_image = self
             .render_targets
             .get_render_target(self.directional_light_shadow_image)
-            .unwrap().image();
+            .unwrap()
+            .image();
 
         // Copy camera
         if let Some(camera) = self.active_camera {
@@ -797,9 +798,7 @@ impl Renderer {
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(
-                    depth_image
-                ),
+                image: ImageHandleType::Image(depth_image),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
