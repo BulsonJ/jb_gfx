@@ -1,8 +1,8 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
-use game::application::{run_game, Application};
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 
+use game::application::{run_game, Application};
 use game::components::{CameraComponent, LightComponent};
 use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;

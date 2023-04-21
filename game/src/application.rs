@@ -1,13 +1,16 @@
-use crate::asset::AssetManager;
-use crate::input::Input;
-use crate::project::Project;
-use env_logger::{Builder, Target};
-use jb_gfx::renderer::Renderer;
 use std::time::Instant;
+
+use env_logger::{Builder, Target};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
+
+use jb_gfx::renderer::Renderer;
+
+use crate::asset::AssetManager;
+use crate::input::Input;
+use crate::project::Project;
 
 pub struct Application {
     pub window: Window,

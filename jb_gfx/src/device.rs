@@ -1,6 +1,6 @@
 use std::ffi::CString;
-use std::{borrow::Cow, ffi::CStr};
 use std::sync::Arc;
+use std::{borrow::Cow, ffi::CStr};
 
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;

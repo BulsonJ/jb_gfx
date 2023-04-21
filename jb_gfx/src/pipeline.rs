@@ -1,11 +1,9 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::fs;
 
 use anyhow::Result;
 use ash::vk;
-use ash::vk::{
-    DescriptorSetLayout, Handle, ObjectType, PushConstantRange,
-};
+use ash::vk::{DescriptorSetLayout, Handle, ObjectType, PushConstantRange};
 use log::trace;
 use slotmap::{new_key_type, SlotMap};
 

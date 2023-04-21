@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::sync::Arc;
+
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
 use ash::vk::Format;
@@ -126,7 +127,6 @@ impl ResourceManager {
     pub fn get_buffer(&self, handle: BufferHandle) -> Option<Buffer> {
         self.buffers.borrow().get(handle).cloned()
     }
-
 
     pub fn destroy_buffer(&self, handle: BufferHandle) {
         let buffer = self.buffers.borrow_mut().remove(handle).unwrap();
