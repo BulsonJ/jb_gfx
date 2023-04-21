@@ -3,7 +3,9 @@ use std::fs;
 
 use anyhow::Result;
 use ash::vk;
-use ash::vk::{DebugUtilsObjectNameInfoEXT, Handle, ObjectType};
+use ash::vk::{
+    DebugUtilsObjectNameInfoEXT, DescriptorSetLayout, Handle, ObjectType, PushConstantRange,
+};
 use log::trace;
 use slotmap::{new_key_type, SlotMap};
 
@@ -12,6 +14,7 @@ use crate::device::GraphicsDevice;
 pub(crate) struct PipelineManager {
     shader_compiler: shaderc::Compiler,
     pipelines: SlotMap<PipelineHandle, Pipeline>,
+    pipeline_layouts: Vec<vk::PipelineLayout>,
 }
 
 impl PipelineManager {
@@ -20,7 +23,24 @@ impl PipelineManager {
         Self {
             shader_compiler,
             pipelines: SlotMap::default(),
+            pipeline_layouts: Vec::default(),
         }
+    }
+
+    pub fn create_pipeline_layout(
+        &mut self,
+        device: &GraphicsDevice,
+        descriptor_sets: &[DescriptorSetLayout],
+        push_constants: &[PushConstantRange],
+    ) -> Result<vk::PipelineLayout> {
+        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&descriptor_sets)
+            .push_constant_ranges(&push_constants);
+
+        let layout = unsafe { device.vk_device.create_pipeline_layout(&pipeline_layout_info, None) }?;
+        self.pipeline_layouts.push(layout);
+
+        Ok(layout)
     }
 
     pub fn create_pipeline(
@@ -137,6 +157,9 @@ impl PipelineManager {
     pub fn deinit(&mut self, device: &mut ash::Device) {
         for (_, pipeline) in self.pipelines.iter_mut() {
             unsafe { device.destroy_pipeline(pipeline.pso, None) };
+        }
+        for layout in self.pipeline_layouts.iter_mut() {
+            unsafe { device.destroy_pipeline_layout(*layout, None) };
         }
     }
 }

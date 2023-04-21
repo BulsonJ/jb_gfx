@@ -136,22 +136,16 @@ impl Renderer {
             .size(size_of::<PushConstants>() as u32)
             .offset(0u32);
 
-        let layouts = [
-            *device.bindless_descriptor_set_layout(),
-            descriptor_set_layout,
-        ];
-        let push_constant_ranges = [push_constant_range];
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&layouts)
-            .push_constant_ranges(&push_constant_ranges);
-
-        let pso_layout = unsafe {
-            device
-                .vk_device
-                .create_pipeline_layout(&pipeline_layout_info, None)
-        }?;
-
         let mut pipeline_manager = PipelineManager::new();
+
+        let pso_layout = pipeline_manager.create_pipeline_layout(
+            &device,
+            &[
+                *device.bindless_descriptor_set_layout(),
+                descriptor_set_layout,
+            ],
+            &[push_constant_range],
+        )?;
 
         let pso = {
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
@@ -230,18 +224,14 @@ impl Renderer {
         };
 
         let (ui_pso, ui_pso_layout) = {
-            let layouts = [
-                *device.bindless_descriptor_set_layout(),
-                ui_descriptor_set_layout,
-            ];
-            let pipeline_layout_info =
-                vk::PipelineLayoutCreateInfo::builder().set_layouts(&layouts);
-
-            let pso_layout = unsafe {
-                device
-                    .vk_device
-                    .create_pipeline_layout(&pipeline_layout_info, None)
-            }?;
+            let pso_layout = pipeline_manager.create_pipeline_layout(
+                &device,
+                &[
+                    *device.bindless_descriptor_set_layout(),
+                    ui_descriptor_set_layout,
+                ],
+                &[],
+            )?;
 
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
                 .depth_test_enable(false)
@@ -1582,12 +1572,6 @@ impl Drop for Renderer {
             self.device
                 .vk_device
                 .destroy_descriptor_pool(self.descriptor_pool, None);
-            self.device
-                .vk_device
-                .destroy_pipeline_layout(self.ui_pso_layout, None);
-            self.device
-                .vk_device
-                .destroy_pipeline_layout(self.pso_layout, None);
         }
     }
 }
