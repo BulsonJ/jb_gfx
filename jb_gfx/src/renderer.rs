@@ -1562,7 +1562,7 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.device.vk_device.device_wait_idle().unwrap();
-            self.pipeline_manager.deinit(&mut self.device.vk_device);
+            self.pipeline_manager.deinit(&self.device.vk_device);
             self.device
                 .vk_device
                 .destroy_descriptor_set_layout(self.ui_descriptor_set_layout, None);

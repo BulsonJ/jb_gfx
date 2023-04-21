@@ -1,5 +1,6 @@
 use std::ffi::CString;
 use std::{borrow::Cow, ffi::CStr};
+use std::sync::Arc;
 
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
@@ -32,7 +33,7 @@ pub struct GraphicsDevice {
     surface_loader: ash::extensions::khr::Surface,
     surface_format: vk::SurfaceFormatKHR,
     surface_resolution: vk::Extent2D,
-    pub vk_device: ash::Device,
+    pub vk_device: Arc<ash::Device>,
     pdevice: vk::PhysicalDevice,
     pub resource_manager: ResourceManager,
     pub debug_utils_loader: DebugUtils,
@@ -189,7 +190,8 @@ impl GraphicsDevice {
             .enabled_extension_names(&device_extension_names_raw)
             .enabled_features(&features);
 
-        let device = unsafe { instance.create_device(pdevice, &device_create_info, None) }?;
+        let ash_device = unsafe { instance.create_device(pdevice, &device_create_info, None) }?;
+        let device = Arc::new(ash_device);
 
         let mut resource_manager = ResourceManager::new(&instance, &pdevice, device.clone());
 

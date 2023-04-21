@@ -116,7 +116,7 @@ impl PipelineManager {
             cull_mode: build_info.cull_mode,
         };
 
-        let pipeline = build_pipeline(&mut device.vk_device, info);
+        let pipeline = build_pipeline(&device.vk_device, info);
 
         {
             let object_name_string =
@@ -155,7 +155,7 @@ impl PipelineManager {
         Ok(())
     }
 
-    pub fn deinit(&mut self, device: &mut ash::Device) {
+    pub fn deinit(&mut self, device: &ash::Device) {
         for (_, pipeline) in self.pipelines.iter_mut() {
             unsafe { device.destroy_pipeline(pipeline.pso, None) };
         }
@@ -215,7 +215,7 @@ impl Default for PipelineColorAttachment {
     }
 }
 
-pub fn build_pipeline(device: &mut ash::Device, build_info: PipelineBuildInfo) -> vk::Pipeline {
+pub fn build_pipeline(device: &ash::Device, build_info: PipelineBuildInfo) -> vk::Pipeline {
     // Defaults
 
     let viewport_state = vk::PipelineViewportStateCreateInfo::builder()

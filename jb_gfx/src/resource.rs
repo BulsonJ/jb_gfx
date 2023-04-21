@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
 use ash::vk::Format;
@@ -10,7 +11,7 @@ use slotmap::{self, new_key_type, SlotMap};
 /// In the future, refactor to use Rust lifetimes to ensure that a ResourceManager does not outlive the
 /// ash structs that it takes in.
 pub struct ResourceManager {
-    device: ash::Device,
+    device: Arc<ash::Device>,
     allocator: vk_mem_alloc::Allocator,
     buffers: SlotMap<BufferHandle, Buffer>,
     images: SlotMap<ImageHandle, Image>,
@@ -60,7 +61,7 @@ impl ResourceManager {
     pub fn new(
         instance: &ash::Instance,
         pdevice: &vk::PhysicalDevice,
-        device: ash::Device,
+        device: Arc<ash::Device>,
     ) -> Self {
         let allocator =
             unsafe { vk_mem_alloc::create_allocator(instance, *pdevice, &device, None) }.unwrap();
