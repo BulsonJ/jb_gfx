@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::CString;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::CStr};
@@ -53,12 +54,12 @@ pub struct GraphicsDevice {
     pub upload_context: UploadContext,
     pub default_sampler: vk::Sampler,
     frame_number: usize,
-    images_to_upload: Vec<ImageToUpload>,
-    buffers_to_delete: Vec<(BufferHandle, usize)>,
+    images_to_upload: RefCell<Vec<ImageToUpload>>,
+    buffers_to_delete: RefCell<Vec<(BufferHandle, usize)>>,
     render_targets: RenderTargets,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
-    bindless_manager: BindlessManager,
+    bindless_manager: RefCell<BindlessManager>,
     bindless_descriptor_pool: vk::DescriptorPool,
     pub directional_light_shadow_image: RenderTargetHandle,
     pub shadow_sampler: vk::Sampler,
@@ -481,8 +482,10 @@ impl GraphicsDevice {
         };
 
         let samplers = vec![default_sampler, shadow_sampler, ui_sampler];
-        let mut bindless_manager = BindlessManager::new(bindless_descriptor_set);
-        bindless_manager.setup_samplers(&samplers, &device)?;
+        let mut bindless_manager = RefCell::new(BindlessManager::new(bindless_descriptor_set));
+        bindless_manager
+            .borrow_mut()
+            .setup_samplers(&samplers, &device)?;
 
         let mut render_targets = RenderTargets::new((size.width, size.height));
 
@@ -506,7 +509,7 @@ impl GraphicsDevice {
             RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
             RenderImageType::Depth,
         )?;
-        bindless_manager.add_image_to_bindless(
+        bindless_manager.borrow_mut().add_image_to_bindless(
             &device,
             &resource_manager,
             &render_targets,
@@ -540,8 +543,8 @@ impl GraphicsDevice {
             upload_context,
             default_sampler,
             frame_number: 0usize,
-            images_to_upload: Vec::default(),
-            buffers_to_delete: Vec::default(),
+            images_to_upload: RefCell::new(Vec::default()),
+            buffers_to_delete: RefCell::new(Vec::default()),
             render_targets,
             bindless_descriptor_set_layout,
             bindless_descriptor_set,
@@ -623,19 +626,20 @@ impl GraphicsDevice {
         }?;
 
         // Delete old image buffers
-        for buffer_to_delete in self.buffers_to_delete.iter_mut() {
+        for buffer_to_delete in self.buffers_to_delete.borrow_mut().iter_mut() {
             buffer_to_delete.1 -= 1;
 
             if buffer_to_delete.1 == 0 {
                 self.resource_manager.destroy_buffer(buffer_to_delete.0);
             }
         }
-        self.buffers_to_delete.clear();
+        self.buffers_to_delete.borrow_mut().clear();
 
         // Upload images
         // TODO: Remove buffers once upload has completed. Could use status enum so when fences are called, updates images that were submitted to being done.
         // Can then clear done images from vec.
-        for image in self.images_to_upload.iter() {
+        for image in self.images_to_upload.borrow().iter() {
+            profiling::scope!("Deferred Upload Image to GPU");
             {
                 ImageBarrierBuilder::default()
                     .add_image_barrier(ImageBarrier {
@@ -683,7 +687,9 @@ impl GraphicsDevice {
                     );
                 }
 
-                self.buffers_to_delete.push((image.buffer_handle, 2));
+                self.buffers_to_delete
+                    .borrow_mut()
+                    .push((image.buffer_handle, 2));
             }
 
             // Generate mipmaps
@@ -800,7 +806,7 @@ impl GraphicsDevice {
                     )?;
             }
         }
-        self.images_to_upload.clear();
+        self.images_to_upload.borrow_mut().clear();
 
         Ok(present_index)
     }
@@ -940,7 +946,7 @@ impl GraphicsDevice {
     }
 
     pub(crate) fn load_image(
-        &mut self,
+        &self,
         img_bytes: &[u8],
         img_width: u32,
         img_height: u32,
@@ -995,7 +1001,7 @@ impl GraphicsDevice {
 
         let image = self.resource_manager.create_image(&image_create_info);
 
-        self.images_to_upload.push(ImageToUpload {
+        self.images_to_upload.borrow_mut().push(ImageToUpload {
             buffer_handle: staging_buffer,
             image_handle: image,
             width: img_width,
@@ -1003,7 +1009,7 @@ impl GraphicsDevice {
             mip_levels,
         });
 
-        self.bindless_manager.add_image_to_bindless(
+        self.bindless_manager.borrow_mut().add_image_to_bindless(
             &self.vk_device,
             &self.resource_manager,
             &self.render_targets,
@@ -1090,7 +1096,7 @@ impl GraphicsDevice {
     }
 
     pub fn get_descriptor_index(&self, image: &BindlessImage) -> Option<usize> {
-        self.bindless_manager.get_bindless_index(image)
+        self.bindless_manager.borrow().get_bindless_index(image)
     }
 
     pub fn render_image_format(&self) -> Format {

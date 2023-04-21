@@ -1297,7 +1297,7 @@ impl Renderer {
     }
 
     pub fn load_texture_from_bytes(
-        &mut self,
+        &self,
         img_bytes: &[u8],
         img_width: u32,
         img_height: u32,
