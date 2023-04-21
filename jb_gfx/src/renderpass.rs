@@ -238,7 +238,7 @@ pub struct AttachmentInfo {
 #[derive(Copy, Clone)]
 pub enum AttachmentHandle {
     RenderTarget(RenderTargetHandle),
-    SwapchainImage(usize),
+    SwapchainImage(),
 }
 
 impl Default for AttachmentInfo {
@@ -270,7 +270,7 @@ fn convert_attach_info(
                 )
                 .unwrap()
                 .image_view(),
-            AttachmentHandle::SwapchainImage(index) => device.present_image_views[index],
+            AttachmentHandle::SwapchainImage() => device.get_present_image_view(),
         }
     };
 

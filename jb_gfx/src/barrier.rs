@@ -21,7 +21,7 @@ pub struct ImageBarrier {
 pub enum ImageHandleType {
     Image(ImageHandle),
     RenderTarget(RenderTargetHandle),
-    SwapchainImage(usize),
+    SwapchainImage(),
 }
 
 impl Default for ImageBarrier {
@@ -74,7 +74,7 @@ impl ImageBarrierBuilder {
             };
 
             let image_handle = match image_barrier.image {
-                ImageHandleType::SwapchainImage(index) => device.present_images[index],
+                ImageHandleType::SwapchainImage() => device.get_present_image(),
                 _ => image.unwrap().image(),
             };
 
