@@ -17,7 +17,6 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
-use crate::bindless::BindlessImage;
 use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
@@ -105,8 +104,11 @@ impl Renderer {
         device.bindless_manager.borrow_mut().add_image_to_bindless(
             &device.vk_device,
             &resource_manager,
-            &device.render_targets(),
-            &BindlessImage::RenderTarget(directional_light_shadow_image),
+            &device
+                .render_targets()
+                .get_render_target(directional_light_shadow_image)
+                .unwrap()
+                .image(),
         );
 
         let pool_sizes = [
@@ -766,21 +768,39 @@ impl Renderer {
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.render_image),
+                image: ImageHandleType::Image(
+                    self.device
+                        .render_targets()
+                        .get_render_target(self.render_image)
+                        .unwrap()
+                        .image(),
+                ),
                 dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.depth_image),
+                image: ImageHandleType::Image(
+                    self.device
+                        .render_targets()
+                        .get_render_target(self.depth_image)
+                        .unwrap()
+                        .image(),
+                ),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.directional_light_shadow_image),
+                image: ImageHandleType::Image(
+                    self.device
+                        .render_targets()
+                        .get_render_target(self.directional_light_shadow_image)
+                        .unwrap()
+                        .image(),
+                ),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
@@ -840,7 +860,13 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.directional_light_shadow_image),
+                image: ImageHandleType::Image(
+                    self.device
+                        .render_targets()
+                        .get_render_target(self.directional_light_shadow_image)
+                        .unwrap()
+                        .image(),
+                ),
                 src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
                 src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
@@ -935,10 +961,7 @@ impl Renderer {
             let mut index_offset = 0usize;
             for element in self.ui_to_draw.iter_mut() {
                 let texture_id = {
-                    if let Some(index) = self
-                        .device
-                        .get_descriptor_index(&BindlessImage::Image(element.texture_id))
-                    {
+                    if let Some(index) = self.device.get_descriptor_index(&element.texture_id) {
                         index as i32
                     } else {
                         0
@@ -1070,7 +1093,13 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.render_image),
+                image: ImageHandleType::Image(
+                    self.device
+                        .render_targets()
+                        .get_render_target(self.render_image)
+                        .unwrap()
+                        .image(),
+                ),
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 dst_stage_mask: PipelineStageFlags2::BLIT,
@@ -1198,9 +1227,13 @@ impl Renderer {
                     draw.transform_index as i32,
                     draw.material_index as i32,
                     self.device
-                        .get_descriptor_index(&BindlessImage::RenderTarget(
-                            self.directional_light_shadow_image,
-                        ))
+                        .get_descriptor_index(
+                            &self.device
+                                .render_targets()
+                                .get_render_target(self.directional_light_shadow_image)
+                                .unwrap()
+                                .image(),
+                        )
                         .unwrap() as i32,
                     0,
                 ],
@@ -1454,9 +1487,7 @@ impl Renderer {
     fn get_material_ssbo_from_instance(&self, instance: &MaterialInstance) -> MaterialParamSSBO {
         let diffuse_tex = {
             if let Some(tex) = instance.diffuse_texture {
-                self.device
-                    .get_descriptor_index(&BindlessImage::Image(tex))
-                    .unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1464,9 +1495,7 @@ impl Renderer {
 
         let normal_tex = {
             if let Some(tex) = instance.normal_texture {
-                self.device
-                    .get_descriptor_index(&BindlessImage::Image(tex))
-                    .unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1474,9 +1503,7 @@ impl Renderer {
 
         let metallic_roughness_tex = {
             if let Some(tex) = instance.metallic_roughness_texture {
-                self.device
-                    .get_descriptor_index(&BindlessImage::Image(tex))
-                    .unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1484,9 +1511,7 @@ impl Renderer {
 
         let emissive_tex = {
             if let Some(tex) = instance.emissive_texture {
-                self.device
-                    .get_descriptor_index(&BindlessImage::Image(tex))
-                    .unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }
@@ -1494,9 +1519,7 @@ impl Renderer {
 
         let occlusion_tex = {
             if let Some(tex) = instance.occlusion_texture {
-                self.device
-                    .get_descriptor_index(&BindlessImage::Image(tex))
-                    .unwrap()
+                self.device.get_descriptor_index(&tex).unwrap()
             } else {
                 0usize
             }

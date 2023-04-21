@@ -12,7 +12,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
-use crate::bindless::{BindlessImage, BindlessManager};
+use crate::bindless::BindlessManager;
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
@@ -997,8 +997,7 @@ impl GraphicsDevice {
         self.bindless_manager.borrow_mut().add_image_to_bindless(
             &self.vk_device,
             &self.resource_manager,
-            &self.render_targets,
-            &BindlessImage::Image(image),
+            &image,
         );
 
         Ok(image)
@@ -1084,7 +1083,7 @@ impl GraphicsDevice {
         &self.bindless_descriptor_set
     }
 
-    pub fn get_descriptor_index(&self, image: &BindlessImage) -> Option<usize> {
+    pub fn get_descriptor_index(&self, image: &ImageHandle) -> Option<usize> {
         self.bindless_manager.borrow().get_bindless_index(image)
     }
 }

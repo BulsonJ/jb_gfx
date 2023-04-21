@@ -20,7 +20,6 @@ pub struct ImageBarrier {
 
 pub enum ImageHandleType {
     Image(ImageHandle),
-    RenderTarget(RenderTargetHandle),
     SwapchainImage(),
 }
 
@@ -58,18 +57,6 @@ impl ImageBarrierBuilder {
                 ImageHandleType::Image(image) => {
                     Some(device.resource_manager.get_image(image).unwrap())
                 }
-                ImageHandleType::RenderTarget(image) => Some(
-                    device
-                        .resource_manager
-                        .get_image(
-                            device
-                                .render_targets()
-                                .get_render_target(image)
-                                .unwrap()
-                                .image(),
-                        )
-                        .unwrap(),
-                ),
                 _ => None,
             };
 
