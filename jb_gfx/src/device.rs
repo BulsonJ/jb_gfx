@@ -1013,7 +1013,7 @@ impl GraphicsDevice {
         Ok(image)
     }
 
-    pub fn immediate_submit<F: Fn(&mut GraphicsDevice, &mut vk::CommandBuffer) -> Result<()>>(
+    pub fn immediate_submit<F: Fn(&GraphicsDevice, &vk::CommandBuffer) -> Result<()>>(
         &mut self,
         function: F,
     ) -> Result<()> {
@@ -1026,7 +1026,7 @@ impl GraphicsDevice {
 
         unsafe { self.vk_device.begin_command_buffer(cmd, &cmd_begin_info) }?;
 
-        function(self, &mut cmd)?;
+        function(self, &cmd)?;
 
         unsafe { self.vk_device.end_command_buffer(cmd) }?;
 
