@@ -6,9 +6,7 @@ use std::{borrow::Cow, ffi::CStr};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
-use ash::vk::{
-    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Format, Handle, ImageLayout, ObjectType,
-};
+use ash::vk::{self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::Window;
@@ -18,7 +16,7 @@ use crate::bindless::{BindlessImage, BindlessManager};
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
-use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
+use crate::targets::RenderTargets;
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 pub const SHADOWMAP_SIZE: u32 = 8192u32 * 2u32;

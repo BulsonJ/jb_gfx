@@ -31,9 +31,7 @@ use crate::pipeline::{
 };
 use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
-use crate::targets::{
-    RenderImageType, RenderTarget, RenderTargetHandle, RenderTargetSize, RenderTargets,
-};
+use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
