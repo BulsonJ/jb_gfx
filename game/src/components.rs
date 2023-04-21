@@ -3,12 +3,12 @@ use jb_gfx::{Camera, Light};
 
 #[derive(Copy, Clone)]
 pub struct LightComponent {
-    pub(crate) handle: LightHandle,
+    pub handle: LightHandle,
     pub light: Light,
 }
 
 #[derive(Copy, Clone)]
 pub struct CameraComponent {
-    pub(crate) handle: CameraHandle,
+    pub handle: CameraHandle,
     pub camera: Camera,
 }

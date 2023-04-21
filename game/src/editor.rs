@@ -5,7 +5,7 @@ use egui::panel::TopBottomSide;
 use egui::{Context, Ui};
 use winit::event::VirtualKeyCode;
 
-use jb_gfx::renderer::{CameraHandle, Renderer};
+use jb_gfx::renderer::Renderer;
 
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
