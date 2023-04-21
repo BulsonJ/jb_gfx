@@ -4,7 +4,7 @@ use std::fs;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{
-    DebugUtilsObjectNameInfoEXT, DescriptorSetLayout, Handle, ObjectType, PushConstantRange,
+    DescriptorSetLayout, Handle, ObjectType, PushConstantRange,
 };
 use log::trace;
 use slotmap::{new_key_type, SlotMap};

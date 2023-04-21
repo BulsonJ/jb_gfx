@@ -962,7 +962,7 @@ impl GraphicsDevice {
             .create_buffer(&staging_buffer_create_info);
 
         self.resource_manager
-            .get_buffer_mut(staging_buffer)
+            .get_buffer(staging_buffer)
             .unwrap()
             .view()
             .mapped_slice()?

@@ -20,7 +20,7 @@ impl RenderTargets {
 
     pub fn create_render_target(
         &mut self,
-        resource_manager: &mut ResourceManager,
+        resource_manager: &ResourceManager,
         format: vk::Format,
         size: RenderTargetSize,
         image_type: RenderImageType,
@@ -53,7 +53,7 @@ impl RenderTargets {
 
     pub fn recreate_render_targets(
         &mut self,
-        resource_manager: &mut ResourceManager,
+        resource_manager: &ResourceManager,
         new_size: (u32, u32),
     ) -> Result<()> {
         profiling::scope!("Recreate Render Targets");
@@ -127,7 +127,7 @@ impl RenderTarget {
 }
 
 fn create_render_target_image(
-    resource_manager: &mut ResourceManager,
+    resource_manager: &ResourceManager,
     format: vk::Format,
     size: (u32, u32),
     image_type: RenderImageType,

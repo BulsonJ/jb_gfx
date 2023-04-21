@@ -362,7 +362,7 @@ impl Renderer {
 
             device
                 .resource_manager
-                .get_buffer_mut(*camera_buffer)
+                .get_buffer(*camera_buffer)
                 .unwrap()
                 .view()
                 .mapped_slice()?
@@ -377,7 +377,7 @@ impl Renderer {
 
             device
                 .resource_manager
-                .get_buffer_mut(*light_buffer)
+                .get_buffer(*light_buffer)
                 .unwrap()
                 .view()
                 .mapped_slice()?
@@ -624,7 +624,7 @@ impl Renderer {
 
         self.device
             .resource_manager
-            .get_buffer_mut(self.camera_buffer[self.device.buffered_resource_number()])
+            .get_buffer(self.camera_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view()
             .mapped_slice()?
@@ -635,7 +635,7 @@ impl Renderer {
 
         self.device
             .resource_manager
-            .get_buffer_mut(self.light_buffer[self.device.buffered_resource_number()])
+            .get_buffer(self.light_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view_custom::<LightUniform>(0, uniforms.len())?
             .mapped_slice()?
@@ -665,7 +665,7 @@ impl Renderer {
 
         self.device
             .resource_manager
-            .get_buffer_mut(self.transform_buffer[self.device.buffered_resource_number()])
+            .get_buffer(self.transform_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view_custom(0, transform_matrices.len())?
             .mapped_slice()?
@@ -687,7 +687,7 @@ impl Renderer {
 
         self.device
             .resource_manager
-            .get_buffer_mut(self.material_buffer[self.device.buffered_resource_number()])
+            .get_buffer(self.material_buffer[self.device.buffered_resource_number()])
             .unwrap()
             .view_custom(0, materials.len())?
             .mapped_slice()?
@@ -887,7 +887,7 @@ impl Renderer {
         };
         self.device
             .resource_manager
-            .get_buffer_mut(self.ui_uniform_data[self.device.buffered_resource_number()])
+            .get_buffer(self.ui_uniform_data[self.device.buffered_resource_number()])
             .unwrap()
             .view()
             .mapped_slice()?
@@ -923,7 +923,7 @@ impl Renderer {
 
                 self.device
                     .resource_manager
-                    .get_buffer_mut(self.quad_buffer[self.device.buffered_resource_number()])
+                    .get_buffer(self.quad_buffer[self.device.buffered_resource_number()])
                     .unwrap()
                     .view_custom(vertex_offset, verts.len())?
                     .mapped_slice()?
@@ -931,7 +931,7 @@ impl Renderer {
 
                 self.device
                     .resource_manager
-                    .get_buffer_mut(self.index_buffer[self.device.buffered_resource_number()])
+                    .get_buffer(self.index_buffer[self.device.buffered_resource_number()])
                     .unwrap()
                     .view_custom(index_offset, element.indices.len())?
                     .mapped_slice()?
@@ -1330,7 +1330,7 @@ impl Renderer {
 
             self.device
                 .resource_manager
-                .get_buffer_mut(staging_buffer)
+                .get_buffer(staging_buffer)
                 .unwrap()
                 .view()
                 .mapped_slice()?
@@ -1384,7 +1384,7 @@ impl Renderer {
 
                     self.device
                         .resource_manager
-                        .get_buffer_mut(staging_buffer)
+                        .get_buffer(staging_buffer)
                         .unwrap()
                         .view()
                         .mapped_slice()?

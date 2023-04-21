@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::Arc;
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
@@ -13,8 +14,8 @@ use slotmap::{self, new_key_type, SlotMap};
 pub struct ResourceManager {
     device: Arc<ash::Device>,
     allocator: vk_mem_alloc::Allocator,
-    buffers: SlotMap<BufferHandle, Buffer>,
-    images: SlotMap<ImageHandle, Image>,
+    buffers: RefCell<SlotMap<BufferHandle, Buffer>>,
+    images: RefCell<SlotMap<ImageHandle, Image>>,
 }
 
 #[derive(Copy, Clone)]
@@ -69,8 +70,8 @@ impl ResourceManager {
         Self {
             device,
             allocator,
-            buffers: SlotMap::default(),
-            images: SlotMap::default(),
+            buffers: RefCell::new(SlotMap::default()),
+            images: RefCell::new(SlotMap::default()),
         }
     }
 
@@ -88,7 +89,7 @@ impl ResourceManager {
     /// ```
     ///
     /// ```
-    pub fn create_buffer(&mut self, buffer_create_info: &BufferCreateInfo) -> BufferHandle {
+    pub fn create_buffer(&self, buffer_create_info: &BufferCreateInfo) -> BufferHandle {
         let create_info: vk::BufferCreateInfo = (*buffer_create_info).into();
         let alloc_info: vk_mem_alloc::AllocationCreateInfo = (*buffer_create_info).into();
 
@@ -106,7 +107,7 @@ impl ResourceManager {
 
         trace!("Buffer created. [Size: {} bytes]", buffer_create_info.size);
 
-        self.buffers.insert(buffer)
+        self.buffers.borrow_mut().insert(buffer)
     }
 
     /// Gets a GPU [`Buffer`] using a [`BufferHandle`]. If buffer does not exist, returns [`None`]
@@ -122,16 +123,13 @@ impl ResourceManager {
     /// ```
     ///
     /// ```
-    pub fn get_buffer(&self, handle: BufferHandle) -> Option<&Buffer> {
-        self.buffers.get(handle)
+    pub fn get_buffer(&self, handle: BufferHandle) -> Option<Buffer> {
+        self.buffers.borrow().get(handle).cloned()
     }
 
-    pub fn get_buffer_mut(&mut self, handle: BufferHandle) -> Option<&mut Buffer> {
-        self.buffers.get_mut(handle)
-    }
 
-    pub fn destroy_buffer(&mut self, handle: BufferHandle) {
-        let buffer = self.buffers.remove(handle).unwrap();
+    pub fn destroy_buffer(&self, handle: BufferHandle) {
+        let buffer = self.buffers.borrow_mut().remove(handle).unwrap();
         unsafe {
             self.device.destroy_buffer(buffer.buffer, None);
             vk_mem_alloc::destroy_buffer(self.allocator, buffer.buffer, buffer.allocation)
@@ -152,7 +150,7 @@ impl ResourceManager {
     /// ```
     ///
     /// ```
-    pub fn create_image(&mut self, image_create_info: &vk::ImageCreateInfo) -> ImageHandle {
+    pub fn create_image(&self, image_create_info: &vk::ImageCreateInfo) -> ImageHandle {
         let alloc_create_info = vk_mem_alloc::AllocationCreateInfo {
             usage: vk_mem_alloc::MemoryUsage::AUTO,
             ..Default::default()
@@ -200,26 +198,26 @@ impl ResourceManager {
             image_create_info.extent.height
         );
 
-        self.images.insert(image)
+        self.images.borrow_mut().insert(image)
     }
 
-    pub fn get_image(&self, handle: ImageHandle) -> Option<&Image> {
-        self.images.get(handle)
+    pub fn get_image(&self, handle: ImageHandle) -> Option<Image> {
+        self.images.borrow().get(handle).cloned()
     }
 
-    pub fn destroy_image(&mut self, handle: ImageHandle) {
-        let image = self.images.remove(handle).unwrap();
+    pub fn destroy_image(&self, handle: ImageHandle) {
+        let image = self.images.borrow_mut().remove(handle).unwrap();
         unsafe {
             self.device.destroy_image_view(image.image_view, None);
             vk_mem_alloc::destroy_image(self.allocator, image.image, image.allocation)
         };
     }
-    pub fn destroy_resources(&mut self) {
+    pub fn destroy_resources(&self) {
         unsafe {
-            for buffer in self.buffers.iter_mut() {
+            for buffer in self.buffers.borrow_mut().iter_mut() {
                 vk_mem_alloc::destroy_buffer(self.allocator, buffer.1.buffer, buffer.1.allocation);
             }
-            for image in self.images.iter_mut() {
+            for image in self.images.borrow_mut().iter_mut() {
                 self.device.destroy_image_view(image.1.image_view, None);
                 vk_mem_alloc::destroy_image(self.allocator, image.1.image, image.1.allocation);
             }
@@ -230,6 +228,7 @@ impl ResourceManager {
 }
 
 /// A buffer and it's memory allocation.
+#[derive(Copy, Clone)]
 pub struct Buffer {
     buffer: vk::Buffer,
     size: vk::DeviceSize,
@@ -319,7 +318,7 @@ impl<'a, T> BufferView<'a, T> {
     /// Obtain a slice to the mapped memory of this buffer.
     /// # Errors
     /// Fails if this buffer is not mappable (not `HOST_VISIBLE`).
-    pub fn mapped_slice(&mut self) -> Result<&mut [T]> {
+    pub fn mapped_slice(&self) -> Result<&mut [T]> {
         ensure!(self.buffer.is_mapped(), anyhow!("Not mapped!"));
 
         let pointer = self.buffer.allocation_info.mapped_data;
@@ -334,6 +333,7 @@ impl<'a, T> BufferView<'a, T> {
 }
 
 /// A image and it's memory allocation.
+#[derive(Copy, Clone)]
 pub struct Image {
     image: vk::Image,
     image_usage: vk::ImageUsageFlags,
