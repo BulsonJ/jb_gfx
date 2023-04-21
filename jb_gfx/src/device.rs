@@ -31,11 +31,9 @@ pub struct GraphicsDevice {
     present_index: usize,
     pub vk_device: Arc<ash::Device>,
     pdevice: vk::PhysicalDevice,
-    pub resource_manager: ResourceManager,
+    pub resource_manager: Arc<ResourceManager>,
     pub debug_utils_loader: DebugUtils,
     debug_call_back: vk::DebugUtilsMessengerEXT,
-    pub render_image: RenderTargetHandle,
-    pub depth_image: RenderTargetHandle,
     pub graphics_queue: vk::Queue,
     pub graphics_command_pool: [vk::CommandPool; FRAMES_IN_FLIGHT],
     pub graphics_command_buffer: [vk::CommandBuffer; FRAMES_IN_FLIGHT],
@@ -50,13 +48,10 @@ pub struct GraphicsDevice {
     render_targets: RenderTargets,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
-    bindless_manager: RefCell<BindlessManager>,
+    pub bindless_manager: RefCell<BindlessManager>,
     bindless_descriptor_pool: vk::DescriptorPool,
-    pub directional_light_shadow_image: RenderTargetHandle,
     pub shadow_sampler: vk::Sampler,
     pub ui_sampler: vk::Sampler,
-    render_image_format: vk::Format,
-    depth_image_format: vk::Format,
 }
 
 impl GraphicsDevice {
@@ -502,33 +497,6 @@ impl GraphicsDevice {
 
         let mut render_targets = RenderTargets::new((size.width, size.height));
 
-        let render_image_format = vk::Format::R8G8B8A8_SRGB;
-        let depth_image_format = vk::Format::D32_SFLOAT;
-        let render_image = render_targets.create_render_target(
-            &mut resource_manager,
-            render_image_format,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
-        let depth_image = render_targets.create_render_target(
-            &mut resource_manager,
-            depth_image_format,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Depth,
-        )?;
-        let directional_light_shadow_image = render_targets.create_render_target(
-            &mut resource_manager,
-            depth_image_format,
-            RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
-            RenderImageType::Depth,
-        )?;
-        bindless_manager.borrow_mut().add_image_to_bindless(
-            &device,
-            &resource_manager,
-            &render_targets,
-            &BindlessImage::RenderTarget(directional_light_shadow_image),
-        );
-
         let device = Self {
             instance,
             size,
@@ -537,11 +505,9 @@ impl GraphicsDevice {
             present_index: 0,
             vk_device: device,
             pdevice,
-            resource_manager,
+            resource_manager: Arc::new(resource_manager),
             debug_utils_loader,
             debug_call_back,
-            render_image,
-            depth_image,
             graphics_queue,
             graphics_command_pool,
             graphics_command_buffer,
@@ -558,11 +524,8 @@ impl GraphicsDevice {
             bindless_descriptor_set,
             bindless_manager,
             bindless_descriptor_pool: descriptor_pool,
-            directional_light_shadow_image,
             shadow_sampler,
             ui_sampler,
-            render_image_format,
-            depth_image_format,
         };
 
         for set in device.bindless_descriptor_set.iter() {
@@ -1111,6 +1074,10 @@ impl GraphicsDevice {
         &self.render_targets
     }
 
+    pub fn render_targets_mut(&mut self) -> &mut RenderTargets {
+        &mut self.render_targets
+    }
+
     pub fn bindless_descriptor_set_layout(&self) -> &vk::DescriptorSetLayout {
         &self.bindless_descriptor_set_layout
     }
@@ -1121,14 +1088,6 @@ impl GraphicsDevice {
 
     pub fn get_descriptor_index(&self, image: &BindlessImage) -> Option<usize> {
         self.bindless_manager.borrow().get_bindless_index(image)
-    }
-
-    pub fn render_image_format(&self) -> Format {
-        self.render_image_format
-    }
-
-    pub fn depth_image_format(&self) -> Format {
-        self.depth_image_format
     }
 }
 

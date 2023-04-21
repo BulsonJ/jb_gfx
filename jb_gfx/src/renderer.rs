@@ -31,6 +31,9 @@ use crate::pipeline::{
 };
 use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
+use crate::targets::{
+    RenderImageType, RenderTarget, RenderTargetHandle, RenderTargetSize, RenderTargets,
+};
 use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
@@ -69,6 +72,9 @@ pub struct Renderer {
     index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_uniform_data: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_to_draw: Vec<UIMesh>,
+    render_image: RenderTargetHandle,
+    depth_image: RenderTargetHandle,
+    directional_light_shadow_image: RenderTargetHandle,
 }
 
 impl Renderer {
@@ -76,6 +82,34 @@ impl Renderer {
         profiling::scope!("Renderer::new");
 
         let mut device = GraphicsDevice::new(window)?;
+
+        let render_image_format = vk::Format::R8G8B8A8_SRGB;
+        let depth_image_format = vk::Format::D32_SFLOAT;
+        let resource_manager = device.resource_manager.clone();
+        let render_image = device.render_targets_mut().create_render_target(
+            &resource_manager,
+            render_image_format,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Colour,
+        )?;
+        let depth_image = device.render_targets_mut().create_render_target(
+            &resource_manager,
+            depth_image_format,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Depth,
+        )?;
+        let directional_light_shadow_image = device.render_targets_mut().create_render_target(
+            &resource_manager,
+            depth_image_format,
+            RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
+            RenderImageType::Depth,
+        )?;
+        device.bindless_manager.borrow_mut().add_image_to_bindless(
+            &device.vk_device,
+            &resource_manager,
+            &device.render_targets(),
+            &BindlessImage::RenderTarget(directional_light_shadow_image),
+        );
 
         let pool_sizes = [
             *vk::DescriptorPoolSize::builder()
@@ -163,11 +197,11 @@ impl Renderer {
                 fragment_shader: "assets/shaders/default.frag".to_string(),
                 vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: device.render_image_format(),
+                    format: render_image_format,
                     blend: false,
                     ..Default::default()
                 }],
-                depth_attachment_format: Some(device.depth_image_format()),
+                depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::BACK,
             };
@@ -191,7 +225,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/shadow.frag".to_string(),
                 vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![],
-                depth_attachment_format: Some(device.depth_image_format()),
+                depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::FRONT,
             };
@@ -248,7 +282,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/ui.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: device.render_image_format(),
+                    format: render_image_format,
                     blend: true,
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
@@ -589,6 +623,9 @@ impl Renderer {
             index_buffer,
             ui_to_draw: Vec::new(),
             ui_uniform_data,
+            render_image,
+            depth_image,
+            directional_light_shadow_image,
         })
     }
 
@@ -731,21 +768,21 @@ impl Renderer {
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.render_image),
+                image: ImageHandleType::RenderTarget(self.render_image),
                 dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.depth_image),
+                image: ImageHandleType::RenderTarget(self.depth_image),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.directional_light_shadow_image),
+                image: ImageHandleType::RenderTarget(self.directional_light_shadow_image),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
@@ -759,7 +796,7 @@ impl Renderer {
         // Shadow pass
         RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
             .set_depth_attachment(AttachmentInfo {
-                target: AttachmentHandle::RenderTarget(self.device.directional_light_shadow_image),
+                target: AttachmentHandle::RenderTarget(self.directional_light_shadow_image),
                 clear_value: vk::ClearValue {
                     depth_stencil: ClearDepthStencilValue {
                         depth: 1.0,
@@ -805,7 +842,7 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.directional_light_shadow_image),
+                image: ImageHandleType::RenderTarget(self.directional_light_shadow_image),
                 src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
                 src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
@@ -823,7 +860,7 @@ impl Renderer {
         let clear_colour: Vector3<f32> = self.clear_colour.into();
         RenderPassBuilder::new((self.device.size.width, self.device.size.height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::RenderTarget(self.device.render_image),
+                target: AttachmentHandle::RenderTarget(self.render_image),
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
@@ -832,7 +869,7 @@ impl Renderer {
                 ..Default::default()
             })
             .set_depth_attachment(AttachmentInfo {
-                target: AttachmentHandle::RenderTarget(self.device.depth_image),
+                target: AttachmentHandle::RenderTarget(self.depth_image),
                 clear_value: vk::ClearValue {
                     depth_stencil: ClearDepthStencilValue {
                         depth: 1.0,
@@ -954,7 +991,7 @@ impl Renderer {
         // UI Pass
         RenderPassBuilder::new((self.device.size.width, self.device.size.height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::RenderTarget(self.device.render_image),
+                target: AttachmentHandle::RenderTarget(self.render_image),
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
@@ -1035,7 +1072,7 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::RenderTarget(self.device.render_image),
+                image: ImageHandleType::RenderTarget(self.render_image),
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 dst_stage_mask: PipelineStageFlags2::BLIT,
@@ -1089,7 +1126,7 @@ impl Renderer {
                     .get_image(
                         self.device
                             .render_targets()
-                            .get_render_target(self.device.render_image)
+                            .get_render_target(self.render_image)
                             .unwrap()
                             .image(),
                     )
@@ -1164,7 +1201,7 @@ impl Renderer {
                     draw.material_index as i32,
                     self.device
                         .get_descriptor_index(&BindlessImage::RenderTarget(
-                            self.device.directional_light_shadow_image,
+                            self.directional_light_shadow_image,
                         ))
                         .unwrap() as i32,
                     0,
