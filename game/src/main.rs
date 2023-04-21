@@ -14,6 +14,131 @@ fn main() {
     run_game::<EditorProject>()
 }
 
+struct EditorProject {
+    lights: Vec<LightComponent>,
+    cameras: Vec<CameraComponent>,
+    egui: EguiContext,
+    editor: Editor,
+}
+
+impl Project for EditorProject {
+    fn new(app: &mut Application, event_loop: &EventLoop<()>) -> Self {
+        // Load cube
+        {
+            let models = app
+                .asset_manager
+                .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
+                .unwrap();
+            for model in models.iter() {
+                app.renderer.light_mesh = Some(model.mesh);
+            }
+        }
+        // Load sponza
+        {
+            let models = app
+                .asset_manager
+                .load_gltf(&mut app.renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+                .unwrap();
+            for model in models.iter() {
+                let handle = app
+                    .renderer
+                    .add_render_model(model.mesh, model.material_instance.clone());
+                app.renderer
+                    .set_render_model_transform(
+                        handle,
+                        from_transforms(
+                            Vector3::new(0f32, 80f32, 0.0f32),
+                            Quaternion::from_axis_angle(
+                                Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+                                Deg(180f32),
+                            ),
+                            Vector3::from_value(0.1f32),
+                        ),
+                    )
+                    .unwrap();
+            }
+        }
+        // Load helmet
+        {
+            let models = app
+                .asset_manager
+                .load_gltf(
+                    &mut app.renderer,
+                    "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
+                )
+                .unwrap();
+            for model in models.iter() {
+                let helmet = app
+                    .renderer
+                    .add_render_model(model.mesh, model.material_instance.clone());
+                app.renderer
+                    .set_render_model_transform(
+                        helmet,
+                        from_transforms(
+                            Vector3::new(10f32, 100f32, 0.0f32),
+                            Quaternion::from_axis_angle(
+                                Vector3::new(1f32, 0f32, 0.0f32).normalize(),
+                                Deg(100f32),
+                            ) * Quaternion::from_axis_angle(
+                                Vector3::new(0f32, 0f32, 1.0f32).normalize(),
+                                Deg(60f32),
+                            ),
+                            Vector3::from_value(6f32),
+                        ),
+                    )
+                    .unwrap();
+            }
+        }
+        app.renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
+
+        let (lights, cameras) = setup_scene(
+            &mut app.renderer,
+            (
+                app.window.inner_size().width,
+                app.window.inner_size().height,
+            ),
+        );
+
+        let egui = EguiContext::new(&event_loop);
+        let editor = Editor::new();
+
+        Self {
+            egui,
+            editor,
+            lights,
+            cameras,
+        }
+    }
+
+    fn update(&mut self, ctx: &mut Application) {
+        for (i, component) in self.lights.iter_mut().enumerate() {
+            let position = 10f32 + ((i as f32 + 3f32 * ctx.time_passed).sin() * 5f32);
+            component.light.position.x = position;
+        }
+        // Update render objects & then render
+        update_renderer_object_states(&mut ctx.renderer, &self.lights, &self.cameras);
+    }
+
+    fn draw(&mut self, app: &mut Application) {
+        self.egui.run(&app.window, |ctx| {
+            self.editor.run(
+                ctx,
+                &mut EditorDependencies {
+                    input: &app.input,
+                    renderer: &mut app.renderer,
+                    cameras: &mut self.cameras,
+                    lights: &mut self.lights,
+                },
+            )
+        });
+        self.egui.paint(&mut app.renderer);
+    }
+
+    fn on_window_event(&mut self, event: &WindowEvent) {
+        self.egui.on_event(event);
+    }
+}
+
 #[profiling::function]
 fn setup_scene(
     renderer: &mut Renderer,
@@ -145,127 +270,3 @@ fn from_transforms(
     translation * rotation * scale
 }
 
-struct EditorProject {
-    lights: Vec<LightComponent>,
-    cameras: Vec<CameraComponent>,
-    egui: EguiContext,
-    editor: Editor,
-}
-
-impl Project for EditorProject {
-    fn new(app: &mut Application, event_loop: &EventLoop<()>) -> Self {
-        // Load cube
-        {
-            let models = app
-                .asset_manager
-                .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
-                .unwrap();
-            for model in models.iter() {
-                app.renderer.light_mesh = Some(model.mesh);
-            }
-        }
-        // Load sponza
-        {
-            let models = app
-                .asset_manager
-                .load_gltf(&mut app.renderer, "assets/models/Sponza/glTF/Sponza.gltf")
-                .unwrap();
-            for model in models.iter() {
-                let handle = app
-                    .renderer
-                    .add_render_model(model.mesh, model.material_instance.clone());
-                app.renderer
-                    .set_render_model_transform(
-                        handle,
-                        from_transforms(
-                            Vector3::new(0f32, 80f32, 0.0f32),
-                            Quaternion::from_axis_angle(
-                                Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-                                Deg(180f32),
-                            ),
-                            Vector3::from_value(0.1f32),
-                        ),
-                    )
-                    .unwrap();
-            }
-        }
-        // Load helmet
-        {
-            let models = app
-                .asset_manager
-                .load_gltf(
-                    &mut app.renderer,
-                    "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
-                )
-                .unwrap();
-            for model in models.iter() {
-                let helmet = app
-                    .renderer
-                    .add_render_model(model.mesh, model.material_instance.clone());
-                app.renderer
-                    .set_render_model_transform(
-                        helmet,
-                        from_transforms(
-                            Vector3::new(10f32, 100f32, 0.0f32),
-                            Quaternion::from_axis_angle(
-                                Vector3::new(1f32, 0f32, 0.0f32).normalize(),
-                                Deg(100f32),
-                            ) * Quaternion::from_axis_angle(
-                                Vector3::new(0f32, 0f32, 1.0f32).normalize(),
-                                Deg(60f32),
-                            ),
-                            Vector3::from_value(6f32),
-                        ),
-                    )
-                    .unwrap();
-            }
-        }
-        app.renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
-
-        let (lights, cameras) = setup_scene(
-            &mut app.renderer,
-            (
-                app.window.inner_size().width,
-                app.window.inner_size().height,
-            ),
-        );
-
-        let egui = EguiContext::new(&event_loop);
-        let editor = Editor::new();
-
-        Self {
-            egui,
-            editor,
-            lights,
-            cameras,
-        }
-    }
-
-    fn update(&mut self, ctx: &mut Application) {
-        for (i, component) in self.lights.iter_mut().enumerate() {
-            let position = 10f32 + ((i as f32 + 3f32 * ctx.time_passed).sin() * 5f32);
-            component.light.position.x = position;
-        }
-        // Update render objects & then render
-        update_renderer_object_states(&mut ctx.renderer, &self.lights, &self.cameras);
-    }
-
-    fn draw(&mut self, app: &mut Application) {
-        self.egui.run(&app.window, |ctx| {
-            self.editor.run(
-                ctx,
-                &mut EditorDependencies {
-                    input: &app.input,
-                    renderer: &mut app.renderer,
-                    cameras: &mut self.cameras,
-                    lights: &mut self.lights,
-                },
-            )
-        });
-        self.egui.paint(&mut app.renderer);
-    }
-
-    fn on_window_event(&mut self, event: &WindowEvent) {
-        self.egui.on_event(event);
-    }
-}
