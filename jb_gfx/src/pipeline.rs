@@ -37,7 +37,11 @@ impl PipelineManager {
             .set_layouts(&descriptor_sets)
             .push_constant_ranges(&push_constants);
 
-        let layout = unsafe { device.vk_device.create_pipeline_layout(&pipeline_layout_info, None) }?;
+        let layout = unsafe {
+            device
+                .vk_device
+                .create_pipeline_layout(&pipeline_layout_info, None)
+        }?;
         self.pipeline_layouts.push(layout);
 
         Ok(layout)
@@ -114,19 +118,16 @@ impl PipelineManager {
 
         let pipeline = build_pipeline(&mut device.vk_device, info);
 
-        let object_name_string = String::from(build_info.vertex_shader.rsplit_once('/').unwrap().1)
-            + " "
-            + build_info.fragment_shader.rsplit_once('/').unwrap().1;
-        let object_name = CString::new(object_name_string).unwrap();
-        let pipeline_debug_info = DebugUtilsObjectNameInfoEXT::builder()
-            .object_type(ObjectType::PIPELINE)
-            .object_handle(pipeline.as_raw())
-            .object_name(object_name.as_ref());
-
-        unsafe {
-            device
-                .debug_utils_loader
-                .set_debug_utils_object_name(device.vk_device.handle(), &pipeline_debug_info)?;
+        {
+            let object_name_string =
+                String::from(build_info.vertex_shader.rsplit_once('/').unwrap().1)
+                    + " "
+                    + build_info.fragment_shader.rsplit_once('/').unwrap().1;
+            device.set_vulkan_debug_name(
+                pipeline.as_raw(),
+                ObjectType::PIPELINE,
+                &object_name_string,
+            )?;
         }
 
         unsafe {

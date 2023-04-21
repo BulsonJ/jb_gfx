@@ -269,4 +269,3 @@ fn from_transforms(
 
     translation * rotation * scale
 }
-
