@@ -48,7 +48,7 @@ pub struct GraphicsDevice {
     buffers_to_delete: RefCell<Vec<(BufferHandle, usize)>>,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
-    pub bindless_manager: RefCell<BindlessManager>,
+    bindless_manager: RefCell<BindlessManager>,
     bindless_descriptor_pool: vk::DescriptorPool,
     pub shadow_sampler: vk::Sampler,
     pub ui_sampler: vk::Sampler,

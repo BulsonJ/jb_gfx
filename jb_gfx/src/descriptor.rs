@@ -71,7 +71,7 @@ impl DescriptorAllocator {
 
     pub fn grab_pool(&mut self) -> anyhow::Result<vk::DescriptorPool> {
         if !self.free_pools.is_empty() {
-            let pool = self.free_pools.remove(self.free_pools.len());
+            let pool = self.free_pools.remove(self.free_pools.len() - 1);
             Ok(pool)
         } else {
             let pool = DescriptorAllocator::create_pool(
@@ -340,6 +340,16 @@ impl<'a> DescriptorBuilder<'a> {
 
         Ok((set, layout))
     }
+
+    pub fn update(mut self, descriptor_set: vk::DescriptorSet) -> anyhow::Result<()> {
+        for write in self.writes.iter_mut() {
+            write.dst_set = descriptor_set;
+        }
+
+        unsafe { self.alloc.device.update_descriptor_sets(&self.writes, &[]) };
+
+        Ok(())
+    }
 }
 
 pub struct JBDescriptorBuilder<'a> {
@@ -424,6 +434,31 @@ impl<'a> JBDescriptorBuilder<'a> {
         }
 
         desc_builder.build()
+    }
+
+    pub fn update(mut self, descriptor_set: &[vk::DescriptorSet]) -> anyhow::Result<()> {
+        for set in descriptor_set {
+            let mut desc_builder = DescriptorBuilder::new(self.cache, self.alloc);
+            for write in self.buffers.iter() {
+                desc_builder = desc_builder.bind_buffer(
+                    write.buffer_info.binding,
+                    &write.write_info,
+                    write.buffer_info.desc_type,
+                    write.buffer_info.stage_flags,
+                )
+            }
+            for write in self.images.iter() {
+                desc_builder = desc_builder.bind_image(
+                    write.buffer_info.binding,
+                    &write.write_info,
+                    write.buffer_info.desc_type,
+                    write.buffer_info.stage_flags,
+                );
+            }
+
+            desc_builder.update(*set)?;
+        }
+        Ok(())
     }
 }
 
