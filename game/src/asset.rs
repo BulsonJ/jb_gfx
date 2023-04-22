@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Index;
 
 use anyhow::{anyhow, Result};
 use cgmath::{Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Vector4};
@@ -57,6 +58,7 @@ impl AssetManager {
 
         let mut meshes = HashMap::new();
         for mesh in gltf.meshes() {
+            let mut submeshes = Vec::new();
             profiling::scope!("Load GLTF Asset: Mesh");
             for primitive in mesh.primitives() {
                 profiling::scope!("Load GLTF Asset: Primitive");
@@ -252,7 +254,7 @@ impl AssetManager {
                 }
 
                 let mesh_handle = renderer.load_mesh(&mesh_data)?;
-                let model = Mesh {
+                let model = SubMesh {
                     mesh: mesh_handle,
                     material_instance: MaterialInstance {
                         diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
@@ -266,20 +268,24 @@ impl AssetManager {
                     },
                 };
 
-                meshes.insert(mesh.index(), model);
+                submeshes.push(model);
             }
+            meshes.insert(mesh.index(), Mesh { submeshes });
         }
 
         let mut models = HashMap::new();
         for node in gltf.nodes() {
-            let mesh_index  = node.mesh().unwrap().index();
+            let mesh_index = node.mesh().unwrap().index();
             let model = meshes.get(&mesh_index).unwrap().clone();
             let transform = Matrix4::from(node.transform().matrix());
 
-            models.insert(node.index(), Model{
-                mesh: model,
-                transform,
-            });
+            models.insert(
+                node.index(),
+                Model {
+                    mesh: model,
+                    transform,
+                },
+            );
         }
 
         for node in gltf.nodes() {
@@ -290,7 +296,7 @@ impl AssetManager {
             }
         }
 
-        let models : Vec<Model> = models.values().copied().collect();
+        let models: Vec<Model> = models.values().cloned().collect();
         info!(
             "Loaded GLTF Model. Name: [{}], Models: [{}]",
             asset_name,
@@ -300,15 +306,19 @@ impl AssetManager {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Model {
-   pub mesh: Mesh,
-   pub transform: Matrix4<f32>,
+    pub mesh: Mesh,
+    pub transform: Matrix4<f32>,
+}
+
+#[derive(Clone)]
+pub struct Mesh {
+    pub submeshes: Vec<SubMesh>,
 }
 
 #[derive(Copy, Clone)]
-pub struct Mesh {
+pub struct SubMesh {
     pub mesh: MeshHandle,
     pub material_instance: MaterialInstance,
 }
-

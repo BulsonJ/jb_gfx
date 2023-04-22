@@ -30,25 +30,35 @@ impl Project for EditorProject {
                 .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
                 .unwrap();
             for model in models.iter() {
-                app.renderer.light_mesh = Some(model.mesh.mesh);
+                for submesh in model.mesh.submeshes.iter() {
+                    app.renderer.light_mesh = Some(submesh.mesh);
+                }
             }
         }
         // Load sponza
         {
             let models = app
                 .asset_manager
-                .load_gltf(&mut app.renderer, "assets/models/deccer_cubes/SM_Deccer_Cubes_Textured.gltf")
+                .load_gltf(&mut app.renderer, "assets/models/Sponza/glTF/Sponza.gltf")
                 .unwrap();
             for model in models.iter() {
-                let handle = app
-                    .renderer
-                    .add_render_model(model.mesh.mesh, model.mesh.material_instance);
-                app.renderer
-                    .set_render_model_transform(
-                        handle,
-                        model.transform,
-                    )
-                    .unwrap();
+                let transform = from_transforms(
+                    Vector3::new(0f32, -20f32, 0.0f32),
+                    Quaternion::from_axis_angle(
+                        Vector3::new(0f32, 1f32, 0.0f32).normalize(),
+                        Deg(180f32),
+                    ),
+                    Vector3::from_value(0.1f32),
+                );
+                Vector3::from_value(0.1f32);
+                for submesh in model.mesh.submeshes.iter() {
+                    let handle = app
+                        .renderer
+                        .add_render_model(submesh.mesh, submesh.material_instance);
+                    app.renderer
+                        .set_render_model_transform(handle, transform)
+                        .unwrap();
+                }
             }
         }
         // Load helmet
@@ -61,25 +71,26 @@ impl Project for EditorProject {
                 )
                 .unwrap();
             for model in models.iter() {
-                let helmet = app
-                    .renderer
-                    .add_render_model(model.mesh.mesh, model.mesh.material_instance);
-                app.renderer
-                    .set_render_model_transform(
-                        helmet,
-                        from_transforms(
-                            Vector3::new(10f32, 100f32, 0.0f32),
-                            Quaternion::from_axis_angle(
-                                Vector3::new(1f32, 0f32, 0.0f32).normalize(),
-                                Deg(100f32),
-                            ) * Quaternion::from_axis_angle(
-                                Vector3::new(0f32, 0f32, 1.0f32).normalize(),
-                                Deg(60f32),
-                            ),
-                            Vector3::from_value(6f32),
-                        ),
-                    )
-                    .unwrap();
+                let transform = from_transforms(
+                    Vector3::new(10f32, 0f32, 0.0f32),
+                    Quaternion::from_axis_angle(
+                        Vector3::new(1f32, 0f32, 0.0f32).normalize(),
+                        Deg(100f32),
+                    ) * Quaternion::from_axis_angle(
+                        Vector3::new(0f32, 0f32, 1.0f32).normalize(),
+                        Deg(60f32),
+                    ),
+                    Vector3::from_value(6f32),
+                );
+                Vector3::from_value(0.1f32);
+                for submesh in model.mesh.submeshes.iter() {
+                    let handle = app
+                        .renderer
+                        .add_render_model(submesh.mesh, submesh.material_instance);
+                    app.renderer
+                        .set_render_model_transform(handle, transform)
+                        .unwrap();
+                }
             }
         }
         app.renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
@@ -139,19 +150,19 @@ fn setup_scene(
 ) -> (Vec<LightComponent>, Vec<CameraComponent>) {
     let initial_lights = vec![
         Light::new(
-            Point3::new(10.0f32, 95.0f32, -16.0f32),
+            Point3::new(10.0f32, -5.0f32, -16.0f32),
             Vector3::new(1.0f32, 0.0f32, 0.0f32),
         ),
         Light::new(
-            Point3::new(-10.0f32, 105.0f32, 16.0f32),
+            Point3::new(-10.0f32, 5.0f32, 16.0f32),
             Vector3::new(0.0f32, 1.0f32, 0.0f32),
         ),
         Light::new(
-            Point3::new(10.0f32, 105.0f32, -16.0f32),
+            Point3::new(10.0f32, 5.0f32, -16.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
         Light::new(
-            Point3::new(-10.0f32, 95.0f32, 16.0f32),
+            Point3::new(-10.0f32, -5.0f32, 16.0f32),
             Vector3::new(1.0f32, 1.0f32, 1.0f32),
         ),
     ];
@@ -262,4 +273,3 @@ pub fn from_transforms(
 
     translation * rotation * scale
 }
-

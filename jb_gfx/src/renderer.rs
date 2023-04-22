@@ -19,8 +19,8 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::descriptor::{
-    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutCache,
-    ImageDescriptorInfo, JBDescriptorBuilder,
+    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutCache, ImageDescriptorInfo,
+    JBDescriptorBuilder,
 };
 use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
@@ -697,20 +697,17 @@ impl Renderer {
                     let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline,
                         );
                         self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             vk::PipelineBindPoint::GRAPHICS,
                             self.pso_layout,
                             0u32,
                             &[
-                                self.device.bindless_descriptor_set()
-                                    [resource_index],
+                                self.device.bindless_descriptor_set()[resource_index],
                                 self.descriptor_set[resource_index],
                             ],
                             &[],
@@ -774,20 +771,17 @@ impl Renderer {
 
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline,
                         );
                         self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             vk::PipelineBindPoint::GRAPHICS,
                             self.pso_layout,
                             0u32,
                             &[
-                                self.device.bindless_descriptor_set()
-                                    [resource_index],
+                                self.device.bindless_descriptor_set()[resource_index],
                                 self.descriptor_set[resource_index],
                             ],
                             &[],
@@ -893,20 +887,17 @@ impl Renderer {
 
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline,
                         );
                         self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             vk::PipelineBindPoint::GRAPHICS,
                             self.ui_pso_layout,
                             0u32,
                             &[
-                                self.device.bindless_descriptor_set()
-                                    [resource_index],
+                                self.device.bindless_descriptor_set()[resource_index],
                                 self.ui_descriptor_set[resource_index],
                             ],
                             &[],
@@ -921,8 +912,7 @@ impl Renderer {
 
                     unsafe {
                         self.device.vk_device.cmd_bind_index_buffer(
-                            self.device.graphics_command_buffer
-                                [resource_index],
+                            self.device.graphics_command_buffer[resource_index],
                             index_buffer.buffer(),
                             0u64,
                             vk::IndexType::UINT32,
@@ -938,8 +928,7 @@ impl Renderer {
                         // Draw commands
                         unsafe {
                             self.device.vk_device.cmd_draw_indexed(
-                                self.device.graphics_command_buffer
-                                    [resource_index],
+                                self.device.graphics_command_buffer[resource_index],
                                 draw.amount as u32,
                                 1u32,
                                 draw.index_offset as u32,
@@ -1037,18 +1026,15 @@ impl Renderer {
         //Submit buffer
 
         unsafe {
-            self.device.vk_device.end_command_buffer(
-                self.device.graphics_command_buffer[resource_index],
-            )
+            self.device
+                .vk_device
+                .end_command_buffer(self.device.graphics_command_buffer[resource_index])
         }?;
 
-        let wait_semaphores =
-            [self.device.present_complete_semaphore[resource_index]];
+        let wait_semaphores = [self.device.present_complete_semaphore[resource_index]];
         let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers =
-            [self.device.graphics_command_buffer[resource_index]];
-        let signal_semaphores =
-            [self.device.rendering_complete_semaphore[resource_index]];
+        let command_buffers = [self.device.graphics_command_buffer[resource_index]];
+        let signal_semaphores = [self.device.rendering_complete_semaphore[resource_index]];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_dst_stage_mask)
