@@ -1211,7 +1211,7 @@ impl Renderer {
             self.device
                 .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &name)?;
 
-            info!(
+            trace!(
                 "Texture Loaded: {} | Size: [{},{}] | Mip Levels:[{}]",
                 image_name,
                 img.width(),

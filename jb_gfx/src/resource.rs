@@ -225,7 +225,7 @@ impl ResourceManager {
 
 /// A buffer and it's memory allocation.
 #[derive(Copy, Clone)]
-pub struct Buffer {
+pub struct  Buffer {
     buffer: vk::Buffer,
     size: vk::DeviceSize,
     allocation: vk_mem_alloc::Allocation,

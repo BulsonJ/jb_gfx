@@ -1,7 +1,7 @@
 use crate::device::GraphicsDevice;
 use anyhow::Result;
 use ash::vk;
-use log::info;
+use log::{info, trace};
 use slotmap::{new_key_type, SlotMap};
 use std::sync::Arc;
 
@@ -45,7 +45,7 @@ impl RenderTargets {
             format,
             image_type,
         };
-        info!(
+        trace!(
             "Render Target Created: {} | Size: [{},{}]",
             "Test", actual_size.0, actual_size.1,
         );
