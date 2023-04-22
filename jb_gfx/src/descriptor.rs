@@ -357,8 +357,8 @@ pub struct JBDescriptorBuilder<'a> {
     cache: &'a mut DescriptorLayoutCache,
     alloc: &'a mut DescriptorAllocator,
 
-    buffers: Vec<BufferWrite>,
-    images: Vec<ImageWrite>,
+    buffers: Vec<TempBufferDescriptorInfo>,
+    images: Vec<TempImageDescriptorInfo>,
 }
 
 impl<'a> JBDescriptorBuilder<'a> {
@@ -388,7 +388,7 @@ impl<'a> JBDescriptorBuilder<'a> {
                 .range(buffer.size())
         };
 
-        self.buffers.push(BufferWrite {
+        self.buffers.push(TempBufferDescriptorInfo {
             buffer_info,
             write_info: [buffer_write],
         });
@@ -406,7 +406,7 @@ impl<'a> JBDescriptorBuilder<'a> {
         };
 
         let image_info = [image_write];
-        self.images.push(ImageWrite {
+        self.images.push(TempImageDescriptorInfo {
             buffer_info: image,
             write_info: image_info,
         });
@@ -462,12 +462,14 @@ impl<'a> JBDescriptorBuilder<'a> {
     }
 }
 
-pub struct BufferWrite {
+// TODO : Fix workaround for lifetime of write_info(read after free)
+pub struct TempBufferDescriptorInfo {
     buffer_info: BufferDescriptorInfo,
     write_info: [vk::DescriptorBufferInfo; 1],
 }
 
-pub struct ImageWrite {
+// TODO : Fix workaround for lifetime of write_info(read after free)
+pub struct TempImageDescriptorInfo {
     buffer_info: ImageDescriptorInfo,
     write_info: [vk::DescriptorImageInfo; 1],
 }

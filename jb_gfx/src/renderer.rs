@@ -19,7 +19,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::descriptor::{
-    BufferDescriptorInfo, DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache,
+    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutCache,
     ImageDescriptorInfo, JBDescriptorBuilder,
 };
 use crate::device::{
