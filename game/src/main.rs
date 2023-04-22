@@ -46,14 +46,7 @@ impl Project for EditorProject {
                 app.renderer
                     .set_render_model_transform(
                         handle,
-                        from_transforms(
-                            model.translation,
-                            Quaternion::from_axis_angle(
-                                Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-                                Deg(180f32),
-                            ),
-                            model.scale,
-                        ),
+                        model.transform,
                     )
                     .unwrap();
             }
@@ -258,7 +251,7 @@ fn update_renderer_object_states(
 }
 
 #[profiling::function]
-fn from_transforms(
+pub fn from_transforms(
     position: Vector3<f32>,
     rotation: Quaternion<f32>,
     size: Vector3<f32>,
@@ -269,3 +262,4 @@ fn from_transforms(
 
     translation * rotation * scale
 }
+

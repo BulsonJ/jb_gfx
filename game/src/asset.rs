@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
-use cgmath::Vector3;
+use cgmath::{Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Vector4};
 use gltf::image::Source;
 use log::info;
 
@@ -270,28 +270,27 @@ impl AssetManager {
             }
         }
 
-        let mut models = Vec::new();
+        let mut models = HashMap::new();
         for node in gltf.nodes() {
-            node.index()
             let mesh_index  = node.mesh().unwrap().index();
             let model = meshes.get(&mesh_index).unwrap().clone();
-            let transform = node.transform().decomposed();
-            let position = transform.0;
-            let scale = transform.2;
+            let transform = Matrix4::from(node.transform().matrix());
 
-            for child in node.children(){
-                println!("child")
-            }
-
-            models.push(Model{
+            models.insert(node.index(), Model{
                 mesh: model,
-                translation: Vector3::from(position),
-                scale:  Vector3::from(scale),
+                transform,
             });
-
         }
 
+        for node in gltf.nodes() {
+            let parent = models.get(&node.index()).unwrap().clone();
+            for child in node.children() {
+                let model = models.get_mut(&child.index()).unwrap();
+                model.transform = parent.transform * model.transform;
+            }
+        }
 
+        let models : Vec<Model> = models.values().copied().collect();
         info!(
             "Loaded GLTF Model. Name: [{}], Models: [{}]",
             asset_name,
@@ -301,10 +300,10 @@ impl AssetManager {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Model {
    pub mesh: Mesh,
-   pub translation: Vector3<f32>,
-   pub scale: Vector3<f32>,
+   pub transform: Matrix4<f32>,
 }
 
 #[derive(Copy, Clone)]
@@ -312,3 +311,4 @@ pub struct Mesh {
     pub mesh: MeshHandle,
     pub material_instance: MaterialInstance,
 }
+
