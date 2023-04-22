@@ -1,4 +1,5 @@
 use crate::device::GraphicsDevice;
+use crate::resource::{Buffer, BufferHandle, ImageHandle, ResourceManager};
 use ash::prelude::VkResult;
 use ash::vk;
 use ash::vk::DescriptorPoolCreateFlags;
@@ -293,7 +294,32 @@ impl<'a> DescriptorBuilder<'a> {
         let new_write = *vk::WriteDescriptorSet::builder()
             .descriptor_type(desc_type)
             .dst_binding(binding)
-            .buffer_info(&buffer_info);
+            .buffer_info(buffer_info);
+
+        self.writes.push(new_write);
+
+        self
+    }
+
+    pub fn bind_image(
+        mut self,
+        binding: u32,
+        image_info: &[vk::DescriptorImageInfo],
+        desc_type: vk::DescriptorType,
+        stage_flags: vk::ShaderStageFlags,
+    ) -> Self {
+        let new_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(binding)
+            .descriptor_type(desc_type)
+            .descriptor_count(1u32)
+            .stage_flags(stage_flags);
+
+        self.bindings.push(*new_binding);
+
+        let new_write = *vk::WriteDescriptorSet::builder()
+            .descriptor_type(desc_type)
+            .dst_binding(binding)
+            .image_info(image_info);
 
         self.writes.push(new_write);
 
@@ -314,4 +340,113 @@ impl<'a> DescriptorBuilder<'a> {
 
         Ok((set, layout))
     }
+}
+
+pub struct JBDescriptorBuilder<'a> {
+    resource_manager: &'a ResourceManager,
+    cache: &'a mut DescriptorLayoutCache,
+    alloc: &'a mut DescriptorAllocator,
+
+    buffers: Vec<BufferWrite>,
+    images: Vec<ImageWrite>,
+}
+
+impl<'a> JBDescriptorBuilder<'a> {
+    pub fn new(
+        resource_manager: &'a ResourceManager,
+        cache: &'a mut DescriptorLayoutCache,
+        alloc: &'a mut DescriptorAllocator,
+    ) -> Self {
+        Self {
+            resource_manager,
+            cache,
+            alloc,
+            buffers: Vec::default(),
+            images: Vec::default(),
+        }
+    }
+
+    pub fn bind_buffer(mut self, buffer_info: BufferDescriptorInfo) -> Self {
+        let buffer_write = {
+            let buffer = self
+                .resource_manager
+                .get_buffer(buffer_info.buffer)
+                .unwrap();
+
+            *vk::DescriptorBufferInfo::builder()
+                .buffer(buffer.buffer())
+                .range(buffer.size())
+        };
+
+        self.buffers.push(BufferWrite {
+            buffer_info,
+            write_info: [buffer_write],
+        });
+
+        self
+    }
+
+    pub fn bind_image(mut self, image: ImageDescriptorInfo) -> Self {
+        let image_write = {
+            let image = self.resource_manager.get_image(image.image).unwrap();
+
+            *vk::DescriptorImageInfo::builder()
+                .image_view(image.image_view())
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        };
+
+        let image_info = [image_write];
+        self.images.push(ImageWrite {
+            buffer_info: image,
+            write_info: image_info,
+        });
+
+        self
+    }
+
+    pub fn build(mut self) -> anyhow::Result<(vk::DescriptorSet, vk::DescriptorSetLayout)> {
+        let mut desc_builder = DescriptorBuilder::new(self.cache, self.alloc);
+        for write in self.buffers.iter() {
+            desc_builder = desc_builder.bind_buffer(
+                write.buffer_info.binding,
+                &write.write_info,
+                write.buffer_info.desc_type,
+                write.buffer_info.stage_flags,
+            )
+        }
+        for write in self.images.iter() {
+            desc_builder = desc_builder.bind_image(
+                write.buffer_info.binding,
+                &write.write_info,
+                write.buffer_info.desc_type,
+                write.buffer_info.stage_flags,
+            );
+        }
+
+        desc_builder.build()
+    }
+}
+
+pub struct BufferWrite {
+    buffer_info: BufferDescriptorInfo,
+    write_info: [vk::DescriptorBufferInfo; 1],
+}
+
+pub struct ImageWrite {
+    buffer_info: ImageDescriptorInfo,
+    write_info: [vk::DescriptorImageInfo; 1],
+}
+
+pub struct BufferDescriptorInfo {
+    pub binding: u32,
+    pub buffer: BufferHandle,
+    pub desc_type: vk::DescriptorType,
+    pub stage_flags: vk::ShaderStageFlags,
+}
+
+pub struct ImageDescriptorInfo {
+    pub binding: u32,
+    pub image: ImageHandle,
+    pub desc_type: vk::DescriptorType,
+    pub stage_flags: vk::ShaderStageFlags,
 }

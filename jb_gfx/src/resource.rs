@@ -225,7 +225,7 @@ impl ResourceManager {
 
 /// A buffer and it's memory allocation.
 #[derive(Copy, Clone)]
-pub struct  Buffer {
+pub struct Buffer {
     buffer: vk::Buffer,
     size: vk::DeviceSize,
     allocation: vk_mem_alloc::Allocation,
@@ -235,12 +235,6 @@ pub struct  Buffer {
 impl Buffer {
     pub fn buffer(&self) -> vk::Buffer {
         self.buffer
-    }
-
-    pub fn buffer_write(&self) -> vk::DescriptorBufferInfo {
-        *vk::DescriptorBufferInfo::builder()
-            .buffer(self.buffer())
-            .range(self.size())
     }
 
     pub fn size(&self) -> vk::DeviceSize {

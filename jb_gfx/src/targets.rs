@@ -47,13 +47,15 @@ impl RenderTargets {
         };
         trace!(
             "Render Target Created: {} | Size: [{},{}]",
-            "Test", actual_size.0, actual_size.1,
+            "Test",
+            actual_size.0,
+            actual_size.1,
         );
         Ok(self.targets.insert(render_target))
     }
 
-    pub fn get_render_target(&self, render_target: RenderTargetHandle) -> Option<&RenderTarget> {
-        self.targets.get(render_target)
+    pub fn get(&self, render_target: RenderTargetHandle) -> Option<ImageHandle> {
+        self.targets.get(render_target).map(|render| render.image)
     }
 
     pub fn recreate_render_targets(&mut self) -> Result<()> {
@@ -118,14 +120,6 @@ pub struct RenderTarget {
 impl RenderTarget {
     pub fn image(&self) -> ImageHandle {
         self.image
-    }
-
-    pub fn size(&self) -> RenderTargetSize {
-        self.size
-    }
-
-    pub fn format(&self) -> vk::Format {
-        self.format
     }
 }
 

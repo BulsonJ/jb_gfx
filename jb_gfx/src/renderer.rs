@@ -18,7 +18,10 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
-use crate::descriptor::{DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache};
+use crate::descriptor::{
+    BufferDescriptorInfo, DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache,
+    ImageDescriptorInfo, JBDescriptorBuilder,
+};
 use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
@@ -107,12 +110,10 @@ impl Renderer {
             RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
             RenderImageType::Depth,
         )?;
-        device.bindless_manager.borrow_mut().add_image_to_bindless(
-            &render_targets
-                .get_render_target(directional_light_shadow_image)
-                .unwrap()
-                .image(),
-        );
+        device
+            .bindless_manager
+            .borrow_mut()
+            .add_image_to_bindless(&render_targets.get(directional_light_shadow_image).unwrap());
 
         let camera = Camera {
             position: (-8.0, 100.0, 0.0).into(),
@@ -186,50 +187,37 @@ impl Renderer {
             let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
             let mut layout = None;
             for i in 0..FRAMES_IN_FLIGHT {
-                let (set, set_layout) =
-                    DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
-                        .bind_buffer(
-                            0,
-                            &[device
-                                .resource_manager
-                                .get_buffer(camera_buffer[i])
-                                .unwrap()
-                                .buffer_write()],
-                            vk::DescriptorType::UNIFORM_BUFFER,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        )
-                        .bind_buffer(
-                            1,
-                            &[device
-                                .resource_manager
-                                .get_buffer(light_buffer[i])
-                                .unwrap()
-                                .buffer_write()],
-                            vk::DescriptorType::UNIFORM_BUFFER,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        )
-                        .bind_buffer(
-                            2,
-                            &[device
-                                .resource_manager
-                                .get_buffer(transform_buffer[i])
-                                .unwrap()
-                                .buffer_write()],
-                            vk::DescriptorType::STORAGE_BUFFER,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        )
-                        .bind_buffer(
-                            3,
-                            &[device
-                                .resource_manager
-                                .get_buffer(material_buffer[i])
-                                .unwrap()
-                                .buffer_write()],
-                            vk::DescriptorType::STORAGE_BUFFER,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        )
-                        .build()
-                        .unwrap();
+                let (set, set_layout) = JBDescriptorBuilder::new(
+                    &device.resource_manager,
+                    &mut descriptor_layout_cache,
+                    &mut descriptor_allocator,
+                )
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 0,
+                    buffer: camera_buffer[i],
+                    desc_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 1,
+                    buffer: light_buffer[i],
+                    desc_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 2,
+                    buffer: transform_buffer[i],
+                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 3,
+                    buffer: material_buffer[i],
+                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
 
                 sets[i] = set;
                 layout = Some(set_layout);
@@ -383,30 +371,25 @@ impl Renderer {
             let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
             let mut layout = None;
             for i in 0..FRAMES_IN_FLIGHT {
-                let (set, set_layout) =
-                    DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
-                        .bind_buffer(
-                            0,
-                            &[device
-                                .resource_manager
-                                .get_buffer(ui_uniform_data[i])
-                                .unwrap()
-                                .buffer_write()],
-                            vk::DescriptorType::UNIFORM_BUFFER,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        )
-                        .bind_buffer(
-                            1,
-                            &[device
-                                .resource_manager
-                                .get_buffer(quad_buffer[i])
-                                .unwrap()
-                                .buffer_write()],
-                            vk::DescriptorType::STORAGE_BUFFER,
-                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        )
-                        .build()
-                        .unwrap();
+                let (set, set_layout) = JBDescriptorBuilder::new(
+                    &device.resource_manager,
+                    &mut descriptor_layout_cache,
+                    &mut descriptor_allocator,
+                )
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 0,
+                    buffer: ui_uniform_data[i],
+                    desc_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 1,
+                    buffer: quad_buffer[i],
+                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
 
                 sets[i] = set;
                 layout = Some(set_layout);
@@ -514,21 +497,12 @@ impl Renderer {
 
         // Get images
 
-        let render_image = self
-            .render_targets
-            .get_render_target(self.render_image)
-            .unwrap()
-            .image();
-        let depth_image = self
-            .render_targets
-            .get_render_target(self.depth_image)
-            .unwrap()
-            .image();
+        let render_image = self.render_targets.get(self.render_image).unwrap();
+        let depth_image = self.render_targets.get(self.depth_image).unwrap();
         let shadow_image = self
             .render_targets
-            .get_render_target(self.directional_light_shadow_image)
-            .unwrap()
-            .image();
+            .get(self.directional_light_shadow_image)
+            .unwrap();
 
         // Copy camera
         if let Some(camera) = self.active_camera {
@@ -668,9 +642,8 @@ impl Renderer {
             .add_image_barrier(ImageBarrier {
                 image: ImageHandleType::Image(
                     self.render_targets
-                        .get_render_target(self.directional_light_shadow_image)
-                        .unwrap()
-                        .image(),
+                        .get(self.directional_light_shadow_image)
+                        .unwrap(),
                 ),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
@@ -733,9 +706,8 @@ impl Renderer {
             .add_image_barrier(ImageBarrier {
                 image: ImageHandleType::Image(
                     self.render_targets
-                        .get_render_target(self.directional_light_shadow_image)
-                        .unwrap()
-                        .image(),
+                        .get(self.directional_light_shadow_image)
+                        .unwrap(),
                 ),
                 src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
                 src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
@@ -963,12 +935,7 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(
-                    self.render_targets
-                        .get_render_target(self.render_image)
-                        .unwrap()
-                        .image(),
-                ),
+                image: ImageHandleType::Image(self.render_targets.get(self.render_image).unwrap()),
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 dst_stage_mask: PipelineStageFlags2::BLIT,
@@ -1019,12 +986,7 @@ impl Renderer {
                 self.device.graphics_command_buffer[self.device.buffered_resource_number()],
                 self.device
                     .resource_manager
-                    .get_image(
-                        self.render_targets
-                            .get_render_target(self.render_image)
-                            .unwrap()
-                            .image(),
-                    )
+                    .get_image(self.render_targets.get(self.render_image).unwrap())
                     .unwrap()
                     .image(),
                 ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -1098,9 +1060,8 @@ impl Renderer {
                         .get_descriptor_index(
                             &self
                                 .render_targets
-                                .get_render_target(self.directional_light_shadow_image)
-                                .unwrap()
-                                .image(),
+                                .get(self.directional_light_shadow_image)
+                                .unwrap(),
                         )
                         .unwrap() as i32,
                     0,
