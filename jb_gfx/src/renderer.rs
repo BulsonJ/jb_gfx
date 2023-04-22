@@ -1597,7 +1597,6 @@ impl Renderer {
     }
 
     pub fn draw_ui(&mut self, ui: UIMesh) -> Result<()> {
-        // TODO : Implement drawing textures from UI
         self.ui_to_draw.push(ui);
         Ok(())
     }
