@@ -18,6 +18,7 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::descriptor::{DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache};
 use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
@@ -46,7 +47,6 @@ pub struct Renderer {
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     camera_uniform: CameraUniform,
     default_camera: Camera,
-    descriptor_pool: vk::DescriptorPool,
     descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     pub clear_colour: Colour,
@@ -74,6 +74,8 @@ pub struct Renderer {
     render_image: RenderTargetHandle,
     depth_image: RenderTargetHandle,
     directional_light_shadow_image: RenderTargetHandle,
+    descriptor_layout_cache: DescriptorLayoutCache,
+    descriptor_allocator: DescriptorAllocator,
 }
 
 impl Renderer {
@@ -83,6 +85,9 @@ impl Renderer {
         let device = Arc::new(GraphicsDevice::new(window)?);
         let mut render_targets = RenderTargets::new(device.clone());
         let mut pipeline_manager = PipelineManager::new(device.clone());
+
+        let mut descriptor_layout_cache = DescriptorLayoutCache::new(device.vk_device.clone());
+        let mut descriptor_allocator = DescriptorAllocator::new(device.vk_device.clone());
 
         let render_image_format = vk::Format::R8G8B8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
@@ -108,187 +113,6 @@ impl Renderer {
                 .unwrap()
                 .image(),
         );
-
-        let pool_sizes = [
-            *vk::DescriptorPoolSize::builder()
-                .descriptor_count(100u32)
-                .ty(vk::DescriptorType::UNIFORM_BUFFER),
-            *vk::DescriptorPoolSize::builder()
-                .descriptor_count(100u32)
-                .ty(vk::DescriptorType::STORAGE_BUFFER),
-            *vk::DescriptorPoolSize::builder()
-                .descriptor_count(1000u32)
-                .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER),
-        ];
-
-        let pool_create_info = vk::DescriptorPoolCreateInfo::builder()
-            .max_sets(4u32)
-            .pool_sizes(&pool_sizes);
-
-        let descriptor_pool = unsafe {
-            device
-                .vk_device
-                .create_descriptor_pool(&pool_create_info, None)
-        }?;
-
-        let descriptor_set_bindings = [
-            *vk::DescriptorSetLayoutBinding::builder()
-                .binding(0u32)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-            *vk::DescriptorSetLayoutBinding::builder()
-                .binding(1u32)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .descriptor_count(1u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-            *vk::DescriptorSetLayoutBinding::builder()
-                .binding(2u32)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-            *vk::DescriptorSetLayoutBinding::builder()
-                .binding(3u32)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1u32)
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-        ];
-
-        let descriptor_set_layout_create_info =
-            vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
-
-        let descriptor_set_layout = unsafe {
-            device
-                .vk_device
-                .create_descriptor_set_layout(&descriptor_set_layout_create_info, None)
-        }?;
-
-        let push_constant_range = *vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-            .size(size_of::<PushConstants>() as u32)
-            .offset(0u32);
-
-        let pso_layout = pipeline_manager.create_pipeline_layout(
-            &[
-                *device.bindless_descriptor_set_layout(),
-                descriptor_set_layout,
-            ],
-            &[push_constant_range],
-        )?;
-
-        let pso = {
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
-
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/default.vert".to_string(),
-                fragment_shader: "assets/shaders/default.frag".to_string(),
-                vertex_input_state: Vertex::get_vertex_input_desc(),
-                color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
-                    blend: false,
-                    ..Default::default()
-                }],
-                depth_attachment_format: Some(depth_image_format),
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::BACK,
-            };
-
-            pipeline_manager.create_pipeline(&pso_build_info)?
-        };
-
-        let shadow_pso = {
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
-
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/shadow.vert".to_string(),
-                fragment_shader: "assets/shaders/shadow.frag".to_string(),
-                vertex_input_state: Vertex::get_vertex_input_desc(),
-                color_attachment_formats: vec![],
-                depth_attachment_format: Some(depth_image_format),
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::FRONT,
-            };
-
-            pipeline_manager.create_pipeline(&pso_build_info)?
-        };
-
-        let ui_descriptor_set_layout = {
-            let descriptor_set_bindings = [
-                *vk::DescriptorSetLayoutBinding::builder()
-                    .binding(0u32)
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .descriptor_count(1u32)
-                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-                *vk::DescriptorSetLayoutBinding::builder()
-                    .binding(1u32)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .descriptor_count(1u32)
-                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT),
-            ];
-
-            let descriptor_set_layout_create_info =
-                vk::DescriptorSetLayoutCreateInfo::builder().bindings(&descriptor_set_bindings);
-
-            unsafe {
-                device
-                    .vk_device
-                    .create_descriptor_set_layout(&descriptor_set_layout_create_info, None)
-            }?
-        };
-
-        let (ui_pso, ui_pso_layout) = {
-            let pso_layout = pipeline_manager.create_pipeline_layout(
-                &[
-                    *device.bindless_descriptor_set_layout(),
-                    ui_descriptor_set_layout,
-                ],
-                &[],
-            )?;
-
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(false)
-                .depth_write_enable(false)
-                .depth_compare_op(vk::CompareOp::ALWAYS)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
-
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/ui.vert".to_string(),
-                fragment_shader: "assets/shaders/ui.frag".to_string(),
-                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
-                color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
-                    blend: true,
-                    src_blend_factor_color: vk::BlendFactor::ONE,
-                    dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                }],
-                depth_attachment_format: None,
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::NONE,
-            };
-
-            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
-            (pso, pso_layout)
-        };
 
         let camera = Camera {
             position: (-8.0, 100.0, 0.0).into(),
@@ -358,20 +182,146 @@ impl Renderer {
             ]
         };
 
-        let descriptor_set = {
-            let set_layouts = [descriptor_set_layout];
-            let create_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(&set_layouts);
+        let (descriptor_set, descriptor_set_layout) = {
+            let camera_buffer_write = [*vk::DescriptorBufferInfo::builder()
+                .buffer(
+                    device
+                        .resource_manager
+                        .get_buffer(camera_buffer[0])
+                        .unwrap()
+                        .buffer(),
+                )
+                .range(size_of::<CameraUniform>() as DeviceSize)];
 
-            let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
-            let first = *descriptor_sets.get(0).unwrap();
-            let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
-            let second = *descriptor_sets.get(0).unwrap();
+            let transform_buffer_write = {
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(transform_buffer[0])
+                    .unwrap();
 
-            [first, second]
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let material_buffer_write = {
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(material_buffer[0])
+                    .unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let light_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(light_buffer[0]).unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let (set, layout) =
+                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
+                    .bind_buffer(
+                        0,
+                        &camera_buffer_write,
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        1,
+                        &light_buffer_write,
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        2,
+                        &transform_buffer_write,
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        3,
+                        &material_buffer_write,
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .build()
+                    .unwrap();
+
+            let camera_buffer_write = [*vk::DescriptorBufferInfo::builder()
+                .buffer(
+                    device
+                        .resource_manager
+                        .get_buffer(camera_buffer[1])
+                        .unwrap()
+                        .buffer(),
+                )
+                .range(size_of::<CameraUniform>() as DeviceSize)];
+
+            let transform_buffer_write = {
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(transform_buffer[1])
+                    .unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let material_buffer_write = {
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(material_buffer[1])
+                    .unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let light_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(light_buffer[1]).unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let (set_two, layout) =
+                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
+                    .bind_buffer(
+                        0,
+                        &camera_buffer_write,
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        1,
+                        &light_buffer_write,
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        2,
+                        &transform_buffer_write,
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        3,
+                        &material_buffer_write,
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .build()
+                    .unwrap();
+
+            ([set, set_two], layout)
         };
 
         for set in descriptor_set.iter() {
@@ -410,100 +360,72 @@ impl Renderer {
                 .view()
                 .mapped_slice()?
                 .copy_from_slice(&uniforms);
-
-            let camera_buffer_write = vk::DescriptorBufferInfo::builder()
-                .buffer(
-                    device
-                        .resource_manager
-                        .get_buffer(*camera_buffer)
-                        .unwrap()
-                        .buffer(),
-                )
-                .range(size_of::<CameraUniform>() as DeviceSize);
-
-            let transform_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(*transform_buffer)
-                    .unwrap();
-
-                vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())
-            };
-
-            let material_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(*material_buffer)
-                    .unwrap();
-
-                vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())
-            };
-
-            let light_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(*light_buffer).unwrap();
-
-                vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())
-            };
-
-            let desc_set_writes = [
-                *vk::WriteDescriptorSet::builder()
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .dst_binding(0)
-                    .dst_set(*set)
-                    .buffer_info(&[*camera_buffer_write]),
-                *vk::WriteDescriptorSet::builder()
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .dst_binding(1)
-                    .dst_set(*set)
-                    .buffer_info(&[*light_buffer_write]),
-                *vk::WriteDescriptorSet::builder()
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .dst_binding(2)
-                    .dst_set(*set)
-                    .buffer_info(&[*transform_buffer_write]),
-                *vk::WriteDescriptorSet::builder()
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .dst_binding(3)
-                    .dst_set(*set)
-                    .buffer_info(&[*material_buffer_write]),
-            ];
-
-            unsafe {
-                device
-                    .vk_device
-                    .update_descriptor_sets(&desc_set_writes, &[])
-            };
         }
 
-        let ui_descriptor_set = {
-            let set_layouts = [ui_descriptor_set_layout];
-            let create_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(&set_layouts);
+        let push_constant_range = *vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+            .size(size_of::<PushConstants>() as u32)
+            .offset(0u32);
 
-            let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
-            let first = *descriptor_sets.get(0).unwrap();
-            let descriptor_sets =
-                unsafe { device.vk_device.allocate_descriptor_sets(&create_info) }?;
-            let second = *descriptor_sets.get(0).unwrap();
+        let pso_layout = pipeline_manager.create_pipeline_layout(
+            &[
+                *device.bindless_descriptor_set_layout(),
+                descriptor_set_layout,
+            ],
+            &[push_constant_range],
+        )?;
 
-            [first, second]
+        let pso = {
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/default.vert".to_string(),
+                fragment_shader: "assets/shaders/default.frag".to_string(),
+                vertex_input_state: Vertex::get_vertex_input_desc(),
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: render_image_format,
+                    blend: false,
+                    ..Default::default()
+                }],
+                depth_attachment_format: Some(depth_image_format),
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::BACK,
+            };
+
+            pipeline_manager.create_pipeline(&pso_build_info)?
         };
 
-        for set in ui_descriptor_set.iter() {
-            device.set_vulkan_debug_name(
-                set.as_raw(),
-                ObjectType::DESCRIPTOR_SET,
-                "UI Descriptor Set(1)",
-            )?;
-        }
+        let shadow_pso = {
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/shadow.vert".to_string(),
+                fragment_shader: "assets/shaders/shadow.frag".to_string(),
+                vertex_input_state: Vertex::get_vertex_input_desc(),
+                color_attachment_formats: vec![],
+                depth_attachment_format: Some(depth_image_format),
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::FRONT,
+            };
+
+            pipeline_manager.create_pipeline(&pso_build_info)?
+        };
 
         let quad_buffer = {
             let buffer_create_info = BufferCreateInfo {
@@ -544,46 +466,119 @@ impl Renderer {
             ]
         };
 
-        for (i, set) in ui_descriptor_set.iter().enumerate() {
-            let ui_buffer = ui_uniform_data.get(i).unwrap();
-
+        let (ui_descriptor_set, ui_descriptor_set_layout) = {
             let ui_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(*ui_buffer).unwrap();
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(ui_uniform_data[0])
+                    .unwrap();
 
-                vk::DescriptorBufferInfo::builder()
+                [*vk::DescriptorBufferInfo::builder()
                     .buffer(buffer.buffer())
-                    .range(buffer.size())
+                    .range(buffer.size())]
             };
-
-            let quad_buffer = quad_buffer.get(i).unwrap();
 
             let quad_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(*quad_buffer).unwrap();
+                let buffer = device.resource_manager.get_buffer(quad_buffer[0]).unwrap();
 
-                vk::DescriptorBufferInfo::builder()
+                [*vk::DescriptorBufferInfo::builder()
                     .buffer(buffer.buffer())
-                    .range(buffer.size())
+                    .range(buffer.size())]
             };
 
-            let desc_set_writes = [
-                *vk::WriteDescriptorSet::builder()
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .dst_binding(0)
-                    .dst_set(*set)
-                    .buffer_info(&[*ui_buffer_write]),
-                *vk::WriteDescriptorSet::builder()
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .dst_binding(1)
-                    .dst_set(*set)
-                    .buffer_info(&[*quad_buffer_write]),
-            ];
+            let (set, layout) =
+                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
+                    .bind_buffer(
+                        0,
+                        &ui_buffer_write,
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        1,
+                        &quad_buffer_write,
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .build()
+                    .unwrap();
 
-            unsafe {
-                device
-                    .vk_device
-                    .update_descriptor_sets(&desc_set_writes, &[])
+            let ui_buffer_write = {
+                let buffer = device
+                    .resource_manager
+                    .get_buffer(ui_uniform_data[1])
+                    .unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
             };
-        }
+
+            let quad_buffer_write = {
+                let buffer = device.resource_manager.get_buffer(quad_buffer[1]).unwrap();
+
+                [*vk::DescriptorBufferInfo::builder()
+                    .buffer(buffer.buffer())
+                    .range(buffer.size())]
+            };
+
+            let (set_two, layout) =
+                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
+                    .bind_buffer(
+                        0,
+                        &ui_buffer_write,
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_buffer(
+                        1,
+                        &quad_buffer_write,
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .build()
+                    .unwrap();
+
+            ([set, set_two], layout)
+        };
+
+        let (ui_pso, ui_pso_layout) = {
+            let pso_layout = pipeline_manager.create_pipeline_layout(
+                &[
+                    *device.bindless_descriptor_set_layout(),
+                    ui_descriptor_set_layout,
+                ],
+                &[],
+            )?;
+
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(false)
+                .depth_write_enable(false)
+                .depth_compare_op(vk::CompareOp::ALWAYS)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/ui.vert".to_string(),
+                fragment_shader: "assets/shaders/ui.frag".to_string(),
+                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: render_image_format,
+                    blend: true,
+                    src_blend_factor_color: vk::BlendFactor::ONE,
+                    dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                }],
+                depth_attachment_format: None,
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::NONE,
+            };
+
+            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
+            (pso, pso_layout)
+        };
 
         info!("Renderer Created");
         Ok(Self {
@@ -593,7 +588,6 @@ impl Renderer {
             camera_buffer,
             camera_uniform,
             default_camera: camera,
-            descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
             clear_colour: Colour::black(),
@@ -621,6 +615,8 @@ impl Renderer {
             depth_image,
             directional_light_shadow_image,
             render_targets,
+            descriptor_layout_cache,
+            descriptor_allocator,
         })
     }
 
@@ -1612,15 +1608,8 @@ impl Drop for Renderer {
         unsafe {
             self.device.vk_device.device_wait_idle().unwrap();
             self.pipeline_manager.deinit();
-            self.device
-                .vk_device
-                .destroy_descriptor_set_layout(self.ui_descriptor_set_layout, None);
-            self.device
-                .vk_device
-                .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
-            self.device
-                .vk_device
-                .destroy_descriptor_pool(self.descriptor_pool, None);
+            self.descriptor_layout_cache.cleanup();
+            self.descriptor_allocator.cleanup();
         }
     }
 }

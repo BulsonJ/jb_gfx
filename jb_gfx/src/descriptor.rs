@@ -9,7 +9,7 @@ use std::ptr::hash;
 use std::sync::Arc;
 use vk_mem_alloc::create_pool;
 
-struct DescriptorAllocator {
+pub struct DescriptorAllocator {
     device: Arc<ash::Device>,
     descriptor_sizes: PoolSizes,
     used_pools: Vec<vk::DescriptorPool>,
@@ -162,7 +162,7 @@ impl Default for PoolSizes {
     }
 }
 
-struct DescriptorLayoutCache {
+pub struct DescriptorLayoutCache {
     device: Arc<ash::Device>,
     layout_cache: HashMap<DescriptorLayoutInfo, vk::DescriptorSetLayout>,
 }
@@ -190,7 +190,7 @@ impl DescriptorLayoutCache {
             .bindings
             .reserve(create_info.binding_count as usize);
 
-        for i in 0..layout_info.bindings.len() {
+        for i in 0..create_info.binding_count {
             layout_info
                 .bindings
                 .push(unsafe { create_info.p_bindings.offset(i as isize).read() });
@@ -201,7 +201,10 @@ impl DescriptorLayoutCache {
         return if let Some(layout) = self.layout_cache.get(&layout_info) {
             *layout
         } else {
-            unsafe { self.device.create_descriptor_set_layout(&create_info, None) }.unwrap()
+            let layout =
+                unsafe { self.device.create_descriptor_set_layout(&create_info, None) }.unwrap();
+            self.layout_cache.insert(layout_info, layout);
+            layout
         };
     }
 }
@@ -254,7 +257,7 @@ impl Hash for DescriptorLayoutInfo {
     }
 }
 
-struct DescriptorBuilder<'a> {
+pub struct DescriptorBuilder<'a> {
     writes: Vec<vk::WriteDescriptorSet>,
     bindings: Vec<vk::DescriptorSetLayoutBinding>,
 
@@ -275,7 +278,7 @@ impl<'a> DescriptorBuilder<'a> {
     pub fn bind_buffer(
         mut self,
         binding: u32,
-        buffer_info: vk::DescriptorBufferInfo,
+        buffer_info: &[vk::DescriptorBufferInfo],
         desc_type: vk::DescriptorType,
         stage_flags: vk::ShaderStageFlags,
     ) -> Self {
@@ -287,7 +290,6 @@ impl<'a> DescriptorBuilder<'a> {
 
         self.bindings.push(*new_binding);
 
-        let buffer_info = [buffer_info];
         let new_write = *vk::WriteDescriptorSet::builder()
             .descriptor_type(desc_type)
             .dst_binding(binding)
