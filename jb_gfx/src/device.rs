@@ -772,9 +772,9 @@ impl GraphicsDevice {
         Ok(())
     }
 
-    pub fn resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> Result<()> {
+    pub fn resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> Result<bool> {
         if new_size.width == 0u32 || new_size.height == 0u32 || new_size == self.size() {
-            return Ok(());
+            return Ok(false);
         }
 
         profiling::scope!("Resize");
@@ -825,7 +825,6 @@ impl GraphicsDevice {
         {
             vk::SurfaceTransformFlagsKHR::IDENTITY
         } else {
-        } else {
             surface_capabilities.current_transform
         };
         let loader = self.swapchain.borrow().swapchain_loader.clone();
@@ -839,7 +838,7 @@ impl GraphicsDevice {
         )?);
 
         info!("Recreating swapchain.");
-        Ok(())
+        Ok(true)
     }
 
     pub(crate) fn load_image(

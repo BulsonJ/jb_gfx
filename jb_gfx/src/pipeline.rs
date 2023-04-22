@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::fs;
+use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk;
@@ -10,15 +11,17 @@ use slotmap::{new_key_type, SlotMap};
 use crate::device::GraphicsDevice;
 
 pub(crate) struct PipelineManager {
+    device: Arc<GraphicsDevice>,
     shader_compiler: shaderc::Compiler,
     pipelines: SlotMap<PipelineHandle, Pipeline>,
     pipeline_layouts: Vec<vk::PipelineLayout>,
 }
 
 impl PipelineManager {
-    pub fn new() -> Self {
+    pub fn new(device: Arc<GraphicsDevice>) -> Self {
         let shader_compiler = shaderc::Compiler::new().unwrap();
         Self {
+            device,
             shader_compiler,
             pipelines: SlotMap::default(),
             pipeline_layouts: Vec::default(),
@@ -27,7 +30,6 @@ impl PipelineManager {
 
     pub fn create_pipeline_layout(
         &mut self,
-        device: &GraphicsDevice,
         descriptor_sets: &[DescriptorSetLayout],
         push_constants: &[PushConstantRange],
     ) -> Result<vk::PipelineLayout> {
@@ -36,7 +38,7 @@ impl PipelineManager {
             .push_constant_ranges(&push_constants);
 
         let layout = unsafe {
-            device
+            self.device
                 .vk_device
                 .create_pipeline_layout(&pipeline_layout_info, None)
         }?;
@@ -47,12 +49,11 @@ impl PipelineManager {
 
     pub fn create_pipeline(
         &mut self,
-        device: &GraphicsDevice,
         build_info: &PipelineCreateInfo,
     ) -> Result<PipelineHandle> {
         let pso = PipelineManager::create_pipeline_internal(
             &mut self.shader_compiler,
-            device,
+            &self.device,
             build_info,
         )?;
         Ok(self.pipelines.insert(Pipeline {

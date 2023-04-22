@@ -170,10 +170,9 @@ impl Renderer {
             .size(size_of::<PushConstants>() as u32)
             .offset(0u32);
 
-        let mut pipeline_manager = PipelineManager::new();
+        let mut pipeline_manager = PipelineManager::new(device.clone());
 
         let pso_layout = pipeline_manager.create_pipeline_layout(
-            &device,
             &[
                 *device.bindless_descriptor_set_layout(),
                 descriptor_set_layout,
@@ -206,7 +205,7 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::BACK,
             };
 
-            pipeline_manager.create_pipeline(&device, &pso_build_info)?
+            pipeline_manager.create_pipeline(&pso_build_info)?
         };
 
         let shadow_pso = {
@@ -230,7 +229,7 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::FRONT,
             };
 
-            pipeline_manager.create_pipeline(&device, &pso_build_info)?
+            pipeline_manager.create_pipeline( &pso_build_info)?
         };
 
         let ui_descriptor_set_layout = {
@@ -259,7 +258,6 @@ impl Renderer {
 
         let (ui_pso, ui_pso_layout) = {
             let pso_layout = pipeline_manager.create_pipeline_layout(
-                &device,
                 &[
                     *device.bindless_descriptor_set_layout(),
                     ui_descriptor_set_layout,
@@ -292,7 +290,7 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::NONE,
             };
 
-            let pso = pipeline_manager.create_pipeline(&device, &pso_build_info)?;
+            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
             (pso, pso_layout)
         };
 
@@ -631,11 +629,12 @@ impl Renderer {
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
-        self.device.resize(new_size)?;
-        self.render_targets.recreate_render_targets(
-            &self.device.resource_manager,
-            (self.device.size().width, self.device.size().height),
-        )?;
+        if self.device.resize(new_size)? {
+            self.render_targets.recreate_render_targets(
+                &self.device.resource_manager,
+                (self.device.size().width, self.device.size().height),
+            )?;
+        }
 
         Ok(())
     }
