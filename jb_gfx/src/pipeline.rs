@@ -142,7 +142,7 @@ impl PipelineManager {
         self.pipelines.get(handle).unwrap().pso
     }
 
-    pub fn reload_shaders(&mut self, device: &mut GraphicsDevice) -> Result<()> {
+    pub fn reload_shaders(&mut self, device: &GraphicsDevice) -> Result<()> {
         for (_, pipeline) in self.pipelines.iter_mut() {
             pipeline.pso = PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,

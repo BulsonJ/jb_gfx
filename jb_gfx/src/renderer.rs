@@ -1,4 +1,5 @@
 use std::mem::size_of;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use ash::vk;
@@ -39,7 +40,7 @@ const MAX_QUADS: u64 = 100000u64;
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
 pub struct Renderer {
-    device: GraphicsDevice,
+    device: Arc<GraphicsDevice>,
     pso_layout: vk::PipelineLayout,
     pso: PipelineHandle,
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
@@ -79,8 +80,8 @@ impl Renderer {
     pub fn new(window: &Window) -> Result<Self> {
         profiling::scope!("Renderer::new");
 
-        let mut device = GraphicsDevice::new(window)?;
-        let mut render_targets = RenderTargets::new((device.size.width, device.size.height));
+        let device = Arc::new(GraphicsDevice::new(window)?);
+        let mut render_targets = RenderTargets::new((device.size().width, device.size().height));
 
         let render_image_format = vk::Format::R8G8B8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
@@ -205,7 +206,7 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::BACK,
             };
 
-            pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
+            pipeline_manager.create_pipeline(&device, &pso_build_info)?
         };
 
         let shadow_pso = {
@@ -229,7 +230,7 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::FRONT,
             };
 
-            pipeline_manager.create_pipeline(&mut device, &pso_build_info)?
+            pipeline_manager.create_pipeline(&device, &pso_build_info)?
         };
 
         let ui_descriptor_set_layout = {
@@ -291,14 +292,14 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::NONE,
             };
 
-            let pso = pipeline_manager.create_pipeline(&mut device, &pso_build_info)?;
+            let pso = pipeline_manager.create_pipeline(&device, &pso_build_info)?;
             (pso, pso_layout)
         };
 
         let camera = Camera {
             position: (-8.0, 100.0, 0.0).into(),
             direction: (1.0, 0.0, 0.0).into(),
-            aspect: device.size.width as f32 / device.size.height as f32,
+            aspect: device.size().width as f32 / device.size().height as f32,
             fovy: 90.0,
             znear: 0.1,
             zfar: 4000.0,
@@ -632,8 +633,8 @@ impl Renderer {
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
         self.device.resize(new_size)?;
         self.render_targets.recreate_render_targets(
-            &mut self.device.resource_manager,
-            (self.device.size.width, self.device.size.height),
+            &self.device.resource_manager,
+            (self.device.size().width, self.device.size().height),
         )?;
 
         Ok(())
@@ -641,7 +642,7 @@ impl Renderer {
 
     pub fn reload_shaders(&mut self) -> Result<()> {
         profiling::scope!("Reload shaders");
-        self.pipeline_manager.reload_shaders(&mut self.device)?;
+        self.pipeline_manager.reload_shaders(&self.device)?;
         info!("Shaders reloaded!");
         Ok(())
     }
@@ -891,7 +892,7 @@ impl Renderer {
 
         // Normal Pass
         let clear_colour: Vector3<f32> = self.clear_colour.into();
-        RenderPassBuilder::new((self.device.size.width, self.device.size.height))
+        RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
                 target: AttachmentHandle::Image(render_image),
                 clear_value: vk::ClearValue {
@@ -951,8 +952,8 @@ impl Renderer {
 
         let ui_uniform = UIUniformData {
             screen_size: [
-                self.device.size.width as f32,
-                self.device.size.height as f32,
+                self.device.size().width as f32,
+                self.device.size().height as f32,
             ],
         };
         self.device
@@ -1019,7 +1020,7 @@ impl Renderer {
         };
 
         // UI Pass
-        RenderPassBuilder::new((self.device.size.width, self.device.size.height))
+        RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
                 target: AttachmentHandle::Image(render_image),
                 clear_value: vk::ClearValue {
@@ -1133,8 +1134,8 @@ impl Renderer {
             .src_offsets([
                 vk::Offset3D { x: 0, y: 0, z: 0 },
                 vk::Offset3D {
-                    x: self.device.size.width as i32,
-                    y: self.device.size.height as i32,
+                    x: self.device.size().width as i32,
+                    y: self.device.size().height as i32,
                     z: 1,
                 },
             ])
@@ -1147,8 +1148,8 @@ impl Renderer {
             .dst_offsets([
                 vk::Offset3D { x: 0, y: 0, z: 0 },
                 vk::Offset3D {
-                    x: self.device.size.width as i32,
-                    y: self.device.size.height as i32,
+                    x: self.device.size().width as i32,
+                    y: self.device.size().height as i32,
                     z: 1,
                 },
             ]);

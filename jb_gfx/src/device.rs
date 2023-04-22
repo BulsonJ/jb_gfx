@@ -6,9 +6,13 @@ use std::{borrow::Cow, ffi::CStr};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
-use ash::vk::{self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType};
+use ash::vk::{
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
+    SurfaceTransformFlagsKHR,
+};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
@@ -16,17 +20,17 @@ use crate::bindless::BindlessManager;
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
-use crate::targets::RenderTargets;
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 pub const SHADOWMAP_SIZE: u32 = 8192u32 * 2u32;
 
 pub struct GraphicsDevice {
     instance: ash::Instance,
-    pub size: winit::dpi::PhysicalSize<u32>,
-    swapchain: Swapchain,
-    surface: Surface,
-    present_index: usize,
+    size: RefCell<PhysicalSize<u32>>,
+    swapchain: RefCell<Swapchain>,
+    surface: RefCell<Surface>,
+    present_index: RefCell<usize>,
+    frame_number: RefCell<usize>,
     pub vk_device: Arc<ash::Device>,
     pdevice: vk::PhysicalDevice,
     pub resource_manager: Arc<ResourceManager>,
@@ -40,7 +44,6 @@ pub struct GraphicsDevice {
     pub present_complete_semaphore: [vk::Semaphore; FRAMES_IN_FLIGHT],
     pub upload_context: UploadContext,
     pub default_sampler: vk::Sampler,
-    frame_number: usize,
     images_to_upload: RefCell<Vec<ImageToUpload>>,
     buffers_to_delete: RefCell<Vec<(BufferHandle, usize)>>,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
@@ -218,74 +221,23 @@ impl GraphicsDevice {
             } else {
                 surface_capabilities.current_transform
             };
-            let present_modes = unsafe {
-                surface_loader.get_physical_device_surface_present_modes(pdevice, surface)
-            }?;
-            let present_mode = present_modes
-                .iter()
-                .cloned()
-                .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-                .unwrap_or(vk::PresentModeKHR::FIFO);
             let swapchain_loader = ash::extensions::khr::Swapchain::new(&instance, &device);
 
-            let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-                .surface(surface)
-                .min_image_count(desired_image_count)
-                .image_color_space(surface_format.color_space)
-                .image_format(surface_format.format)
-                .image_extent(surface_resolution)
-                .image_usage(
-                    vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST,
-                )
-                .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .pre_transform(pre_transform)
-                .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-                .present_mode(present_mode)
-                .clipped(true)
-                .image_array_layers(1);
-
-            let swapchain =
-                unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }?;
-
-            let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }?;
-            let present_image_views: Vec<vk::ImageView> = present_images
-                .iter()
-                .map(|&image| {
-                    let create_view_info = vk::ImageViewCreateInfo::builder()
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(surface_format.format)
-                        .components(vk::ComponentMapping {
-                            r: vk::ComponentSwizzle::R,
-                            g: vk::ComponentSwizzle::G,
-                            b: vk::ComponentSwizzle::B,
-                            a: vk::ComponentSwizzle::A,
-                        })
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .image(image);
-                    unsafe { device.create_image_view(&create_view_info, None) }.unwrap()
-                })
-                .collect();
-
-            (
-                Surface {
-                    surface,
-                    surface_loader,
-                    surface_format,
-                    surface_resolution,
-                },
-                Swapchain {
-                    swapchain,
-                    swapchain_loader,
-                    present_images,
-                    present_image_views,
-                },
-            )
+            let surface = Surface {
+                surface,
+                surface_loader,
+                surface_format,
+                surface_resolution,
+            };
+            let swapchain = Swapchain::new(
+                &device,
+                swapchain_loader,
+                pdevice,
+                &surface,
+                pre_transform,
+                desired_image_count,
+            )?;
+            (surface, swapchain)
         };
 
         let pool_create_info = vk::CommandPoolCreateInfo::builder()
@@ -486,19 +438,23 @@ impl GraphicsDevice {
             [first, second]
         };
 
-        let resource_manager =  Arc::new(resource_manager);
+        let resource_manager = Arc::new(resource_manager);
         let samplers = vec![default_sampler, shadow_sampler, ui_sampler];
-        let mut bindless_manager = RefCell::new(BindlessManager::new(device.clone(), resource_manager.clone(), bindless_descriptor_set));
+        let mut bindless_manager = RefCell::new(BindlessManager::new(
+            device.clone(),
+            resource_manager.clone(),
+            bindless_descriptor_set,
+        ));
         bindless_manager
             .borrow_mut()
             .setup_samplers(&samplers, &device)?;
 
         let device = Self {
             instance,
-            size,
-            swapchain,
-            surface,
-            present_index: 0,
+            size: RefCell::new(size),
+            swapchain: RefCell::new(swapchain),
+            surface: RefCell::new(surface),
+            present_index: RefCell::new(0),
             vk_device: device,
             pdevice,
             resource_manager,
@@ -512,7 +468,7 @@ impl GraphicsDevice {
             present_complete_semaphore,
             upload_context,
             default_sampler,
-            frame_number: 0usize,
+            frame_number: RefCell::new(0),
             images_to_upload: RefCell::new(Vec::default()),
             buffers_to_delete: RefCell::new(Vec::default()),
             bindless_descriptor_set_layout,
@@ -535,27 +491,35 @@ impl GraphicsDevice {
         Ok(device)
     }
 
+    fn present_index(&self) -> usize {
+        *self.present_index.borrow()
+    }
+
+    pub fn size(&self) -> PhysicalSize<u32> {
+        *self.size.borrow()
+    }
+
     pub fn get_present_image(&self) -> vk::Image {
-        self.swapchain.present_images[self.present_index]
+        self.swapchain.borrow().present_images[self.present_index()]
     }
 
     pub fn get_present_image_view(&self) -> vk::ImageView {
-        self.swapchain.present_image_views[self.present_index]
+        self.swapchain.borrow().present_image_views[self.present_index()]
     }
 
     pub fn surface_format(&self) -> vk::SurfaceFormatKHR {
-        self.surface.surface_format
+        self.surface.borrow().surface_format
     }
 
     pub fn frame_number(&self) -> usize {
-        self.frame_number
+        *self.frame_number.borrow()
     }
 
     pub fn buffered_resource_number(&self) -> usize {
-        self.frame_number % 2
+        self.frame_number() % 2
     }
 
-    pub fn start_frame(&mut self) -> Result<()> {
+    pub fn start_frame(&self) -> Result<()> {
         profiling::scope!("Start Frame");
 
         unsafe {
@@ -579,14 +543,14 @@ impl GraphicsDevice {
         }?;
 
         let (present_index, _) = unsafe {
-            self.swapchain.swapchain_loader.acquire_next_image(
-                self.swapchain.swapchain,
+            self.swapchain.borrow().swapchain_loader.acquire_next_image(
+                self.swapchain.borrow().swapchain,
                 u64::MAX,
                 self.present_complete_semaphore[self.buffered_resource_number()],
                 vk::Fence::null(),
             )
         }?;
-        self.present_index = present_index as usize;
+        *self.present_index.borrow_mut() = present_index as usize;
 
         // Begin command buffer
 
@@ -786,12 +750,12 @@ impl GraphicsDevice {
         Ok(())
     }
 
-    pub fn end_frame(&mut self) -> Result<()> {
+    pub fn end_frame(&self) -> Result<()> {
         profiling::scope!("End Frame");
 
         let wait_semaphores = [self.rendering_complete_semaphore[self.buffered_resource_number()]];
-        let swapchains = [self.swapchain.swapchain];
-        let image_indices = [self.present_index as u32];
+        let swapchains = [self.swapchain.borrow().swapchain];
+        let image_indices = [self.present_index() as u32];
         let present_info = vk::PresentInfoKHR::builder()
             .wait_semaphores(&wait_semaphores)
             .swapchains(&swapchains)
@@ -799,32 +763,34 @@ impl GraphicsDevice {
 
         unsafe {
             self.swapchain
+                .borrow()
                 .swapchain_loader
                 .queue_present(self.graphics_queue, &present_info)
         }?;
 
-        self.frame_number += 1usize;
+        *self.frame_number.borrow_mut() += 1usize;
         Ok(())
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) -> Result<()> {
-        if new_size.width == 0u32 || new_size.height == 0u32 || new_size == self.size {
+    pub fn resize(&self, new_size: winit::dpi::PhysicalSize<u32>) -> Result<()> {
+        if new_size.width == 0u32 || new_size.height == 0u32 || new_size == self.size() {
             return Ok(());
         }
 
         profiling::scope!("Resize");
 
         unsafe { self.vk_device.device_wait_idle() }?;
-        self.size = new_size;
+        *self.size.borrow_mut() = new_size;
 
         // Destroy old swapchain
 
         unsafe {
             self.swapchain
+                .borrow()
                 .swapchain_loader
-                .destroy_swapchain(self.swapchain.swapchain, None);
+                .destroy_swapchain(self.swapchain.borrow().swapchain, None);
 
-            for &image_view in self.swapchain.present_image_views.iter() {
+            for &image_view in self.swapchain.borrow().present_image_views.iter() {
                 self.vk_device.destroy_image_view(image_view, None);
             }
         }
@@ -832,8 +798,12 @@ impl GraphicsDevice {
         // Create swapchain
         let surface_capabilities = unsafe {
             self.surface
+                .borrow()
                 .surface_loader
-                .get_physical_device_surface_capabilities(self.pdevice, self.surface.surface)
+                .get_physical_device_surface_capabilities(
+                    self.pdevice,
+                    self.surface.borrow().surface,
+                )
         }?;
         let mut desired_image_count = surface_capabilities.min_image_count + 1;
         if surface_capabilities.max_image_count > 0
@@ -841,82 +811,32 @@ impl GraphicsDevice {
         {
             desired_image_count = surface_capabilities.max_image_count;
         }
-        self.surface.surface_resolution = match surface_capabilities.current_extent.width {
-            u32::MAX => vk::Extent2D {
-                width: self.size.width,
-                height: self.size.height,
-            },
-            _ => surface_capabilities.current_extent,
-        };
+        self.surface.borrow_mut().surface_resolution =
+            match surface_capabilities.current_extent.width {
+                u32::MAX => vk::Extent2D {
+                    width: self.size().width,
+                    height: self.size().height,
+                },
+                _ => surface_capabilities.current_extent,
+            };
         let pre_transform = if surface_capabilities
             .supported_transforms
             .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
         {
             vk::SurfaceTransformFlagsKHR::IDENTITY
         } else {
+        } else {
             surface_capabilities.current_transform
         };
-        let present_modes = unsafe {
-            self.surface
-                .surface_loader
-                .get_physical_device_surface_present_modes(self.pdevice, self.surface.surface)
-        }?;
-        let present_mode = present_modes
-            .iter()
-            .cloned()
-            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-            .unwrap_or(vk::PresentModeKHR::FIFO);
-
-        let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
-            .surface(self.surface.surface)
-            .min_image_count(desired_image_count)
-            .image_color_space(self.surface.surface_format.color_space)
-            .image_format(self.surface.surface_format.format)
-            .image_extent(self.surface.surface_resolution)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(pre_transform)
-            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(present_mode)
-            .clipped(true)
-            .image_array_layers(1);
-
-        self.swapchain.swapchain = unsafe {
-            self.swapchain
-                .swapchain_loader
-                .create_swapchain(&swapchain_create_info, None)
-        }?;
-
-        self.swapchain.present_images = unsafe {
-            self.swapchain
-                .swapchain_loader
-                .get_swapchain_images(self.swapchain.swapchain)
-        }?;
-        self.swapchain.present_image_views = self
-            .swapchain
-            .present_images
-            .iter()
-            .map(|&image| {
-                let create_view_info = vk::ImageViewCreateInfo::builder()
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(self.surface.surface_format.format)
-                    .components(vk::ComponentMapping {
-                        r: vk::ComponentSwizzle::R,
-                        g: vk::ComponentSwizzle::G,
-                        b: vk::ComponentSwizzle::B,
-                        a: vk::ComponentSwizzle::A,
-                    })
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .image(image);
-                unsafe { self.vk_device.create_image_view(&create_view_info, None) }.unwrap()
-            })
-            .collect();
+        let loader = self.swapchain.borrow().swapchain_loader.clone();
+        self.swapchain.replace(Swapchain::new(
+            &self.vk_device,
+            loader,
+            self.pdevice,
+            &self.surface.borrow(),
+            pre_transform,
+            desired_image_count,
+        )?);
 
         info!("Recreating swapchain.");
         Ok(())
@@ -986,15 +906,15 @@ impl GraphicsDevice {
             mip_levels,
         });
 
-        self.bindless_manager.borrow_mut().add_image_to_bindless(
-            &image,
-        );
+        self.bindless_manager
+            .borrow_mut()
+            .add_image_to_bindless(&image);
 
         Ok(image)
     }
 
     pub fn immediate_submit<F: Fn(&GraphicsDevice, &vk::CommandBuffer) -> Result<()>>(
-        &mut self,
+        &self,
         function: F,
     ) -> Result<()> {
         profiling::scope!("Immediate Submit to GPU");
@@ -1093,7 +1013,7 @@ impl Drop for GraphicsDevice {
             for fence in self.draw_commands_reuse_fence.into_iter() {
                 self.vk_device.destroy_fence(fence, None);
             }
-            for &image_view in self.swapchain.present_image_views.iter() {
+            for &image_view in self.swapchain.borrow().present_image_views.iter() {
                 self.vk_device.destroy_image_view(image_view, None);
             }
             self.vk_device
@@ -1102,12 +1022,14 @@ impl Drop for GraphicsDevice {
                 self.vk_device.destroy_command_pool(pool, None);
             }
             self.swapchain
+                .borrow()
                 .swapchain_loader
-                .destroy_swapchain(self.swapchain.swapchain, None);
+                .destroy_swapchain(self.swapchain.borrow().swapchain, None);
             self.vk_device.destroy_device(None);
             self.surface
+                .borrow()
                 .surface_loader
-                .destroy_surface(self.surface.surface, None);
+                .destroy_surface(self.surface.borrow().surface, None);
             self.debug_utils_loader
                 .destroy_debug_utils_messenger(self.debug_call_back, None);
             self.instance.destroy_instance(None);
@@ -1196,6 +1118,76 @@ struct Swapchain {
     swapchain_loader: ash::extensions::khr::Swapchain,
     present_images: Vec<vk::Image>,
     present_image_views: Vec<vk::ImageView>,
+}
+
+impl Swapchain {
+    fn new(
+        device: &ash::Device,
+        swapchain_loader: ash::extensions::khr::Swapchain,
+        pdevice: vk::PhysicalDevice,
+        surface: &Surface,
+        pre_transform: SurfaceTransformFlagsKHR,
+        desired_image_count: u32,
+    ) -> Result<Self> {
+        let present_modes = unsafe {
+            surface
+                .surface_loader
+                .get_physical_device_surface_present_modes(pdevice, surface.surface)
+        }?;
+        let present_mode = present_modes
+            .iter()
+            .cloned()
+            .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
+            .unwrap_or(vk::PresentModeKHR::FIFO);
+
+        let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+            .surface(surface.surface)
+            .min_image_count(desired_image_count)
+            .image_color_space(surface.surface_format.color_space)
+            .image_format(surface.surface_format.format)
+            .image_extent(surface.surface_resolution)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(pre_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(present_mode)
+            .clipped(true)
+            .image_array_layers(1);
+
+        let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None) }?;
+
+        let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain) }?;
+        let present_image_views = present_images
+            .iter()
+            .map(|&image| {
+                let create_view_info = vk::ImageViewCreateInfo::builder()
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(surface.surface_format.format)
+                    .components(vk::ComponentMapping {
+                        r: vk::ComponentSwizzle::R,
+                        g: vk::ComponentSwizzle::G,
+                        b: vk::ComponentSwizzle::B,
+                        a: vk::ComponentSwizzle::A,
+                    })
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .image(image);
+                unsafe { device.create_image_view(&create_view_info, None) }.unwrap()
+            })
+            .collect();
+
+        Ok(Swapchain {
+            swapchain,
+            swapchain_loader,
+            present_images,
+            present_image_views,
+        })
+    }
 }
 
 struct Surface {

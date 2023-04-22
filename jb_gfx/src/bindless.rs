@@ -62,15 +62,16 @@ impl BindlessManager {
         Ok(())
     }
 
-    pub fn add_image_to_bindless(
-        &mut self,
-        image: &ImageHandle,
-    ) {
+    pub fn add_image_to_bindless(&mut self, image: &ImageHandle) {
         self.bindless_textures.push(*image);
         let bindless_index = self.bindless_textures.len();
         self.bindless_indexes.insert(*image, bindless_index);
 
-        let image_view = self.resource_manager.get_image(*image).unwrap().image_view();
+        let image_view = self
+            .resource_manager
+            .get_image(*image)
+            .unwrap()
+            .image_view();
 
         let bindless_image_info = vk::DescriptorImageInfo::builder()
             .image_view(image_view)
@@ -91,7 +92,8 @@ impl BindlessManager {
             .image_info(&image_info);
 
         unsafe {
-            self.device.update_descriptor_sets(&[*desc_write, *desc_write_two], &[]);
+            self.device
+                .update_descriptor_sets(&[*desc_write, *desc_write_two], &[]);
         }
     }
 }
