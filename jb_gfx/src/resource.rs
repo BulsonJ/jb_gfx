@@ -237,6 +237,12 @@ impl Buffer {
         self.buffer
     }
 
+    pub fn buffer_write(&self) -> vk::DescriptorBufferInfo {
+        *vk::DescriptorBufferInfo::builder()
+            .buffer(self.buffer())
+            .range(self.size())
+    }
+
     pub fn size(&self) -> vk::DeviceSize {
         self.size
     }

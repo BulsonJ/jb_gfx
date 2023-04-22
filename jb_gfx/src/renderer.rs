@@ -183,145 +183,58 @@ impl Renderer {
         };
 
         let (descriptor_set, descriptor_set_layout) = {
-            let camera_buffer_write = [*vk::DescriptorBufferInfo::builder()
-                .buffer(
-                    device
-                        .resource_manager
-                        .get_buffer(camera_buffer[0])
-                        .unwrap()
-                        .buffer(),
-                )
-                .range(size_of::<CameraUniform>() as DeviceSize)];
+            let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
+            let mut layout = None;
+            for i in 0..FRAMES_IN_FLIGHT {
+                let (set, set_layout) =
+                    DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
+                        .bind_buffer(
+                            0,
+                            &[device
+                                .resource_manager
+                                .get_buffer(camera_buffer[i])
+                                .unwrap()
+                                .buffer_write()],
+                            vk::DescriptorType::UNIFORM_BUFFER,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        )
+                        .bind_buffer(
+                            1,
+                            &[device
+                                .resource_manager
+                                .get_buffer(light_buffer[i])
+                                .unwrap()
+                                .buffer_write()],
+                            vk::DescriptorType::UNIFORM_BUFFER,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        )
+                        .bind_buffer(
+                            2,
+                            &[device
+                                .resource_manager
+                                .get_buffer(transform_buffer[i])
+                                .unwrap()
+                                .buffer_write()],
+                            vk::DescriptorType::STORAGE_BUFFER,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        )
+                        .bind_buffer(
+                            3,
+                            &[device
+                                .resource_manager
+                                .get_buffer(material_buffer[i])
+                                .unwrap()
+                                .buffer_write()],
+                            vk::DescriptorType::STORAGE_BUFFER,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        )
+                        .build()
+                        .unwrap();
 
-            let transform_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(transform_buffer[0])
-                    .unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let material_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(material_buffer[0])
-                    .unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let light_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(light_buffer[0]).unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let (set, layout) =
-                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
-                    .bind_buffer(
-                        0,
-                        &camera_buffer_write,
-                        vk::DescriptorType::UNIFORM_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        1,
-                        &light_buffer_write,
-                        vk::DescriptorType::UNIFORM_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        2,
-                        &transform_buffer_write,
-                        vk::DescriptorType::STORAGE_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        3,
-                        &material_buffer_write,
-                        vk::DescriptorType::STORAGE_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .build()
-                    .unwrap();
-
-            let camera_buffer_write = [*vk::DescriptorBufferInfo::builder()
-                .buffer(
-                    device
-                        .resource_manager
-                        .get_buffer(camera_buffer[1])
-                        .unwrap()
-                        .buffer(),
-                )
-                .range(size_of::<CameraUniform>() as DeviceSize)];
-
-            let transform_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(transform_buffer[1])
-                    .unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let material_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(material_buffer[1])
-                    .unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let light_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(light_buffer[1]).unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let (set_two, layout) =
-                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
-                    .bind_buffer(
-                        0,
-                        &camera_buffer_write,
-                        vk::DescriptorType::UNIFORM_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        1,
-                        &light_buffer_write,
-                        vk::DescriptorType::UNIFORM_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        2,
-                        &transform_buffer_write,
-                        vk::DescriptorType::STORAGE_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        3,
-                        &material_buffer_write,
-                        vk::DescriptorType::STORAGE_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .build()
-                    .unwrap();
-
-            ([set, set_two], layout)
+                sets[i] = set;
+                layout = Some(set_layout);
+            }
+            (sets, layout.unwrap())
         };
 
         for set in descriptor_set.iter() {
@@ -467,79 +380,38 @@ impl Renderer {
         };
 
         let (ui_descriptor_set, ui_descriptor_set_layout) = {
-            let ui_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(ui_uniform_data[0])
-                    .unwrap();
+            let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
+            let mut layout = None;
+            for i in 0..FRAMES_IN_FLIGHT {
+                let (set, set_layout) =
+                    DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
+                        .bind_buffer(
+                            0,
+                            &[device
+                                .resource_manager
+                                .get_buffer(ui_uniform_data[i])
+                                .unwrap()
+                                .buffer_write()],
+                            vk::DescriptorType::UNIFORM_BUFFER,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        )
+                        .bind_buffer(
+                            1,
+                            &[device
+                                .resource_manager
+                                .get_buffer(quad_buffer[i])
+                                .unwrap()
+                                .buffer_write()],
+                            vk::DescriptorType::STORAGE_BUFFER,
+                            vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        )
+                        .build()
+                        .unwrap();
 
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let quad_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(quad_buffer[0]).unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let (set, layout) =
-                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
-                    .bind_buffer(
-                        0,
-                        &ui_buffer_write,
-                        vk::DescriptorType::UNIFORM_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        1,
-                        &quad_buffer_write,
-                        vk::DescriptorType::STORAGE_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .build()
-                    .unwrap();
-
-            let ui_buffer_write = {
-                let buffer = device
-                    .resource_manager
-                    .get_buffer(ui_uniform_data[1])
-                    .unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let quad_buffer_write = {
-                let buffer = device.resource_manager.get_buffer(quad_buffer[1]).unwrap();
-
-                [*vk::DescriptorBufferInfo::builder()
-                    .buffer(buffer.buffer())
-                    .range(buffer.size())]
-            };
-
-            let (set_two, layout) =
-                DescriptorBuilder::new(&mut descriptor_layout_cache, &mut descriptor_allocator)
-                    .bind_buffer(
-                        0,
-                        &ui_buffer_write,
-                        vk::DescriptorType::UNIFORM_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .bind_buffer(
-                        1,
-                        &quad_buffer_write,
-                        vk::DescriptorType::STORAGE_BUFFER,
-                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    )
-                    .build()
-                    .unwrap();
-
-            ([set, set_two], layout)
+                sets[i] = set;
+                layout = Some(set_layout);
+            }
+            (sets, layout.unwrap())
         };
 
         let (ui_pso, ui_pso_layout) = {
