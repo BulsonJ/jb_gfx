@@ -47,10 +47,7 @@ impl PipelineManager {
         Ok(layout)
     }
 
-    pub fn create_pipeline(
-        &mut self,
-        build_info: &PipelineCreateInfo,
-    ) -> Result<PipelineHandle> {
+    pub fn create_pipeline(&mut self, build_info: &PipelineCreateInfo) -> Result<PipelineHandle> {
         let pso = PipelineManager::create_pipeline_internal(
             &mut self.shader_compiler,
             &self.device,
@@ -154,12 +151,12 @@ impl PipelineManager {
         Ok(())
     }
 
-    pub fn deinit(&mut self, device: &ash::Device) {
+    pub fn deinit(&mut self) {
         for (_, pipeline) in self.pipelines.iter_mut() {
-            unsafe { device.destroy_pipeline(pipeline.pso, None) };
+            unsafe { self.device.vk_device.destroy_pipeline(pipeline.pso, None) };
         }
         for layout in self.pipeline_layouts.iter_mut() {
-            unsafe { device.destroy_pipeline_layout(*layout, None) };
+            unsafe { self.device.vk_device.destroy_pipeline_layout(*layout, None) };
         }
     }
 }

@@ -1,20 +1,22 @@
+use crate::device::GraphicsDevice;
 use anyhow::Result;
 use ash::vk;
 use log::info;
 use slotmap::{new_key_type, SlotMap};
+use std::sync::Arc;
 
 use crate::resource::{ImageHandle, ResourceManager};
 
 pub struct RenderTargets {
+    device: Arc<GraphicsDevice>,
     targets: SlotMap<RenderTargetHandle, RenderTarget>,
-    fullscreen_size: (u32, u32),
 }
 
 impl RenderTargets {
-    pub fn new(size: (u32, u32)) -> Self {
+    pub fn new(device: Arc<GraphicsDevice>) -> Self {
         Self {
+            device,
             targets: SlotMap::default(),
-            fullscreen_size: size,
         }
     }
 
@@ -29,7 +31,7 @@ impl RenderTargets {
 
         let actual_size = match size {
             RenderTargetSize::Static(width, height) => (width, height),
-            RenderTargetSize::Fullscreen => self.fullscreen_size,
+            RenderTargetSize::Fullscreen => (self.device.size().width, self.device.size().height),
         };
 
         let render_image =
@@ -51,14 +53,8 @@ impl RenderTargets {
         self.targets.get(render_target)
     }
 
-    pub fn recreate_render_targets(
-        &mut self,
-        resource_manager: &ResourceManager,
-        new_size: (u32, u32),
-    ) -> Result<()> {
+    pub fn recreate_render_targets(&mut self) -> Result<()> {
         profiling::scope!("Recreate Render Targets");
-
-        self.fullscreen_size = new_size;
 
         for (_, render_target) in self.targets.iter_mut() {
             if render_target.size != RenderTargetSize::Fullscreen {
@@ -67,7 +63,9 @@ impl RenderTargets {
 
             let size = {
                 match render_target.size {
-                    RenderTargetSize::Fullscreen => self.fullscreen_size,
+                    RenderTargetSize::Fullscreen => {
+                        (self.device.size().width, self.device.size().height)
+                    }
                     _ => (0, 0),
                 }
             };
@@ -77,9 +75,11 @@ impl RenderTargets {
                 "Test", size.0, size.1,
             );
 
-            resource_manager.destroy_image(render_target.image);
+            self.device
+                .resource_manager
+                .destroy_image(render_target.image);
             render_target.image = create_render_target_image(
-                resource_manager,
+                &self.device.resource_manager,
                 render_target.format,
                 size,
                 render_target.image_type,

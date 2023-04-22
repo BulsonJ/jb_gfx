@@ -81,7 +81,8 @@ impl Renderer {
         profiling::scope!("Renderer::new");
 
         let device = Arc::new(GraphicsDevice::new(window)?);
-        let mut render_targets = RenderTargets::new((device.size().width, device.size().height));
+        let mut render_targets = RenderTargets::new(device.clone());
+        let mut pipeline_manager = PipelineManager::new(device.clone());
 
         let render_image_format = vk::Format::R8G8B8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
@@ -170,8 +171,6 @@ impl Renderer {
             .size(size_of::<PushConstants>() as u32)
             .offset(0u32);
 
-        let mut pipeline_manager = PipelineManager::new(device.clone());
-
         let pso_layout = pipeline_manager.create_pipeline_layout(
             &[
                 *device.bindless_descriptor_set_layout(),
@@ -229,7 +228,7 @@ impl Renderer {
                 cull_mode: vk::CullModeFlags::FRONT,
             };
 
-            pipeline_manager.create_pipeline( &pso_build_info)?
+            pipeline_manager.create_pipeline(&pso_build_info)?
         };
 
         let ui_descriptor_set_layout = {
@@ -630,10 +629,7 @@ impl Renderer {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
         if self.device.resize(new_size)? {
-            self.render_targets.recreate_render_targets(
-                &self.device.resource_manager,
-                (self.device.size().width, self.device.size().height),
-            )?;
+            self.render_targets.recreate_render_targets()?;
         }
 
         Ok(())
@@ -1618,7 +1614,7 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.device.vk_device.device_wait_idle().unwrap();
-            self.pipeline_manager.deinit(&self.device.vk_device);
+            self.pipeline_manager.deinit();
             self.device
                 .vk_device
                 .destroy_descriptor_set_layout(self.ui_descriptor_set_layout, None);
