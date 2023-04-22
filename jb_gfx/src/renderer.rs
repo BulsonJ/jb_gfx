@@ -1537,7 +1537,7 @@ fn from_transforms(
     model
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct MaterialInstance {
     pub diffuse: Vector4<f32>,
     pub emissive: Vector3<f32>,

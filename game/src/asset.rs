@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
+use cgmath::Vector3;
 use gltf::image::Source;
 use log::info;
 
@@ -35,8 +36,6 @@ impl AssetManager {
     pub fn load_gltf(&mut self, renderer: &mut Renderer, file: &str) -> Result<Vec<Model>> {
         profiling::scope!("Load GLTF Asset");
 
-        let mut models = Vec::new();
-
         let (gltf, buffers, _) = {
             profiling::scope!("Load GLTF Asset: Import File");
             gltf::import(file)?
@@ -56,6 +55,7 @@ impl AssetManager {
             };
         }
 
+        let mut meshes = HashMap::new();
         for mesh in gltf.meshes() {
             profiling::scope!("Load GLTF Asset: Mesh");
             for primitive in mesh.primitives() {
@@ -242,17 +242,17 @@ impl AssetManager {
                     }
                 };
 
-                let mut mesh = MeshData {
+                let mut mesh_data = MeshData {
                     vertices,
                     indices,
                     faces,
                 };
                 if tangents.is_empty() {
-                    let _ret = mesh.generate_tangents();
+                    let _ret = mesh_data.generate_tangents();
                 }
 
-                let mesh_handle = renderer.load_mesh(&mesh)?;
-                let model = Model {
+                let mesh_handle = renderer.load_mesh(&mesh_data)?;
+                let model = Mesh {
                     mesh: mesh_handle,
                     material_instance: MaterialInstance {
                         diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
@@ -266,9 +266,31 @@ impl AssetManager {
                     },
                 };
 
-                models.push(model);
+                meshes.insert(mesh.index(), model);
             }
         }
+
+        let mut models = Vec::new();
+        for node in gltf.nodes() {
+            node.index()
+            let mesh_index  = node.mesh().unwrap().index();
+            let model = meshes.get(&mesh_index).unwrap().clone();
+            let transform = node.transform().decomposed();
+            let position = transform.0;
+            let scale = transform.2;
+
+            for child in node.children(){
+                println!("child")
+            }
+
+            models.push(Model{
+                mesh: model,
+                translation: Vector3::from(position),
+                scale:  Vector3::from(scale),
+            });
+
+        }
+
 
         info!(
             "Loaded GLTF Model. Name: [{}], Models: [{}]",
@@ -280,6 +302,13 @@ impl AssetManager {
 }
 
 pub struct Model {
+   pub mesh: Mesh,
+   pub translation: Vector3<f32>,
+   pub scale: Vector3<f32>,
+}
+
+#[derive(Copy, Clone)]
+pub struct Mesh {
     pub mesh: MeshHandle,
     pub material_instance: MaterialInstance,
 }

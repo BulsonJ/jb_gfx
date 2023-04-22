@@ -30,29 +30,29 @@ impl Project for EditorProject {
                 .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
                 .unwrap();
             for model in models.iter() {
-                app.renderer.light_mesh = Some(model.mesh);
+                app.renderer.light_mesh = Some(model.mesh.mesh);
             }
         }
         // Load sponza
         {
             let models = app
                 .asset_manager
-                .load_gltf(&mut app.renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+                .load_gltf(&mut app.renderer, "assets/models/deccer_cubes/SM_Deccer_Cubes_Textured.gltf")
                 .unwrap();
             for model in models.iter() {
                 let handle = app
                     .renderer
-                    .add_render_model(model.mesh, model.material_instance.clone());
+                    .add_render_model(model.mesh.mesh, model.mesh.material_instance);
                 app.renderer
                     .set_render_model_transform(
                         handle,
                         from_transforms(
-                            Vector3::new(0f32, 80f32, 0.0f32),
+                            model.translation,
                             Quaternion::from_axis_angle(
                                 Vector3::new(0f32, 1f32, 0.0f32).normalize(),
                                 Deg(180f32),
                             ),
-                            Vector3::from_value(0.1f32),
+                            model.scale,
                         ),
                     )
                     .unwrap();
@@ -70,7 +70,7 @@ impl Project for EditorProject {
             for model in models.iter() {
                 let helmet = app
                     .renderer
-                    .add_render_model(model.mesh, model.material_instance.clone());
+                    .add_render_model(model.mesh.mesh, model.mesh.material_instance);
                 app.renderer
                     .set_render_model_transform(
                         helmet,
@@ -193,7 +193,7 @@ fn setup_scene(
     let cameras = vec![
         {
             let camera = Camera {
-                position: (-8.0, 100.0, 0.0).into(),
+                position: (-8.0, 0.0, 0.0).into(),
                 direction: (1.0, 0.0, 0.0).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
@@ -207,7 +207,7 @@ fn setup_scene(
         },
         {
             let camera = Camera {
-                position: (-50.0, 100.0, 20.0).into(),
+                position: (-50.0, 0.0, 20.0).into(),
                 direction: (1.0, 0.25, -0.5).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
@@ -221,7 +221,7 @@ fn setup_scene(
         },
         {
             let camera = Camera {
-                position: (-75.0, 200.0, 20.0).into(),
+                position: (-75.0, 100.0, 20.0).into(),
                 direction: (1.0, -0.75, -0.5).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
