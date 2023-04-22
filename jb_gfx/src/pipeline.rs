@@ -15,6 +15,7 @@ pub(crate) struct PipelineManager {
     shader_compiler: shaderc::Compiler,
     pipelines: SlotMap<PipelineHandle, Pipeline>,
     pipeline_layouts: Vec<vk::PipelineLayout>,
+    old_pipelines: Vec<vk::Pipeline>,
 }
 
 impl PipelineManager {
@@ -25,6 +26,7 @@ impl PipelineManager {
             shader_compiler,
             pipelines: SlotMap::default(),
             pipeline_layouts: Vec::default(),
+            old_pipelines: Vec::default(),
         }
     }
 
@@ -142,6 +144,7 @@ impl PipelineManager {
 
     pub fn reload_shaders(&mut self, device: &GraphicsDevice) -> Result<()> {
         for (_, pipeline) in self.pipelines.iter_mut() {
+            self.old_pipelines.push(pipeline.pso);
             pipeline.pso = PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,
                 device,
@@ -152,10 +155,13 @@ impl PipelineManager {
     }
 
     pub fn deinit(&mut self) {
-        for (_, pipeline) in self.pipelines.iter_mut() {
+        for pipeline in self.old_pipelines.iter() {
+            unsafe { self.device.vk_device.destroy_pipeline(*pipeline, None) };
+        }
+        for (_, pipeline) in self.pipelines.iter() {
             unsafe { self.device.vk_device.destroy_pipeline(pipeline.pso, None) };
         }
-        for layout in self.pipeline_layouts.iter_mut() {
+        for layout in self.pipeline_layouts.iter() {
             unsafe { self.device.vk_device.destroy_pipeline_layout(*layout, None) };
         }
     }

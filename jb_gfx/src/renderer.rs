@@ -88,19 +88,16 @@ impl Renderer {
         let depth_image_format = vk::Format::D32_SFLOAT;
         let resource_manager = device.resource_manager.clone();
         let render_image = render_targets.create_render_target(
-            &resource_manager,
             render_image_format,
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
         let depth_image = render_targets.create_render_target(
-            &resource_manager,
             depth_image_format,
             RenderTargetSize::Fullscreen,
             RenderImageType::Depth,
         )?;
         let directional_light_shadow_image = render_targets.create_render_target(
-            &resource_manager,
             depth_image_format,
             RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
             RenderImageType::Depth,

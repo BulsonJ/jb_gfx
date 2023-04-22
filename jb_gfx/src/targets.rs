@@ -22,7 +22,6 @@ impl RenderTargets {
 
     pub fn create_render_target(
         &mut self,
-        resource_manager: &ResourceManager,
         format: vk::Format,
         size: RenderTargetSize,
         image_type: RenderImageType,
@@ -35,7 +34,7 @@ impl RenderTargets {
         };
 
         let render_image =
-            create_render_target_image(resource_manager, format, actual_size, image_type)?;
+            create_render_target_image(&self.device.resource_manager, format, actual_size, image_type)?;
         let render_target = RenderTarget {
             image: render_image,
             size,
