@@ -8,10 +8,6 @@ use log::trace;
 use slotmap::{self, new_key_type, SlotMap};
 
 /// Used to create Buffers and Images.
-///
-/// Currently, not great code as gets around lifetimes by cloning ash structs into it.
-/// In the future, refactor to use Rust lifetimes to ensure that a ResourceManager does not outlive the
-/// ash structs that it takes in.
 pub struct ResourceManager {
     device: Arc<ash::Device>,
     allocator: vk_mem_alloc::Allocator,

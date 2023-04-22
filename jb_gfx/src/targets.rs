@@ -33,8 +33,12 @@ impl RenderTargets {
             RenderTargetSize::Fullscreen => (self.device.size().width, self.device.size().height),
         };
 
-        let render_image =
-            create_render_target_image(&self.device.resource_manager, format, actual_size, image_type)?;
+        let render_image = create_render_target_image(
+            &self.device.resource_manager,
+            format,
+            actual_size,
+            image_type,
+        )?;
         let render_target = RenderTarget {
             image: render_image,
             size,

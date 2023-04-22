@@ -7,6 +7,7 @@ mod barrier;
 mod bindless;
 pub mod camera;
 pub mod colour;
+mod descriptor;
 pub mod device;
 pub mod gpu_structs;
 pub mod light;
