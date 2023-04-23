@@ -93,12 +93,8 @@ impl RenderPassBuilder {
         let viewport = {
             if let Some(attach) = self.colour_attachments.first() {
                 match attach.target {
-                    AttachmentHandle::SwapchainImage => {
-                        get_viewport_info(self.viewport_size, true)
-                    }
-                    AttachmentHandle::Image(_) => {
-                        get_viewport_info(self.viewport_size, false)
-                    }
+                    AttachmentHandle::SwapchainImage => get_viewport_info(self.viewport_size, true),
+                    AttachmentHandle::Image(_) => get_viewport_info(self.viewport_size, false),
                 }
             } else {
                 get_viewport_info(self.viewport_size, false)
