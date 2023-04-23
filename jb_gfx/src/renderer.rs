@@ -443,7 +443,7 @@ impl Renderer {
                 ],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::BACK,
+                cull_mode: vk::CullModeFlags::FRONT,
             };
 
             pipeline_manager.create_pipeline(&pso_build_info)?
@@ -1117,7 +1117,7 @@ impl Renderer {
                                 self.bloom_pso_layout,
                                 vk::ShaderStageFlags::FRAGMENT,
                                 0u32,
-                                bytemuck::cast_slice(&[0]),
+                                bytemuck::cast_slice(&[horizontal as i32]),
                             );
                             self.device.vk_device.cmd_draw(
                                 self.device.graphics_command_buffer(),
