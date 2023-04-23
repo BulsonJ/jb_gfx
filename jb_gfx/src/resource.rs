@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, ensure, Result};
 use ash::vk;
-use ash::vk::Format;
 use log::trace;
 use slotmap::{self, new_key_type, SlotMap};
 
@@ -13,46 +12,6 @@ pub struct ResourceManager {
     allocator: vk_mem_alloc::Allocator,
     buffers: RefCell<SlotMap<BufferHandle, Buffer>>,
     images: RefCell<SlotMap<ImageHandle, Image>>,
-}
-
-#[derive(Copy, Clone)]
-pub enum BufferStorageType {
-    Device,
-    HostLocal,
-}
-
-#[derive(Copy, Clone)]
-pub struct BufferCreateInfo {
-    pub size: usize,
-    pub usage: vk::BufferUsageFlags,
-    pub storage_type: BufferStorageType,
-}
-
-impl From<BufferCreateInfo> for vk::BufferCreateInfo {
-    fn from(value: BufferCreateInfo) -> Self {
-        Self {
-            size: value.size as vk::DeviceSize,
-            usage: value.usage,
-            ..Default::default()
-        }
-    }
-}
-
-impl From<BufferCreateInfo> for vk_mem_alloc::AllocationCreateInfo {
-    fn from(value: BufferCreateInfo) -> Self {
-        let flags = match value.storage_type {
-            BufferStorageType::Device => vk_mem_alloc::AllocationCreateFlags::NONE,
-            BufferStorageType::HostLocal => {
-                vk_mem_alloc::AllocationCreateFlags::MAPPED
-                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE
-            }
-        };
-        Self {
-            flags,
-            usage: vk_mem_alloc::MemoryUsage::AUTO,
-            ..Default::default()
-        }
-    }
 }
 
 impl ResourceManager {
@@ -328,6 +287,46 @@ impl<'a, T> BufferView<'a, T> {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum BufferStorageType {
+    Device,
+    HostLocal,
+}
+
+#[derive(Copy, Clone)]
+pub struct BufferCreateInfo {
+    pub size: usize,
+    pub usage: vk::BufferUsageFlags,
+    pub storage_type: BufferStorageType,
+}
+
+impl From<BufferCreateInfo> for vk::BufferCreateInfo {
+    fn from(value: BufferCreateInfo) -> Self {
+        Self {
+            size: value.size as vk::DeviceSize,
+            usage: value.usage,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<BufferCreateInfo> for vk_mem_alloc::AllocationCreateInfo {
+    fn from(value: BufferCreateInfo) -> Self {
+        let flags = match value.storage_type {
+            BufferStorageType::Device => vk_mem_alloc::AllocationCreateFlags::NONE,
+            BufferStorageType::HostLocal => {
+                vk_mem_alloc::AllocationCreateFlags::MAPPED
+                    | vk_mem_alloc::AllocationCreateFlags::HOST_ACCESS_SEQUENTIAL_WRITE
+            }
+        };
+        Self {
+            flags,
+            usage: vk_mem_alloc::MemoryUsage::AUTO,
+            ..Default::default()
+        }
+    }
+}
+
 /// A image and it's memory allocation.
 #[derive(Copy, Clone)]
 pub struct Image {
@@ -366,23 +365,25 @@ impl Image {
     }
 }
 
-new_key_type! {
-    /// Used to access buffers in a ResourceManager.
-    pub struct BufferHandle;
-    /// Used to access images in a ResourceManager.
-    pub struct ImageHandle;
-}
-
-fn get_image_aspect_flags_from_format(format: Format) -> vk::ImageAspectFlags {
+fn get_image_aspect_flags_from_format(format: vk::Format) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
 
     match format {
-        Format::R8G8B8A8_SRGB | Format::R8G8B8A8_UNORM => flags |= vk::ImageAspectFlags::COLOR,
-        Format::D32_SFLOAT => flags |= vk::ImageAspectFlags::DEPTH,
+        vk::Format::R8G8B8A8_SRGB | vk::Format::R8G8B8A8_UNORM => {
+            flags |= vk::ImageAspectFlags::COLOR
+        }
+        vk::Format::D32_SFLOAT => flags |= vk::ImageAspectFlags::DEPTH,
         _ => {
             todo!()
         }
     }
 
     flags
+}
+
+new_key_type! {
+    /// Used to access buffers in a ResourceManager.
+    pub struct BufferHandle;
+    /// Used to access images in a ResourceManager.
+    pub struct ImageHandle;
 }
