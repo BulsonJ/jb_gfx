@@ -75,6 +75,9 @@ pub struct Renderer {
     descriptor_allocator: DescriptorAllocator,
     timestamps: TimeStamp,
     pipeline_layout_cache: PipelineLayoutCache,
+    forward_image: RenderTargetHandle,
+    bright_extracted_image: RenderTargetHandle,
+    bloom_image: [RenderTargetHandle; 2],
 }
 
 impl Renderer {
@@ -89,7 +92,7 @@ impl Renderer {
         let mut descriptor_allocator = DescriptorAllocator::new(device.vk_device.clone());
         let mut pipeline_layout_cache = PipelineLayoutCache::new(device.vk_device.clone());
 
-        let render_image_format = vk::Format::B8G8R8A8_SRGB;
+        let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
         let depth_image = render_targets.create_render_target(
             depth_image_format,
@@ -101,6 +104,29 @@ impl Renderer {
             RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
             RenderImageType::Depth,
         )?;
+        let render_image_format = vk::Format::R8G8B8A8_SRGB;
+        let forward_image = render_targets.create_render_target(
+            render_image_format,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Colour,
+        )?;
+        let bright_extracted_image = render_targets.create_render_target(
+            render_image_format,
+            RenderTargetSize::Fullscreen,
+            RenderImageType::Colour,
+        )?;
+        let bloom_image = [
+            render_targets.create_render_target(
+                render_image_format,
+                RenderTargetSize::Fullscreen,
+                RenderImageType::Colour,
+            )?,
+            render_targets.create_render_target(
+                depth_image_format,
+                RenderTargetSize::Fullscreen,
+                RenderImageType::Colour,
+            )?,
+        ];
 
         let sun = DirectionalLight::new((0.0, -1.0, -0.1).into(), (1.0, 1.0, 1.0).into(), 200f32);
         let mut camera_uniform = {
@@ -285,7 +311,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/default.frag".to_string(),
                 vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
+                    format: swapchain_image_format,
                     blend: false,
                     ..Default::default()
                 }],
@@ -414,7 +440,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/ui.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
+                    format: swapchain_image_format,
                     blend: true,
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
@@ -461,6 +487,9 @@ impl Renderer {
             descriptor_allocator,
             timestamps: TimeStamp::default(),
             pipeline_layout_cache,
+            forward_image,
+            bright_extracted_image,
+            bloom_image,
         })
     }
 
@@ -506,6 +535,11 @@ impl Renderer {
 
         let resource_index = self.device.buffered_resource_number();
 
+        let forward_image = self.render_targets.get(self.forward_image).unwrap();
+        let bright_extracted_image = self
+            .render_targets
+            .get(self.bright_extracted_image)
+            .unwrap();
         let depth_image = self.render_targets.get(self.depth_image).unwrap();
         let shadow_image = self
             .render_targets
@@ -631,13 +665,23 @@ impl Renderer {
                 ..Default::default()
             })
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(
-                    self.render_targets
-                        .get(self.directional_light_shadow_image)
-                        .unwrap(),
-                ),
+                image: ImageHandleType::Image(shadow_image),
                 dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
                 dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::Image(forward_image),
+                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: ImageHandleType::Image(bright_extracted_image),
+                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
@@ -720,10 +764,19 @@ impl Renderer {
         let clear_colour: Vector3<f32> = self.clear_colour.into();
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::SwapchainImage,
+                target: AttachmentHandle::Image(forward_image),
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
+                    },
+                },
+                ..Default::default()
+            })
+            .add_colour_attachment(AttachmentInfo {
+                target: AttachmentHandle::Image(bright_extracted_image),
+                clear_value: vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
                     },
                 },
                 ..Default::default()
