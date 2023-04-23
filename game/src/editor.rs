@@ -170,6 +170,9 @@ impl Editor {
             ui.label(format!("{:.6}", timestamps.total.to_string()));
         });
 
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut dependencies.renderer.enable_bloom_pass, "Bloom");
+        });
         if ui.button("Reload Shaders").clicked() {
             dependencies.renderer.reload_shaders().unwrap();
         }
