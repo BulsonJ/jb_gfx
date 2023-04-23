@@ -8,7 +8,7 @@ use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
 use ash::vk::{
     self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
-    SurfaceTransformFlagsKHR,
+    PhysicalDeviceHostQueryResetFeatures, SurfaceTransformFlagsKHR,
 };
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -23,6 +23,7 @@ use crate::resource::{
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 pub const SHADOWMAP_SIZE: u32 = 8192u32 * 2u32;
+pub const QUERY_COUNT: u32 = 6u32;
 
 pub struct GraphicsDevice {
     instance: ash::Instance,
@@ -33,6 +34,8 @@ pub struct GraphicsDevice {
     frame_number: RefCell<usize>,
     pub vk_device: Arc<ash::Device>,
     pdevice: vk::PhysicalDevice,
+    pub(crate) query_pool: vk::QueryPool,
+    pub(crate) timestamp_period: f32,
     pub resource_manager: Arc<ResourceManager>,
     pub debug_utils_loader: DebugUtils,
     debug_call_back: vk::DebugUtilsMessengerEXT,
@@ -119,32 +122,38 @@ impl GraphicsDevice {
         let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
         let pdevices =
             unsafe { instance.enumerate_physical_devices() }.expect("Physical device error");
+        let mut timestamp_period = 0.0;
         let (pdevice, queue_family_index) = pdevices
             .iter()
             .find_map(|pdevice| {
-                unsafe { instance.get_physical_device_queue_family_properties(*pdevice) }
-                    .iter()
-                    .enumerate()
-                    .find_map(|(index, info)| {
-                        let supports_graphic_and_surface =
-                            info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                                && unsafe {
-                                    surface_loader.get_physical_device_surface_support(
-                                        *pdevice,
-                                        index as u32,
-                                        surface,
-                                    )
-                                }
-                                .unwrap();
-                        if supports_graphic_and_surface {
-                            Some((*pdevice, index))
-                        } else {
-                            None
-                        }
-                    })
+                let limits = unsafe { instance.get_physical_device_properties(*pdevice).limits };
+                if limits.timestamp_period == 0.0 {
+                    None
+                } else {
+                    timestamp_period = limits.timestamp_period;
+                    unsafe { instance.get_physical_device_queue_family_properties(*pdevice) }
+                        .iter()
+                        .enumerate()
+                        .find_map(|(index, info)| {
+                            let supports_graphic_and_surface =
+                                info.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+                                    && unsafe {
+                                        surface_loader.get_physical_device_surface_support(
+                                            *pdevice,
+                                            index as u32,
+                                            surface,
+                                        )
+                                    }
+                                    .unwrap();
+                            if supports_graphic_and_surface {
+                                Some((*pdevice, index))
+                            } else {
+                                None
+                            }
+                        })
+                }
             })
             .expect("Couldn't find suitable device.");
-
         let queue_family_index = queue_family_index as u32;
         let device_extension_names_raw = [
             ash::extensions::khr::Swapchain::name().as_ptr(),
@@ -161,6 +170,8 @@ impl GraphicsDevice {
                 .descriptor_binding_partially_bound(true)
                 .descriptor_binding_variable_descriptor_count(true)
                 .runtime_descriptor_array(true);
+        let mut query_features =
+            vk::PhysicalDeviceHostQueryResetFeatures::builder().host_query_reset(true);
 
         let priorities = [1.0];
 
@@ -172,12 +183,21 @@ impl GraphicsDevice {
             .push_next(&mut descriptor_indexing_features)
             .push_next(&mut sync_2_feature)
             .push_next(&mut dynamic_rendering_feature)
+            .push_next(&mut query_features)
             .queue_create_infos(std::slice::from_ref(&queue_info))
             .enabled_extension_names(&device_extension_names_raw)
             .enabled_features(&features);
 
         let ash_device = unsafe { instance.create_device(pdevice, &device_create_info, None) }?;
         let device = Arc::new(ash_device);
+
+        let query_pool = {
+            let create_info = vk::QueryPoolCreateInfo::builder()
+                .query_type(vk::QueryType::TIMESTAMP)
+                .query_count(QUERY_COUNT);
+
+            unsafe { device.create_query_pool(&create_info, None) }
+        }?;
 
         let resource_manager = ResourceManager::new(&instance, &pdevice, device.clone());
 
@@ -457,6 +477,8 @@ impl GraphicsDevice {
             present_index: RefCell::new(0),
             vk_device: device,
             pdevice,
+            query_pool,
+            timestamp_period,
             resource_manager,
             debug_utils_loader,
             debug_call_back,
@@ -563,6 +585,11 @@ impl GraphicsDevice {
                 &cmd_begin_info,
             )
         }?;
+
+        unsafe {
+            self.vk_device
+                .reset_query_pool(self.query_pool, 0, QUERY_COUNT);
+        }
 
         // Delete old image buffers
         for buffer_to_delete in self.buffers_to_delete.borrow_mut().iter_mut() {
@@ -996,6 +1023,7 @@ impl Drop for GraphicsDevice {
     fn drop(&mut self) {
         unsafe {
             self.vk_device.device_wait_idle().unwrap();
+            self.vk_device.destroy_query_pool(self.query_pool, None);
             self.vk_device
                 .destroy_descriptor_set_layout(self.bindless_descriptor_set_layout, None);
             self.vk_device
