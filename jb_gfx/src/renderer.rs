@@ -670,14 +670,10 @@ impl Renderer {
             )?;
 
         // Shadow pass
-        unsafe {
-            self.device.vk_device.cmd_write_timestamp2(
-                self.device.graphics_command_buffer[resource_index],
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-                self.device.query_pool,
-                0,
-            );
-        }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer[resource_index],
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
             .set_depth_attachment(AttachmentInfo {
                 target: AttachmentHandle::Image(shadow_image),
@@ -720,14 +716,10 @@ impl Renderer {
                     Ok(())
                 },
             )?;
-        unsafe {
-            self.device.vk_device.cmd_write_timestamp2(
-                self.device.graphics_command_buffer[resource_index],
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-                self.device.query_pool,
-                1,
-            );
-        }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer[resource_index],
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
@@ -749,14 +741,10 @@ impl Renderer {
                 &self.device.graphics_command_buffer[resource_index],
             )?;
 
-        unsafe {
-            self.device.vk_device.cmd_write_timestamp2(
-                self.device.graphics_command_buffer[resource_index],
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-                self.device.query_pool,
-                2,
-            );
-        }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer[resource_index],
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         // Normal Pass
         let clear_colour: Vector3<f32> = self.clear_colour.into();
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
@@ -811,14 +799,10 @@ impl Renderer {
                     Ok(())
                 },
             )?;
-        unsafe {
-            self.device.vk_device.cmd_write_timestamp2(
-                self.device.graphics_command_buffer[resource_index],
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-                self.device.query_pool,
-                3,
-            );
-        }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer[resource_index],
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // Copy UI
 
@@ -892,14 +876,10 @@ impl Renderer {
         };
 
         // UI Pass
-        unsafe {
-            self.device.vk_device.cmd_write_timestamp2(
-                self.device.graphics_command_buffer[resource_index],
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-                self.device.query_pool,
-                4,
-            );
-        }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer[resource_index],
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
                 target: AttachmentHandle::Image(render_image),
@@ -973,14 +953,10 @@ impl Renderer {
                     Ok(())
                 },
             )?;
-        unsafe {
-            self.device.vk_device.cmd_write_timestamp2(
-                self.device.graphics_command_buffer[resource_index],
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-                self.device.query_pool,
-                5,
-            );
-        }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer[resource_index],
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // Transition render image to transfer src
 
@@ -1072,6 +1048,20 @@ impl Renderer {
                 .end_command_buffer(self.device.graphics_command_buffer[resource_index])
         }?;
 
+        if let Some(results) = self.device.get_timestamp_result() {
+            for (i, _) in results.iter().step_by(2usize).enumerate() {
+                let start = results[i];
+                let end = results[i + 1];
+                if start.1 == 0 || end.1 == 0 {
+                    continue;
+                }
+
+                let delta =
+                    ((end.0 - start.0) as f64 * self.device.timestamp_period() as f64)  / 1000000.0f64;
+                info!("TimeStamp:{}", delta);
+            }
+        }
+
         let wait_semaphores = [self.device.present_complete_semaphore[resource_index]];
         let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let command_buffers = [self.device.graphics_command_buffer[resource_index]];
@@ -1092,29 +1082,6 @@ impl Renderer {
         };
         if let Some(error) = result.err() {
             error!("{}", error);
-        }
-
-        let mut query_pool_results = [(0f64, 0u64); QUERY_COUNT as usize];
-        let result = unsafe {
-            self.device.vk_device.get_query_pool_results(
-                self.device.query_pool,
-                0,
-                QUERY_COUNT,
-                &mut query_pool_results,
-                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WITH_AVAILABILITY,
-            )
-        };
-        if result.is_ok() {
-            for (i, _) in query_pool_results.iter().step_by(2usize).enumerate() {
-                let start = query_pool_results[i];
-                let end = query_pool_results[i + 1];
-                if start.1 == 0 || end.1 == 0 {
-                    continue;
-                }
-
-                let delta = ((end.0 - start.0) * self.device.timestamp_period as f64) / 1e+9;
-                info!("TimeStamp:{:.4}", delta);
-            }
         }
 
         self.device.end_frame()?;

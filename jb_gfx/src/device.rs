@@ -3,7 +3,7 @@ use std::ffi::CString;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::CStr};
 
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
 use ash::vk::{
@@ -34,8 +34,9 @@ pub struct GraphicsDevice {
     frame_number: RefCell<usize>,
     pub vk_device: Arc<ash::Device>,
     pdevice: vk::PhysicalDevice,
-    pub(crate) query_pool: vk::QueryPool,
-    pub(crate) timestamp_period: f32,
+    query_pool: vk::QueryPool,
+    timestamp_period: f32,
+    timestamp_frame_count: RefCell<usize>,
     pub resource_manager: Arc<ResourceManager>,
     pub debug_utils_loader: DebugUtils,
     debug_call_back: vk::DebugUtilsMessengerEXT,
@@ -479,6 +480,7 @@ impl GraphicsDevice {
             pdevice,
             query_pool,
             timestamp_period,
+            timestamp_frame_count: RefCell::new(0),
             resource_manager,
             debug_utils_loader,
             debug_call_back,
@@ -552,6 +554,16 @@ impl GraphicsDevice {
             )
         }?;
 
+        let (present_index, _) = unsafe {
+            self.swapchain.borrow().swapchain_loader.acquire_next_image(
+                self.swapchain.borrow().swapchain,
+                u64::MAX,
+                self.present_complete_semaphore[self.buffered_resource_number()],
+                vk::Fence::null(),
+            )
+        }?;
+        *self.present_index.borrow_mut() = present_index as usize;
+
         unsafe {
             self.vk_device
                 .reset_fences(&[self.draw_commands_reuse_fence[self.buffered_resource_number()]])
@@ -564,15 +576,12 @@ impl GraphicsDevice {
             )
         }?;
 
-        let (present_index, _) = unsafe {
-            self.swapchain.borrow().swapchain_loader.acquire_next_image(
-                self.swapchain.borrow().swapchain,
-                u64::MAX,
-                self.present_complete_semaphore[self.buffered_resource_number()],
-                vk::Fence::null(),
-            )
-        }?;
-        *self.present_index.borrow_mut() = present_index as usize;
+        // Reset query pool
+        *self.timestamp_frame_count.borrow_mut() = 0;
+        unsafe {
+            self.vk_device
+                .reset_query_pool(self.query_pool, 0, *self.timestamp_frame_count.borrow() as u32);
+        }
 
         // Begin command buffer
 
@@ -585,11 +594,6 @@ impl GraphicsDevice {
                 &cmd_begin_info,
             )
         }?;
-
-        unsafe {
-            self.vk_device
-                .reset_query_pool(self.query_pool, 0, QUERY_COUNT);
-        }
 
         // Delete old image buffers
         for buffer_to_delete in self.buffers_to_delete.borrow_mut().iter_mut() {
@@ -1004,6 +1008,38 @@ impl GraphicsDevice {
                 .set_debug_utils_object_name(self.vk_device.handle(), &pipeline_debug_info)?;
         }
         Ok(())
+    }
+
+    pub fn write_timestamp(&self, cmd: vk::CommandBuffer, stage: vk::PipelineStageFlags2) {
+        let mut timestamp_count = self.timestamp_frame_count.borrow_mut();
+        let count = *timestamp_count as u32;
+        unsafe {
+            self.vk_device
+                .cmd_write_timestamp2(cmd, stage, self.query_pool, count);
+        }
+        *timestamp_count += 1;
+    }
+
+    pub fn timestamp_period(&self) -> f32 {
+        self.timestamp_period
+    }
+
+    pub fn get_timestamp_result(&self) -> Option<Vec<(u64, u64)>> {
+        let mut query_pool_results = [(0u64, 0u64); QUERY_COUNT as usize];
+        let result = unsafe {
+            self.vk_device.get_query_pool_results(
+                self.query_pool,
+                0,
+                QUERY_COUNT,
+                &mut query_pool_results,
+                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WITH_AVAILABILITY,
+            )
+        };
+        if result.is_ok() {
+            Some(Vec::from(query_pool_results))
+        } else {
+            None
+        }
     }
 
     pub fn bindless_descriptor_set_layout(&self) -> &vk::DescriptorSetLayout {
