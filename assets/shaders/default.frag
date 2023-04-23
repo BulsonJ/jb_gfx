@@ -54,7 +54,7 @@ float ShadowCalculation(vec4 projCoords)
 {
 	float closestDepth = texture(sceneShadowMap, projCoords.xy).r;
 	float currentDepth = projCoords.z;
-	float bias = 0.005;
+	float bias = 0.001;
 	float ambient = 0.01;
 	float shadow = 0.0;
 	vec2 texelSize = 1.0 / textureSize(sceneShadowMap, 0);
