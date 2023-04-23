@@ -38,24 +38,24 @@ pub struct GraphicsDevice {
     timestamp_period: f32,
     timestamp_frame_count: RefCell<usize>,
     pub resource_manager: Arc<ResourceManager>,
-    pub debug_utils_loader: DebugUtils,
+    debug_utils_loader: DebugUtils,
     debug_call_back: vk::DebugUtilsMessengerEXT,
-    pub graphics_queue: vk::Queue,
-    pub graphics_command_pool: [vk::CommandPool; FRAMES_IN_FLIGHT],
-    pub graphics_command_buffer: [vk::CommandBuffer; FRAMES_IN_FLIGHT],
-    pub draw_commands_reuse_fence: [vk::Fence; FRAMES_IN_FLIGHT],
-    pub rendering_complete_semaphore: [vk::Semaphore; FRAMES_IN_FLIGHT],
-    pub present_complete_semaphore: [vk::Semaphore; FRAMES_IN_FLIGHT],
-    pub upload_context: UploadContext,
-    pub default_sampler: vk::Sampler,
+    graphics_queue: vk::Queue,
+    graphics_command_pool: [vk::CommandPool; FRAMES_IN_FLIGHT],
+    graphics_command_buffer: [vk::CommandBuffer; FRAMES_IN_FLIGHT],
+    draw_commands_reuse_fence: [vk::Fence; FRAMES_IN_FLIGHT],
+    rendering_complete_semaphore: [vk::Semaphore; FRAMES_IN_FLIGHT],
+    present_complete_semaphore: [vk::Semaphore; FRAMES_IN_FLIGHT],
+    upload_context: UploadContext,
     images_to_upload: RefCell<Vec<ImageToUpload>>,
     buffers_to_delete: RefCell<Vec<(BufferHandle, usize)>>,
     bindless_descriptor_set_layout: vk::DescriptorSetLayout,
     bindless_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     bindless_manager: RefCell<BindlessManager>,
     bindless_descriptor_pool: vk::DescriptorPool,
-    pub shadow_sampler: vk::Sampler,
-    pub ui_sampler: vk::Sampler,
+    default_sampler: vk::Sampler,
+    shadow_sampler: vk::Sampler,
+    ui_sampler: vk::Sampler,
 }
 
 impl GraphicsDevice {
@@ -994,6 +994,26 @@ impl GraphicsDevice {
         Ok(())
     }
 
+    pub fn graphics_queue(&self) -> vk::Queue {
+        self.graphics_queue
+    }
+
+    pub fn graphics_command_buffer(&self) -> vk::CommandBuffer {
+        self.graphics_command_buffer[self.buffered_resource_number()]
+    }
+
+    pub fn draw_commands_reuse_fence(&self) -> vk::Fence {
+        self.draw_commands_reuse_fence[self.buffered_resource_number()]
+    }
+
+    pub fn rendering_complete_semaphore(&self) -> vk::Semaphore {
+        self.rendering_complete_semaphore[self.buffered_resource_number()]
+    }
+
+    pub fn present_complete_semaphore(&self) -> vk::Semaphore {
+        self.present_complete_semaphore[self.buffered_resource_number()]
+    }
+
     pub fn set_vulkan_debug_name(
         &self,
         object_handle: u64,
@@ -1047,16 +1067,28 @@ impl GraphicsDevice {
         }
     }
 
-    pub fn bindless_descriptor_set_layout(&self) -> &vk::DescriptorSetLayout {
-        &self.bindless_descriptor_set_layout
+    pub fn bindless_descriptor_set_layout(&self) -> vk::DescriptorSetLayout {
+        self.bindless_descriptor_set_layout
     }
 
-    pub fn bindless_descriptor_set(&self) -> &[vk::DescriptorSet; FRAMES_IN_FLIGHT] {
-        &self.bindless_descriptor_set
+    pub fn bindless_descriptor_set(&self) -> vk::DescriptorSet {
+        self.bindless_descriptor_set[self.buffered_resource_number()]
     }
 
     pub fn get_descriptor_index(&self, image: &ImageHandle) -> Option<usize> {
         self.bindless_manager.borrow().get_bindless_index(image)
+    }
+}
+
+impl GraphicsDevice {
+    pub fn default_sampler(&self) -> vk::Sampler{
+        self.default_sampler
+    }
+    pub fn shadow_sampler(&self) -> vk::Sampler{
+        self.shadow_sampler
+    }
+    pub fn ui_sampler(&self) -> vk::Sampler{
+        self.ui_sampler
     }
 }
 

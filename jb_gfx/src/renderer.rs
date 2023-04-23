@@ -213,7 +213,7 @@ impl Renderer {
                 .bind_image(ImageDescriptorInfo {
                     binding: 4,
                     image: render_targets.get(directional_light_shadow_image).unwrap(),
-                    sampler: device.shadow_sampler,
+                    sampler: device.shadow_sampler(),
                     desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                 })
@@ -267,7 +267,7 @@ impl Renderer {
 
         let pso_layout = pipeline_manager.create_pipeline_layout(
             &[
-                *device.bindless_descriptor_set_layout(),
+                device.bindless_descriptor_set_layout(),
                 descriptor_set_layout,
             ],
             &[push_constant_range],
@@ -397,7 +397,7 @@ impl Renderer {
         let (ui_pso, ui_pso_layout) = {
             let pso_layout = pipeline_manager.create_pipeline_layout(
                 &[
-                    *device.bindless_descriptor_set_layout(),
+                    device.bindless_descriptor_set_layout(),
                     ui_descriptor_set_layout,
                 ],
                 &[],
@@ -486,7 +486,7 @@ impl Renderer {
                     .render_targets
                     .get(self.directional_light_shadow_image)
                     .unwrap(),
-                sampler: self.device.shadow_sampler,
+                sampler: self.device.shadow_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
             })
@@ -666,14 +666,11 @@ impl Renderer {
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
-            .build(
-                &self.device,
-                &self.device.graphics_command_buffer[resource_index],
-            )?;
+            .build(&self.device, &self.device.graphics_command_buffer())?;
 
         // Shadow pass
         self.device.write_timestamp(
-            self.device.graphics_command_buffer[resource_index],
+            self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::TOP_OF_PIPE,
         );
         RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
@@ -689,24 +686,24 @@ impl Renderer {
             })
             .start(
                 &self.device,
-                &self.device.graphics_command_buffer[resource_index],
+                &self.device.graphics_command_buffer(),
                 |_render_pass| {
                     profiling::scope!("Shadow Pass");
 
                     let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline,
                         );
                         self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             vk::PipelineBindPoint::GRAPHICS,
                             self.pso_layout,
                             0u32,
                             &[
-                                self.device.bindless_descriptor_set()[resource_index],
+                                self.device.bindless_descriptor_set(),
                                 self.descriptor_set[resource_index],
                             ],
                             &[],
@@ -719,7 +716,7 @@ impl Renderer {
                 },
             )?;
         self.device.write_timestamp(
-            self.device.graphics_command_buffer[resource_index],
+            self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
 
@@ -738,13 +735,10 @@ impl Renderer {
                 new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 ..Default::default()
             })
-            .build(
-                &self.device,
-                &self.device.graphics_command_buffer[resource_index],
-            )?;
+            .build(&self.device, &self.device.graphics_command_buffer())?;
 
         self.device.write_timestamp(
-            self.device.graphics_command_buffer[resource_index],
+            self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::TOP_OF_PIPE,
         );
         // Normal Pass
@@ -771,24 +765,24 @@ impl Renderer {
             })
             .start(
                 &self.device,
-                &self.device.graphics_command_buffer[resource_index],
+                &self.device.graphics_command_buffer(),
                 |_render_pass| {
                     profiling::scope!("Forward Pass");
                     let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline,
                         );
                         self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             vk::PipelineBindPoint::GRAPHICS,
                             self.pso_layout,
                             0u32,
                             &[
-                                self.device.bindless_descriptor_set()[resource_index],
+                                self.device.bindless_descriptor_set(),
                                 self.descriptor_set[resource_index],
                             ],
                             &[],
@@ -802,7 +796,7 @@ impl Renderer {
                 },
             )?;
         self.device.write_timestamp(
-            self.device.graphics_command_buffer[resource_index],
+            self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
 
@@ -879,7 +873,7 @@ impl Renderer {
 
         // UI Pass
         self.device.write_timestamp(
-            self.device.graphics_command_buffer[resource_index],
+            self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::TOP_OF_PIPE,
         );
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
@@ -895,24 +889,24 @@ impl Renderer {
             })
             .start(
                 &self.device,
-                &self.device.graphics_command_buffer[resource_index],
+                &self.device.graphics_command_buffer(),
                 |render_pass| {
                     profiling::scope!("UI Pass");
                     let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
 
                     unsafe {
                         self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             vk::PipelineBindPoint::GRAPHICS,
                             pipeline,
                         );
                         self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             vk::PipelineBindPoint::GRAPHICS,
                             self.ui_pso_layout,
                             0u32,
                             &[
-                                self.device.bindless_descriptor_set()[resource_index],
+                                self.device.bindless_descriptor_set(),
                                 self.ui_descriptor_set[resource_index],
                             ],
                             &[],
@@ -927,7 +921,7 @@ impl Renderer {
 
                     unsafe {
                         self.device.vk_device.cmd_bind_index_buffer(
-                            self.device.graphics_command_buffer[resource_index],
+                            self.device.graphics_command_buffer(),
                             index_buffer.buffer(),
                             0u64,
                             vk::IndexType::UINT32,
@@ -943,7 +937,7 @@ impl Renderer {
                         // Draw commands
                         unsafe {
                             self.device.vk_device.cmd_draw_indexed(
-                                self.device.graphics_command_buffer[resource_index],
+                                self.device.graphics_command_buffer(),
                                 draw.amount as u32,
                                 1u32,
                                 draw.index_offset as u32,
@@ -956,7 +950,7 @@ impl Renderer {
                 },
             )?;
         self.device.write_timestamp(
-            self.device.graphics_command_buffer[resource_index],
+            self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
 
@@ -973,10 +967,7 @@ impl Renderer {
                 new_layout: ImageLayout::TRANSFER_SRC_OPTIMAL,
                 ..Default::default()
             })
-            .build(
-                &self.device,
-                &self.device.graphics_command_buffer[resource_index],
-            )?;
+            .build(&self.device, &self.device.graphics_command_buffer())?;
 
         // Blit to swapchain
 
@@ -1012,7 +1003,7 @@ impl Renderer {
         let regions = [*image_blit];
         unsafe {
             self.device.vk_device.cmd_blit_image(
-                self.device.graphics_command_buffer[resource_index],
+                self.device.graphics_command_buffer(),
                 self.device
                     .resource_manager
                     .get_image(self.render_targets.get(self.render_image).unwrap())
@@ -1035,23 +1026,20 @@ impl Renderer {
                 new_layout: ImageLayout::PRESENT_SRC_KHR,
                 ..Default::default()
             })
-            .build(
-                &self.device,
-                &self.device.graphics_command_buffer[resource_index],
-            )?;
+            .build(&self.device, &self.device.graphics_command_buffer())?;
 
         //Submit buffer
 
         unsafe {
             self.device
                 .vk_device
-                .end_command_buffer(self.device.graphics_command_buffer[resource_index])
+                .end_command_buffer(self.device.graphics_command_buffer())
         }?;
 
-        let wait_semaphores = [self.device.present_complete_semaphore[resource_index]];
+        let wait_semaphores = [self.device.present_complete_semaphore()];
         let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [self.device.graphics_command_buffer[resource_index]];
-        let signal_semaphores = [self.device.rendering_complete_semaphore[resource_index]];
+        let command_buffers = [self.device.graphics_command_buffer()];
+        let signal_semaphores = [self.device.rendering_complete_semaphore()];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(&wait_semaphores)
             .wait_dst_stage_mask(&wait_dst_stage_mask)
@@ -1061,9 +1049,9 @@ impl Renderer {
         let submits = [*submit_info];
         let result = unsafe {
             self.device.vk_device.queue_submit(
-                self.device.graphics_queue,
+                self.device.graphics_queue(),
                 &submits,
-                self.device.draw_commands_reuse_fence[resource_index],
+                self.device.draw_commands_reuse_fence(),
             )
         };
         if let Some(error) = result.err() {
@@ -1096,7 +1084,7 @@ impl Renderer {
             };
             unsafe {
                 self.device.vk_device.cmd_push_constants(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    self.device.graphics_command_buffer(),
                     self.pso_layout,
                     vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     0u32,
@@ -1119,19 +1107,19 @@ impl Renderer {
 
             unsafe {
                 self.device.vk_device.cmd_bind_vertex_buffers(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    self.device.graphics_command_buffer(),
                     0u32,
                     &[vertex_buffer],
                     &[0u64],
                 );
                 self.device.vk_device.cmd_bind_index_buffer(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    self.device.graphics_command_buffer(),
                     index_buffer,
                     DeviceSize::zero(),
                     IndexType::UINT32,
                 );
                 self.device.vk_device.cmd_draw_indexed(
-                    self.device.graphics_command_buffer[self.device.buffered_resource_number()],
+                    self.device.graphics_command_buffer(),
                     draw.index_count,
                     1u32,
                     0u32,
