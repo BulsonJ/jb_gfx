@@ -1,14 +1,11 @@
-use crate::device::GraphicsDevice;
-use crate::resource::{Buffer, BufferHandle, ImageHandle, ResourceManager};
-use ash::prelude::VkResult;
-use ash::vk;
-use ash::vk::DescriptorPoolCreateFlags;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::BitOr;
-use std::ptr::hash;
 use std::sync::Arc;
-use vk_mem_alloc::create_pool;
+
+use ash::vk;
+
+use crate::resource::{BufferHandle, ImageHandle, ResourceManager};
 
 pub struct DescriptorAllocator {
     device: Arc<ash::Device>,
@@ -102,7 +99,7 @@ impl DescriptorAllocator {
         match result {
             Ok(sets) => {
                 let first = *sets.get(0).unwrap();
-                return Ok(first);
+                Ok(first)
             }
             Err(error) => {
                 if error == vk::Result::ERROR_OUT_OF_POOL_MEMORY {
@@ -414,7 +411,7 @@ impl<'a> JBDescriptorBuilder<'a> {
         self
     }
 
-    pub fn build(mut self) -> anyhow::Result<(vk::DescriptorSet, vk::DescriptorSetLayout)> {
+    pub fn build(self) -> anyhow::Result<(vk::DescriptorSet, vk::DescriptorSetLayout)> {
         let mut desc_builder = DescriptorBuilder::new(self.cache, self.alloc);
         for write in self.buffers.iter() {
             desc_builder = desc_builder.bind_buffer(
@@ -436,7 +433,7 @@ impl<'a> JBDescriptorBuilder<'a> {
         desc_builder.build()
     }
 
-    pub fn update(mut self, descriptor_set: &[vk::DescriptorSet]) -> anyhow::Result<()> {
+    pub fn update(self, descriptor_set: &[vk::DescriptorSet]) -> anyhow::Result<()> {
         for set in descriptor_set {
             let mut desc_builder = DescriptorBuilder::new(self.cache, self.alloc);
             for write in self.buffers.iter() {

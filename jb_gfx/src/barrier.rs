@@ -4,7 +4,6 @@ use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
 
 use crate::device::GraphicsDevice;
 use crate::resource::ImageHandle;
-use crate::targets::RenderTargetHandle;
 
 pub struct ImageBarrier {
     pub image: ImageHandleType,

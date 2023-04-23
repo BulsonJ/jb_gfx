@@ -1,10 +1,11 @@
-use crate::device::GraphicsDevice;
+use std::sync::Arc;
+
 use anyhow::Result;
 use ash::vk;
 use log::{info, trace};
 use slotmap::{new_key_type, SlotMap};
-use std::sync::Arc;
 
+use crate::device::GraphicsDevice;
 use crate::resource::{ImageHandle, ResourceManager};
 
 pub struct RenderTargets {
@@ -115,12 +116,6 @@ pub struct RenderTarget {
     size: RenderTargetSize,
     format: vk::Format,
     image_type: RenderImageType,
-}
-
-impl RenderTarget {
-    pub fn image(&self) -> ImageHandle {
-        self.image
-    }
 }
 
 fn create_render_target_image(

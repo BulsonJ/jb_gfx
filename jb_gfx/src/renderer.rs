@@ -50,7 +50,6 @@ pub struct Renderer {
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     camera_uniform: CameraUniform,
     default_camera: Camera,
-    descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     pub clear_colour: Colour,
     pipeline_manager: PipelineManager,
@@ -67,7 +66,6 @@ pub struct Renderer {
     pub sun: DirectionalLight,
     ui_pso_layout: vk::PipelineLayout,
     ui_pso: PipelineHandle,
-    ui_descriptor_set_layout: vk::DescriptorSetLayout,
     ui_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     quad_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
@@ -94,7 +92,6 @@ impl Renderer {
 
         let render_image_format = vk::Format::R8G8B8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
-        let resource_manager = device.resource_manager.clone();
         let render_image = render_targets.create_render_target(
             render_image_format,
             RenderTargetSize::Fullscreen,
@@ -227,19 +224,15 @@ impl Renderer {
             (sets, layout.unwrap())
         };
 
-        for set in descriptor_set.iter() {
+        for (i, set) in descriptor_set.iter().enumerate() {
             device.set_vulkan_debug_name(
                 set.as_raw(),
                 ObjectType::DESCRIPTOR_SET,
                 "Global Descriptor Set(1)",
             )?;
-        }
 
-        for (i, set) in descriptor_set.iter().enumerate() {
             let camera_buffer = camera_buffer.get(i).unwrap();
             let light_buffer = light_buffer.get(i).unwrap();
-            let transform_buffer = transform_buffer.get(i).unwrap();
-            let material_buffer = material_buffer.get(i).unwrap();
 
             device
                 .resource_manager
@@ -445,7 +438,6 @@ impl Renderer {
             camera_buffer,
             camera_uniform,
             default_camera: camera,
-            descriptor_set_layout,
             descriptor_set,
             clear_colour: Colour::black(),
             pipeline_manager,
@@ -462,7 +454,6 @@ impl Renderer {
             sun,
             ui_pso,
             ui_pso_layout,
-            ui_descriptor_set_layout,
             ui_descriptor_set,
             quad_buffer,
             index_buffer,
@@ -512,7 +503,7 @@ impl Renderer {
     pub fn render(&mut self) -> Result<()> {
         profiling::scope!("Render Frame");
 
-        let present_index = self.device.start_frame()?;
+        self.device.start_frame()?;
 
         // Get images
 

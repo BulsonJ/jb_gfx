@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::ops::Index;
 
 use anyhow::{anyhow, Result};
-use cgmath::{Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Vector4};
+use cgmath::Matrix4;
 use gltf::image::Source;
 use image::EncodableLayout;
 use log::info;
@@ -40,7 +39,7 @@ impl AssetManager {
         renderer: &mut Renderer,
         buffers: &[gltf::buffer::Data],
         image: &gltf::Image,
-        view: &gltf::buffer::View
+        view: &gltf::buffer::View,
     ) -> Result<ImageHandle> {
         if let Some(texture) = self.loaded_textures.get(image.name().unwrap()) {
             Ok(*texture)
@@ -144,8 +143,13 @@ impl AssetManager {
                 let diffuse_tex = {
                     if let Some(info) = material.pbr_metallic_roughness().base_color_texture() {
                         match info.texture().source().source() {
-                            Source::View { mime_type, view } => {
-                                Some(self.load_embedded_texture(renderer, &buffers, &info.texture().source(),&view)?)
+                            Source::View { mime_type: _, view } => {
+                                Some(self.load_embedded_texture(
+                                    renderer,
+                                    &buffers,
+                                    &info.texture().source(),
+                                    &view,
+                                )?)
                             }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
@@ -163,8 +167,13 @@ impl AssetManager {
                 let normal_tex = {
                     if let Some(info) = material.normal_texture() {
                         match info.texture().source().source() {
-                            Source::View { mime_type, view } => {
-                                Some(self.load_embedded_texture(renderer, &buffers, &info.texture().source(),&view)?)
+                            Source::View { mime_type: _, view } => {
+                                Some(self.load_embedded_texture(
+                                    renderer,
+                                    &buffers,
+                                    &info.texture().source(),
+                                    &view,
+                                )?)
                             }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
@@ -185,8 +194,13 @@ impl AssetManager {
                         .metallic_roughness_texture()
                     {
                         match info.texture().source().source() {
-                            Source::View { mime_type, view } => {
-                                Some(self.load_embedded_texture(renderer, &buffers, &info.texture().source(),&view)?)
+                            Source::View { mime_type: _, view } => {
+                                Some(self.load_embedded_texture(
+                                    renderer,
+                                    &buffers,
+                                    &info.texture().source(),
+                                    &view,
+                                )?)
                             }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
@@ -204,8 +218,13 @@ impl AssetManager {
                 let occlusion_tex = {
                     if let Some(occlusion) = material.occlusion_texture() {
                         match occlusion.texture().source().source() {
-                            Source::View { mime_type, view } => {
-                                Some(self.load_embedded_texture(renderer, &buffers, &occlusion.texture().source(),&view)?)
+                            Source::View { mime_type: _, view } => {
+                                Some(self.load_embedded_texture(
+                                    renderer,
+                                    &buffers,
+                                    &occlusion.texture().source(),
+                                    &view,
+                                )?)
                             }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
@@ -223,8 +242,13 @@ impl AssetManager {
                 let emissive_tex = {
                     if let Some(emissive) = material.emissive_texture() {
                         match emissive.texture().source().source() {
-                            Source::View { mime_type, view } => {
-                                Some(self.load_embedded_texture(renderer, &buffers, &emissive.texture().source(),&view)?)
+                            Source::View { mime_type: _, view } => {
+                                Some(self.load_embedded_texture(
+                                    renderer,
+                                    &buffers,
+                                    &emissive.texture().source(),
+                                    &view,
+                                )?)
                             }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;

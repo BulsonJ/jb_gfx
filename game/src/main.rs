@@ -1,4 +1,5 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
+use egui_winit::EventResponse;
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 
@@ -103,7 +104,7 @@ impl Project for EditorProject {
             ),
         );
 
-        let egui = EguiContext::new(&event_loop);
+        let egui = EguiContext::new(event_loop);
         let editor = Editor::new();
 
         Self {
@@ -138,8 +139,8 @@ impl Project for EditorProject {
         self.egui.paint(&mut app.renderer);
     }
 
-    fn on_window_event(&mut self, event: &WindowEvent) {
-        self.egui.on_event(event);
+    fn on_window_event(&mut self, event: &WindowEvent) -> EventResponse {
+        self.egui.on_event(event)
     }
 }
 

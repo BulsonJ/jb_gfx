@@ -133,7 +133,8 @@ pub fn run_game<T: Project + 'static>() {
                     app.renderer.resize(**new_inner_size).unwrap();
                 }
                 event => {
-                    project.on_window_event(event);
+                    let _response = project.on_window_event(event);
+                    // TODO : Deal with response
                 }
             },
             _ => {}

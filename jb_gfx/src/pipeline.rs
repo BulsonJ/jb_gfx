@@ -36,8 +36,8 @@ impl PipelineManager {
         push_constants: &[PushConstantRange],
     ) -> Result<vk::PipelineLayout> {
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&descriptor_sets)
-            .push_constant_ranges(&push_constants);
+            .set_layouts(descriptor_sets)
+            .push_constant_ranges(push_constants);
 
         let layout = unsafe {
             self.device

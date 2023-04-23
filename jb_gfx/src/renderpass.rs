@@ -3,7 +3,6 @@ use ash::vk;
 
 use crate::device::GraphicsDevice;
 use crate::resource::ImageHandle;
-use crate::targets::RenderTargetHandle;
 
 /// A builder for a [RenderPass]
 ///

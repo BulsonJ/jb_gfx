@@ -179,7 +179,7 @@ impl GraphicsDevice {
         let ash_device = unsafe { instance.create_device(pdevice, &device_create_info, None) }?;
         let device = Arc::new(ash_device);
 
-        let mut resource_manager = ResourceManager::new(&instance, &pdevice, device.clone());
+        let resource_manager = ResourceManager::new(&instance, &pdevice, device.clone());
 
         let graphics_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
 
@@ -440,7 +440,7 @@ impl GraphicsDevice {
 
         let resource_manager = Arc::new(resource_manager);
         let samplers = vec![default_sampler, shadow_sampler, ui_sampler];
-        let mut bindless_manager = RefCell::new(BindlessManager::new(
+        let bindless_manager = RefCell::new(BindlessManager::new(
             device.clone(),
             resource_manager.clone(),
             bindless_descriptor_set,
@@ -921,7 +921,7 @@ impl GraphicsDevice {
     ) -> Result<()> {
         profiling::scope!("Immediate Submit to GPU");
 
-        let mut cmd = self.upload_context.command_buffer;
+        let cmd = self.upload_context.command_buffer;
 
         let cmd_begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);

@@ -10,6 +10,7 @@ use jb_gfx::renderer::Renderer;
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
 
+#[derive(Default)]
 pub struct Editor {
     camera_controls_show: bool,
     light_controls_show: bool,
@@ -19,12 +20,7 @@ pub struct Editor {
 
 impl Editor {
     pub fn new() -> Self {
-        Self {
-            camera_controls_show: false,
-            light_controls_show: false,
-            engine_utils_show: false,
-            camera_panel: CameraPanel::default(),
-        }
+        Self::default()
     }
 
     pub fn handle_input(dependencies: &mut EditorDependencies) {
@@ -152,7 +148,6 @@ pub struct EditorDependencies<'a> {
 
 #[derive(Default)]
 struct CameraPanel {
-    visible: bool,
     selected_camera_index: usize,
 }
 

@@ -7,7 +7,6 @@ use ash::vk::ImageLayout;
 
 use crate::device::FRAMES_IN_FLIGHT;
 use crate::resource::{ImageHandle, ResourceManager};
-use crate::targets::{RenderTargetHandle, RenderTargets};
 
 pub struct BindlessManager {
     device: Arc<ash::Device>,
