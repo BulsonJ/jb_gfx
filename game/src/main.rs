@@ -1,8 +1,8 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
 use egui_winit::EventResponse;
-use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::manager::backend::cpal::CpalBackend;
-use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
+use kira::manager::{AudioManager, AudioManagerSettings};
+use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundSettings};
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 
@@ -24,6 +24,7 @@ struct EditorProject {
     egui: EguiContext,
     editor: Editor,
     audio_manager: AudioManager,
+    background_music: StaticSoundData,
 }
 
 impl Project for EditorProject {
@@ -108,12 +109,14 @@ impl Project for EditorProject {
             ),
         );
 
-        let egui = EguiContext::new(event_loop);
-        let editor = Editor::new();
+        let audio_manager =
+            AudioManager::<CpalBackend>::new(AudioManagerSettings::default()).unwrap();
+        let background_music =
+            StaticSoundData::from_file("assets/sounds/prelude.ogg", StaticSoundSettings::default())
+                .unwrap();
 
-        let mut audio_manager = AudioManager::<CpalBackend>::new(AudioManagerSettings::default()).unwrap();
-        let sound_data = StaticSoundData::from_file("assets/sounds/prelude.ogg", StaticSoundSettings::default()).unwrap();
-        audio_manager.play(sound_data).unwrap();
+        let egui = EguiContext::new(event_loop);
+        let editor = Editor::default();
 
         Self {
             egui,
@@ -121,6 +124,7 @@ impl Project for EditorProject {
             lights,
             cameras,
             audio_manager,
+            background_music,
         }
     }
 
@@ -140,6 +144,8 @@ impl Project for EditorProject {
                 &mut EditorDependencies {
                     input: &app.input,
                     renderer: &mut app.renderer,
+                    audio_manager: &mut self.audio_manager,
+                    background_music: &mut self.background_music,
                     cameras: &mut self.cameras,
                     lights: &mut self.lights,
                 },

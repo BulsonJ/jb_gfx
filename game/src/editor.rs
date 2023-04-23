@@ -3,6 +3,9 @@ use std::ops::RangeInclusive;
 use cgmath::Vector3;
 use egui::panel::TopBottomSide;
 use egui::{Context, Ui};
+use kira::manager::AudioManager;
+use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle};
+use kira::tween::Tween;
 use winit::event::VirtualKeyCode;
 
 use jb_gfx::renderer::Renderer;
@@ -15,12 +18,16 @@ pub struct Editor {
     camera_controls_show: bool,
     light_controls_show: bool,
     engine_utils_show: bool,
+    audio_show: bool,
     camera_panel: CameraPanel,
+    audio_panel: AudioPanel,
 }
 
 impl Editor {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            ..Default::default()
+        }
     }
 
     pub fn handle_input(dependencies: &mut EditorDependencies) {
@@ -41,6 +48,7 @@ impl Editor {
 
     pub fn run(&mut self, ctx: &Context, dependencies: &mut EditorDependencies) {
         Editor::handle_input(dependencies);
+        self.audio_panel.update();
 
         egui::TopBottomPanel::new(TopBottomSide::Top, "Test").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -68,6 +76,13 @@ impl Editor {
                 .show(ctx, |ui| {
                     Editor::engine_utils_panel(ui, dependencies);
                 });
+            egui::Window::new("Audio")
+                .vscroll(false)
+                .resizable(false)
+                .open(&mut self.audio_show)
+                .show(ctx, |ui| {
+                    self.audio_panel.draw(ui, dependencies);
+                });
         });
     }
 
@@ -80,6 +95,9 @@ impl Editor {
         }
         if ui.button("Utils").clicked() {
             self.engine_utils_show = !self.engine_utils_show;
+        }
+        if ui.button("Audio").clicked() {
+            self.audio_show = !self.audio_show;
         }
     }
 
@@ -142,6 +160,8 @@ impl Editor {
 pub struct EditorDependencies<'a> {
     pub input: &'a Input,
     pub renderer: &'a mut Renderer,
+    pub audio_manager: &'a mut AudioManager,
+    pub background_music: &'a mut StaticSoundData,
     pub cameras: &'a mut [CameraComponent],
     pub lights: &'a mut [LightComponent],
 }
@@ -199,6 +219,65 @@ impl CameraPanel {
                         .clamp_range(RangeInclusive::new(45, 120)),
                 );
             });
+        }
+    }
+}
+
+pub struct AudioPanel {
+    music_handle: Option<StaticSoundHandle>,
+    volume: f32,
+}
+
+impl AudioPanel {
+    pub fn new(dependencies: &mut EditorDependencies) -> Self {
+        Self {
+            music_handle: Some(
+                dependencies
+                    .audio_manager
+                    .play(dependencies.background_music.clone())
+                    .unwrap(),
+            ),
+            ..Default::default()
+        }
+    }
+}
+
+impl AudioPanel {
+    fn update(&mut self) {
+        if let Some(handle) = &mut self.music_handle {
+            handle.set_volume(self.volume as f64, Tween::default());
+        }
+    }
+
+    fn draw(&mut self, ui: &mut Ui, dependencies: &mut EditorDependencies) {
+        ui.horizontal(|ui| {
+            if self.music_handle.is_none() {
+                if ui.button("Start").clicked() {
+                    self.music_handle = Some(
+                        dependencies
+                            .audio_manager
+                            .play(dependencies.background_music.clone())
+                            .unwrap(),
+                    );
+                }
+                ui.add(egui::Slider::new(&mut self.volume, 0f32..=1f32));
+            } else {
+                if ui.button("Stop").clicked() {
+                    self.music_handle.as_mut().unwrap().stop(Tween::default());
+                    self.music_handle = None;
+                }
+
+                ui.add(egui::Slider::new(&mut self.volume, 0f32..=1f32));
+            }
+        });
+    }
+}
+
+impl Default for AudioPanel {
+    fn default() -> Self {
+        Self {
+            volume: 0.2f32,
+            music_handle: None,
         }
     }
 }
