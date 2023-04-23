@@ -94,7 +94,7 @@ void main()
 		if (diffuseTexture.a == 0){
 			discard;
 		}
-		objectColour *= diffuseTexture.rgb;
+		objectColour *= diffuseTexture.rgb * material.diffuse.rgb;
 	} else {
 		objectColour *= material.diffuse.rgb;
 	}
@@ -174,7 +174,7 @@ void main()
 
 	// Emissive
 	if (emissiveTexIndex > 0){
-		result += emissiveTexture;
+		result += emissiveTexture * material.emissive.rgb;
 	} else {
 		result += material.emissive.rgb;
 	}

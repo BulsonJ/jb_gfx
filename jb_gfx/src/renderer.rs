@@ -443,7 +443,7 @@ impl Renderer {
                 ],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::BACK,
+                cull_mode: vk::CullModeFlags::FRONT,
             };
 
             pipeline_manager.create_pipeline(&pso_build_info)?
@@ -467,7 +467,7 @@ impl Renderer {
                 color_attachment_formats: vec![],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::BACK,
+                cull_mode: vk::CullModeFlags::FRONT,
             };
 
             pipeline_manager.create_pipeline(&pso_build_info)?
@@ -1014,8 +1014,12 @@ impl Renderer {
         .unwrap();
         let bloom_sets = [bloom_set, bloom_set_two];
 
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         let mut horizontal = true;
-        for i in 0..10 {
+        for i in 0..4 {
             if i == 0 {
                 ImageBarrierBuilder::default()
                     .add_image_barrier(ImageBarrier {
@@ -1133,6 +1137,10 @@ impl Renderer {
                 )?;
             horizontal = !horizontal;
         }
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
@@ -1179,6 +1187,11 @@ impl Renderer {
             .build()
             .unwrap();
 
+        // Combine Pass
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
                 target: AttachmentHandle::SwapchainImage,
@@ -1193,7 +1206,7 @@ impl Renderer {
                 &self.device,
                 &self.device.graphics_command_buffer(),
                 |_render_pass| {
-                    profiling::scope!("Bloom Pass");
+                    profiling::scope!("Combine Pass");
 
                     let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
 
@@ -1228,6 +1241,10 @@ impl Renderer {
                     Ok(())
                 },
             )?;
+        self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // Copy UI
 
@@ -1433,7 +1450,10 @@ impl Renderer {
 
             self.timestamps.shadow_pass = get_time(results[0], results[1]);
             self.timestamps.forward_pass = get_time(results[2], results[3]);
-            self.timestamps.ui_pass = get_time(results[4], results[5]);
+            self.timestamps.bloom_pass = get_time(results[4], results[5]);
+            self.timestamps.combine_pass = get_time(results[6], results[7]);
+            self.timestamps.ui_pass = get_time(results[8], results[9]);
+            self.timestamps.total = get_time(results[0], results[9]);
         }
 
         self.device.end_frame()?;
@@ -1970,5 +1990,8 @@ struct UIDrawCall {
 pub struct TimeStamp {
     pub shadow_pass: f64,
     pub forward_pass: f64,
+    pub bloom_pass: f64,
+    pub combine_pass: f64,
     pub ui_pass: f64,
+    pub total: f64,
 }

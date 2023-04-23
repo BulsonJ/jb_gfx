@@ -23,7 +23,7 @@ use crate::resource::{
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 pub const SHADOWMAP_SIZE: u32 = 4096u32;
-pub const QUERY_COUNT: u32 = 6u32;
+pub const QUERY_COUNT: u32 = 10u32;
 
 pub struct GraphicsDevice {
     instance: ash::Instance,

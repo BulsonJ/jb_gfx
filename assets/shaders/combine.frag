@@ -11,6 +11,7 @@ void main()
 {
     vec3 forwardColour = texture(forwardImage, inTexCoords).rgb;
     vec3 bloomColour = texture(bloomImage, inTexCoords).rgb;
-    vec3 result = forwardColour + bloomColour;
-    outFragColor = vec4(result,1.0f);
+    vec3 combineResult = forwardColour + bloomColour;
+
+    outFragColor = vec4(combineResult,1.0f);
 }

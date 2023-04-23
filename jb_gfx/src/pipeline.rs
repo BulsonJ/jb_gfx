@@ -239,7 +239,7 @@ pub fn build_pipeline(device: &ash::Device, build_info: PipelineBuildInfo) -> vk
     let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
         .polygon_mode(vk::PolygonMode::FILL)
         .cull_mode(build_info.cull_mode)
-        .front_face(vk::FrontFace::CLOCKWISE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
         .depth_bias_enable(false)
         .depth_bias_constant_factor(0.0f32)
         .depth_bias_clamp(0.0f32)

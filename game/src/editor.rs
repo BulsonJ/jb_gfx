@@ -154,13 +154,20 @@ impl Editor {
             ui.label(format!("{:.6}", timestamps.forward_pass.to_string()));
         });
         ui.horizontal(|ui| {
+            ui.label("Bloom Pass:");
+            ui.label(format!("{:.6}", timestamps.bloom_pass.to_string()));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Combine Pass:");
+            ui.label(format!("{:.6}", timestamps.combine_pass.to_string()));
+        });
+        ui.horizontal(|ui| {
             ui.label("UI Pass:");
             ui.label(format!("{:.6}", timestamps.ui_pass.to_string()));
         });
         ui.horizontal(|ui| {
             ui.label("Frametime:");
-            let total = timestamps.shadow_pass + timestamps.forward_pass + timestamps.ui_pass;
-            ui.label(format!("{:.6}", total));
+            ui.label(format!("{:.6}", timestamps.total.to_string()));
         });
 
         if ui.button("Reload Shaders").clicked() {
