@@ -4,6 +4,7 @@ use std::ops::Index;
 use anyhow::{anyhow, Result};
 use cgmath::{Deg, InnerSpace, Matrix4, Quaternion, Rotation3, Vector3, Vector4};
 use gltf::image::Source;
+use image::EncodableLayout;
 use log::info;
 
 use jb_gfx::device::ImageFormatType;
@@ -31,6 +32,43 @@ impl AssetManager {
             Ok(loaded_texture)
         } else {
             Err(anyhow!("Cant load texture or find it!"))
+        }
+    }
+
+    fn load_embedded_texture(
+        &mut self,
+        renderer: &mut Renderer,
+        buffers: &[gltf::buffer::Data],
+        image: &gltf::Image,
+        view: &gltf::buffer::View
+    ) -> Result<ImageHandle> {
+        if let Some(texture) = self.loaded_textures.get(image.name().unwrap()) {
+            Ok(*texture)
+        } else {
+            let data = &buffers[view.buffer().index()];
+            let offset = view.offset();
+            let length = view.length();
+            let end = offset + length;
+            let image_slice = &data[offset..end];
+            let img = image::load_from_memory(image_slice).unwrap();
+
+            let rgba_img = img.to_rgba8();
+            let img_bytes = rgba_img.as_bytes();
+            let mip_levels = (img.width().max(img.height()) as f32).log2().floor() as u32 + 1u32;
+
+            if let Ok(loaded_texture) = renderer.load_texture_from_bytes(
+                img_bytes,
+                img.width(),
+                img.height(),
+                &ImageFormatType::Default,
+                mip_levels,
+            ) {
+                self.loaded_textures
+                    .insert(image.name().unwrap().to_string(), loaded_texture);
+                Ok(loaded_texture)
+            } else {
+                Err(anyhow!("Cant load texture or find it!"))
+            }
         }
     }
 
@@ -106,7 +144,9 @@ impl AssetManager {
                 let diffuse_tex = {
                     if let Some(info) = material.pbr_metallic_roughness().base_color_texture() {
                         match info.texture().source().source() {
-                            Source::View { .. } => None,
+                            Source::View { mime_type, view } => {
+                                Some(self.load_embedded_texture(renderer, &buffers, &info.texture().source(),&view)?)
+                            }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 Some(self.load_texture(
@@ -123,7 +163,9 @@ impl AssetManager {
                 let normal_tex = {
                     if let Some(info) = material.normal_texture() {
                         match info.texture().source().source() {
-                            Source::View { .. } => None,
+                            Source::View { mime_type, view } => {
+                                Some(self.load_embedded_texture(renderer, &buffers, &info.texture().source(),&view)?)
+                            }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 Some(self.load_texture(
@@ -143,7 +185,9 @@ impl AssetManager {
                         .metallic_roughness_texture()
                     {
                         match info.texture().source().source() {
-                            Source::View { .. } => None,
+                            Source::View { mime_type, view } => {
+                                Some(self.load_embedded_texture(renderer, &buffers, &info.texture().source(),&view)?)
+                            }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 Some(self.load_texture(
@@ -158,9 +202,11 @@ impl AssetManager {
                     }
                 };
                 let occlusion_tex = {
-                    if let Some(emissive) = material.occlusion_texture() {
-                        match emissive.texture().source().source() {
-                            Source::View { .. } => None,
+                    if let Some(occlusion) = material.occlusion_texture() {
+                        match occlusion.texture().source().source() {
+                            Source::View { mime_type, view } => {
+                                Some(self.load_embedded_texture(renderer, &buffers, &occlusion.texture().source(),&view)?)
+                            }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 Some(self.load_texture(
@@ -177,7 +223,9 @@ impl AssetManager {
                 let emissive_tex = {
                     if let Some(emissive) = material.emissive_texture() {
                         match emissive.texture().source().source() {
-                            Source::View { .. } => None,
+                            Source::View { mime_type, view } => {
+                                Some(self.load_embedded_texture(renderer, &buffers, &emissive.texture().source(),&view)?)
+                            }
                             Source::Uri { uri, .. } => {
                                 let image_asset = String::from(source_folder) + "/" + uri;
                                 Some(self.load_texture(
@@ -298,9 +346,10 @@ impl AssetManager {
 
         let models: Vec<Model> = models.values().cloned().collect();
         info!(
-            "Loaded GLTF Model. Name: [{}], Models: [{}]",
+            "Loaded GLTF Model. Name: [{}], Models: [{}], Meshes:[{}]",
             asset_name,
-            models.len()
+            models.len(),
+            meshes.len(),
         );
         Ok(models)
     }
