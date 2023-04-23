@@ -393,19 +393,20 @@ impl<'a> JBDescriptorBuilder<'a> {
         self
     }
 
-    pub fn bind_image(mut self, image: ImageDescriptorInfo) -> Self {
+    pub fn bind_image(mut self, image_info: ImageDescriptorInfo) -> Self {
         let image_write = {
-            let image = self.resource_manager.get_image(image.image).unwrap();
+            let image = self.resource_manager.get_image(image_info.image).unwrap();
 
             *vk::DescriptorImageInfo::builder()
                 .image_view(image.image_view())
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .sampler(image_info.sampler)
         };
 
-        let image_info = [image_write];
+        let image_descriptor_info = [image_write];
         self.images.push(TempImageDescriptorInfo {
-            buffer_info: image,
-            write_info: image_info,
+            buffer_info: image_info,
+            write_info: image_descriptor_info,
         });
 
         self
@@ -481,6 +482,7 @@ pub struct BufferDescriptorInfo {
 pub struct ImageDescriptorInfo {
     pub binding: u32,
     pub image: ImageHandle,
+    pub sampler: vk::Sampler,
     pub desc_type: vk::DescriptorType,
     pub stage_flags: vk::ShaderStageFlags,
 }

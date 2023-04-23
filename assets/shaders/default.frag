@@ -43,7 +43,7 @@ layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
 	MaterialParameters materials[];
 } materialData;
 
-layout (set = 1, binding = 4) uniform texture2D sceneShadowTex;
+layout (set = 1, binding = 4) uniform sampler2D sceneShadowTex;
 
 layout( push_constant ) uniform constants
 {
@@ -64,7 +64,7 @@ float ShadowCalculation(vec4 fragPosLightSpace)
 	projCoords.y = -projCoords.y * 0.5 + 0.5;
 
 	// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-	float closestDepth = texture(sampler2D(sceneShadowTex, samplers[nonuniformEXT(1)]), projCoords.xy).r;
+	float closestDepth = texture(sceneShadowTex, projCoords.xy).r;
 	// get depth of current fragment from light's perspective
 	float currentDepth = projCoords.z;
 	// check whether current frag pos is in shadow

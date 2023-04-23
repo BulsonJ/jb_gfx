@@ -212,7 +212,8 @@ impl Renderer {
                 .bind_image(ImageDescriptorInfo {
                     binding: 4,
                     image: render_targets.get(directional_light_shadow_image).unwrap(),
-                    desc_type: vk::DescriptorType::SAMPLED_IMAGE,
+                    sampler: device.shadow_sampler,
+                    desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                 })
                 .build()
@@ -483,7 +484,8 @@ impl Renderer {
                     .render_targets
                     .get(self.directional_light_shadow_image)
                     .unwrap(),
-                desc_type: vk::DescriptorType::SAMPLED_IMAGE,
+                sampler: self.device.shadow_sampler,
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
             })
             .update(&self.descriptor_set)
