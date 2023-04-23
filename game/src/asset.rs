@@ -336,7 +336,6 @@ impl AssetManager {
                         normal_texture: normal_tex,
                         metallic_roughness_texture: metallic_roughness_tex,
                         occlusion_texture: occlusion_tex,
-                        ..Default::default()
                     },
                 };
 
