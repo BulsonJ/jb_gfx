@@ -11,8 +11,9 @@ use game::components::{CameraComponent, LightComponent};
 use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
 use game::project::Project;
+use game::DirectionCamera;
 use jb_gfx::renderer::Renderer;
-use jb_gfx::{Camera, Colour, Light};
+use jb_gfx::{Colour, DefaultCamera, Light};
 
 fn main() {
     run_game::<EditorProject>()
@@ -134,7 +135,9 @@ impl Project for EditorProject {
             component.light.position.x = position;
         }
         // Update render objects & then render
-        update_renderer_object_states(&mut ctx.renderer, &self.lights, &self.cameras);
+        update_renderer_object_states(&mut ctx.renderer, &self.lights);
+        ctx.renderer
+            .set_camera(&self.cameras[self.editor.camera_panel().selected_camera_index()].camera);
     }
 
     fn draw(&mut self, app: &mut Application) {
@@ -212,7 +215,7 @@ fn setup_scene(
 
     let cameras = vec![
         {
-            let camera = Camera {
+            let camera = DirectionCamera {
                 position: (-8.0, 0.0, 0.0).into(),
                 direction: (1.0, 0.0, 0.0).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
@@ -220,13 +223,10 @@ fn setup_scene(
                 znear: 0.1,
                 zfar: 4000.0,
             };
-            CameraComponent {
-                handle: renderer.create_camera(&camera),
-                camera,
-            }
+            CameraComponent { camera }
         },
         {
-            let camera = Camera {
+            let camera = DirectionCamera {
                 position: (-50.0, 0.0, 20.0).into(),
                 direction: (1.0, 0.25, -0.5).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
@@ -234,45 +234,30 @@ fn setup_scene(
                 znear: 0.1,
                 zfar: 4000.0,
             };
-            CameraComponent {
-                handle: renderer.create_camera(&camera),
-                camera,
-            }
+            CameraComponent { camera }
         },
         {
-            let camera = Camera {
-                position: (-75.0, 100.0, 20.0).into(),
-                direction: (1.0, -0.75, -0.5).into(),
-                aspect: screen_size.0 as f32 / screen_size.1 as f32,
-                fovy: 90.0,
-                znear: 0.1,
-                zfar: 4000.0,
-            };
             CameraComponent {
-                handle: renderer.create_camera(&camera),
-                camera,
+                camera: DirectionCamera {
+                    position: (-75.0, 100.0, 20.0).into(),
+                    direction: (1.0, -0.75, -0.5).into(),
+                    aspect: screen_size.0 as f32 / screen_size.1 as f32,
+                    fovy: 90.0,
+                    znear: 0.1,
+                    zfar: 4000.0,
+                },
             }
         },
     ];
-    renderer.active_camera = Some(cameras.get(0).unwrap().handle);
 
     (light_components, cameras)
 }
 
 #[profiling::function]
-fn update_renderer_object_states(
-    renderer: &mut Renderer,
-    light_components: &[LightComponent],
-    camera_component: &[CameraComponent],
-) {
+fn update_renderer_object_states(renderer: &mut Renderer, light_components: &[LightComponent]) {
     for component in light_components.iter() {
         renderer
             .set_light(component.handle, &component.light)
-            .unwrap();
-    }
-    for component in camera_component.iter() {
-        renderer
-            .set_camera(component.handle, &component.camera)
             .unwrap();
     }
 }

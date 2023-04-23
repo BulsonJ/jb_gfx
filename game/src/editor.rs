@@ -35,16 +35,6 @@ impl Editor {
         if dependencies.input.is_just_pressed(VirtualKeyCode::F5) {
             dependencies.renderer.reload_shaders().unwrap();
         }
-        if dependencies.input.is_just_pressed(VirtualKeyCode::Key1) {
-            if let Some(camera) = dependencies.cameras.get(0) {
-                dependencies.renderer.active_camera = Some(camera.handle);
-            }
-        }
-        if dependencies.input.is_just_pressed(VirtualKeyCode::Key2) {
-            if let Some(camera) = dependencies.cameras.get(1) {
-                dependencies.renderer.active_camera = Some(camera.handle);
-            }
-        }
     }
 
     pub fn run(&mut self, ctx: &Context, dependencies: &mut EditorDependencies) {
@@ -178,6 +168,12 @@ impl Editor {
     }
 }
 
+impl Editor {
+    pub fn camera_panel(&self) -> &CameraPanel {
+        &self.camera_panel
+    }
+}
+
 pub struct EditorDependencies<'a> {
     pub input: &'a Input,
     pub renderer: &'a mut Renderer,
@@ -188,11 +184,15 @@ pub struct EditorDependencies<'a> {
 }
 
 #[derive(Default)]
-struct CameraPanel {
+pub struct CameraPanel {
     selected_camera_index: usize,
 }
 
 impl CameraPanel {
+    pub fn selected_camera_index(&self) -> usize {
+        self.selected_camera_index
+    }
+
     fn draw(&mut self, ui: &mut Ui, dependencies: &mut EditorDependencies) {
         ui.label("Camera Selection");
         egui::ComboBox::from_label("Take your pick")
@@ -208,7 +208,6 @@ impl CameraPanel {
         ui.separator();
         ui.label("Controls");
         if let Some(camera) = dependencies.cameras.get_mut(self.selected_camera_index) {
-            dependencies.renderer.active_camera = Some(camera.handle);
             ui.horizontal(|ui| {
                 ui.label("Position: ");
                 ui.add(egui::DragValue::new(&mut camera.camera.position.x).speed(0.1));

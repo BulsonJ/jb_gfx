@@ -36,7 +36,7 @@ use crate::pipeline::{
 use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
-use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
+use crate::{Camera, Colour, DefaultCamera, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
@@ -49,7 +49,6 @@ pub struct Renderer {
     pso: PipelineHandle,
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     camera_uniform: CameraUniform,
-    default_camera: Camera,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     pub clear_colour: Colour,
     pipeline_manager: PipelineManager,
@@ -60,8 +59,6 @@ pub struct Renderer {
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     pub light_mesh: Option<MeshHandle>,
     stored_lights: SlotMap<LightHandle, Light>,
-    stored_cameras: SlotMap<CameraHandle, Camera>,
-    pub active_camera: Option<CameraHandle>,
     shadow_pso: PipelineHandle,
     pub sun: DirectionalLight,
     ui_pso_layout: vk::PipelineLayout,
@@ -103,21 +100,24 @@ impl Renderer {
             RenderImageType::Depth,
         )?;
 
-        let camera = Camera {
-            position: (-8.0, 100.0, 0.0).into(),
-            direction: (1.0, 0.0, 0.0).into(),
-            aspect: device.size().width as f32 / device.size().height as f32,
-            fovy: 90.0,
-            znear: 0.1,
-            zfar: 4000.0,
-        };
-
         let sun = DirectionalLight::new((0.0, -1.0, -0.1).into(), (1.0, 1.0, 1.0).into(), 200f32);
+        let mut camera_uniform = {
+            // Create default camera so that scene is at least rendered initially
+            let camera = DefaultCamera {
+                position: (-8.0, 100.0, 0.0).into(),
+                direction: (1.0, 0.0, 0.0).into(),
+                aspect: device.size().width as f32 / device.size().height as f32,
+                fovy: 90.0,
+                znear: 0.1,
+                zfar: 4000.0,
+            };
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_proj(&camera);
-        camera_uniform.update_light(&sun);
-        camera_uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
+            let mut uniform = CameraUniform::new();
+            uniform.update_proj(&camera);
+            uniform.update_light(&sun);
+            uniform.ambient_light = Vector4::new(1.0, 1.0, 1.0, 0.0).into();
+            uniform
+        };
 
         let camera_buffer = {
             let buffer_create_info = BufferCreateInfo {
@@ -433,7 +433,6 @@ impl Renderer {
             pso,
             camera_buffer,
             camera_uniform,
-            default_camera: camera,
             descriptor_set,
             clear_colour: Colour::black(),
             pipeline_manager,
@@ -444,8 +443,6 @@ impl Renderer {
             material_buffer,
             light_mesh: None,
             stored_lights: SlotMap::default(),
-            stored_cameras: SlotMap::default(),
-            active_camera: None,
             shadow_pso,
             sun,
             ui_pso,
@@ -512,17 +509,7 @@ impl Renderer {
             .get(self.directional_light_shadow_image)
             .unwrap();
 
-        // Copy camera
-        if let Some(camera) = self.active_camera {
-            if let Some(found_camera) = self.stored_cameras.get(camera) {
-                self.camera_uniform.update_proj(found_camera);
-            } else {
-                self.active_camera = None;
-                error!("Unable to find stored camera, resetting to default")
-            }
-        } else {
-            self.camera_uniform.update_proj(&self.default_camera);
-        }
+        // Copy light
         self.camera_uniform.update_light(&self.sun);
 
         self.device
@@ -1360,16 +1347,8 @@ impl Renderer {
         Err(anyhow!("No light exists"))
     }
 
-    pub fn create_camera(&mut self, camera: &Camera) -> CameraHandle {
-        self.stored_cameras.insert(*camera)
-    }
-
-    pub fn set_camera(&mut self, handle: CameraHandle, camera: &Camera) -> Result<()> {
-        if let Some(modified_camera) = self.stored_cameras.get_mut(handle) {
-            let _old = std::mem::replace(modified_camera, *camera);
-            return Ok(());
-        }
-        Err(anyhow!("No camera exists"))
+    pub fn set_camera<T: Camera>(&mut self, camera: &T) {
+        self.camera_uniform.update_proj(camera);
     }
 
     pub fn draw_ui(&mut self, ui: UIMesh) -> Result<()> {

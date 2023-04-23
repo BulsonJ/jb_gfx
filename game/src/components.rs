@@ -1,5 +1,6 @@
-use jb_gfx::renderer::{CameraHandle, LightHandle};
-use jb_gfx::{Camera, Light};
+use crate::camera::DirectionCamera;
+use jb_gfx::renderer::LightHandle;
+use jb_gfx::Light;
 
 #[derive(Copy, Clone)]
 pub struct LightComponent {
@@ -9,6 +10,5 @@ pub struct LightComponent {
 
 #[derive(Copy, Clone)]
 pub struct CameraComponent {
-    pub handle: CameraHandle,
-    pub camera: Camera,
+    pub camera: DirectionCamera,
 }

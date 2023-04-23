@@ -58,15 +58,17 @@ float ShadowCalculation(vec4 projCoords)
 	float ambient = 0.01;
 	float shadow = 0.0;
 	vec2 texelSize = 1.0 / textureSize(sceneShadowMap, 0);
-	for(int x = -1; x <= 1; ++x)
+	int offset = 2;
+	for(int x = -offset; x <= offset; ++x)
 	{
-		for(int y = -1; y <= 1; ++y)
+		for(int y = -offset; y <= offset; ++y)
 		{
 			float pcfDepth = texture(sceneShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
 			shadow += currentDepth - bias > pcfDepth  ? 1.0 - ambient : 0.0;
 		}
 	}
-	shadow /= 9.0;
+	int offsetDivide = ((offset * 2) + 1) * ((offset * 2) + 1);
+	shadow /= float(offsetDivide);
 
 	if (projCoords.z > 1.0) {
 		return 0.0;
