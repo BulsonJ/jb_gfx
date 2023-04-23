@@ -323,24 +323,28 @@ impl AssetManager {
 
         let mut models = HashMap::new();
         for node in gltf.nodes() {
-            let mesh_index = node.mesh().unwrap().index();
-            let model = meshes.get(&mesh_index).unwrap().clone();
-            let transform = Matrix4::from(node.transform().matrix());
+            if let Some(mesh) = node.mesh() {
+                let mesh_index = mesh.index();
+                if let Some(model) = meshes.get(&mesh_index) {
+                    let transform = Matrix4::from(node.transform().matrix());
 
-            models.insert(
-                node.index(),
-                Model {
-                    mesh: model,
-                    transform,
-                },
-            );
+                    models.insert(
+                        node.index(),
+                        Model {
+                            mesh: model.clone(),
+                            transform,
+                        },
+                    );
+                }
+            }
         }
 
         for node in gltf.nodes() {
-            let parent = models.get(&node.index()).unwrap().clone();
-            for child in node.children() {
-                let model = models.get_mut(&child.index()).unwrap();
-                model.transform = parent.transform * model.transform;
+            if let Some(parent) = models.get(&node.index()).cloned() {
+                for child in node.children() {
+                    let model = models.get_mut(&child.index()).unwrap();
+                    model.transform = parent.transform * model.transform;
+                }
             }
         }
 
