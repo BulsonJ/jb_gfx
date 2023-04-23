@@ -13,7 +13,7 @@ layout (location = 1) out vec2 outTexCoords;
 layout (location = 2) out vec3 outNormal;
 layout (location = 3) out vec3 outWorldPos;
 layout (location = 4) out mat3 outTBN;
-layout (location = 7) out vec4 outWorldPosLightSpace;
+layout (location = 7) out vec4 outShadowCoord;
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
@@ -51,13 +51,19 @@ layout( push_constant ) uniform constants
 	ivec4 handles;
 } pushConstants;
 
+const mat4 biasMat = mat4(
+0.5, 0.0, 0.0, 0.0,
+0.0, 0.5, 0.0, 0.0,
+0.0, 0.0, 1.0, 0.0,
+0.5, 0.5, 0.0, 1.0 );
+
 void main()
 {
 	mat4 modelMatrix = modelData.models[pushConstants.handles.x].model;
 	mat3 normalMatrix = mat3(modelData.models[pushConstants.handles.x].normal);
 	vec3 worldPos = vec3(modelMatrix * vec4(vPosition, 1.0f));
 	outWorldPos = worldPos;
-	outWorldPosLightSpace = cameraData.sunProj * cameraData.sunView * vec4(worldPos, 1.0f);
+	outShadowCoord = biasMat * cameraData.sunProj * cameraData.sunView * vec4(worldPos, 1.0f);
 	outColor = vColor;
 	outTexCoords = vTexCoords;
 	outNormal = normalMatrix * vNormal;

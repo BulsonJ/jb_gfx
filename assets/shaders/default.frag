@@ -8,7 +8,7 @@ layout (location = 1) in vec2 inTexCoords;
 layout (location = 2) in vec3 inNormal;
 layout (location = 3) in vec3 inWorldPos;
 layout (location = 4) in mat3 inTBN;
-layout (location = 7) in vec4 inWorldPosLightSpace;
+layout (location = 7) in vec4 inShadowCoord;
 
 layout (location = 0) out vec4 outFragColor;
 
@@ -43,32 +43,21 @@ layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
 	MaterialParameters materials[];
 } materialData;
 
-layout (set = 1, binding = 4) uniform sampler2D sceneShadowTex;
+layout (set = 1, binding = 4) uniform sampler2DShadow sceneShadowMap;
 
 layout( push_constant ) uniform constants
 {
 	ivec4 handles;
 } pushConstants;
 
-float ShadowCalculation(vec4 fragPosLightSpace)
+float ShadowCalculation(vec4 projCoords)
 {
-	// perform perspective divide
-	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-
 	if(projCoords.z > 1.0)
 		return 0.0;
 
-	// transform to [0,1] range
-	//projCoords = projCoords * 0.5 + 0.5;
-	projCoords.x = projCoords.x * 0.5 + 0.5;
-	projCoords.y = -projCoords.y * 0.5 + 0.5;
-
-	// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-	float closestDepth = texture(sceneShadowTex, projCoords.xy).r;
-	// get depth of current fragment from light's perspective
+	float closestDepth = texture(sceneShadowMap, projCoords.xyz);
 	float currentDepth = projCoords.z;
-	// check whether current frag pos is in shadow
-	float bias = 0.000001;
+	float bias = 0.005;
 	float ambient = 0.01;
 	float shadow = currentDepth - bias > closestDepth ? 1.0 - ambient : 0.0;
 
@@ -104,7 +93,7 @@ void main()
 	}
 
 	// calculate shadow
-	float shadow = ShadowCalculation(inWorldPosLightSpace);
+	float shadow = ShadowCalculation(inShadowCoord / inShadowCoord.w);
 
 	vec3 diffuseResult = vec3(0);
 	vec3 specularResult = vec3(0);

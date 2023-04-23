@@ -72,7 +72,6 @@ pub struct Renderer {
     ui_uniform_data: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_to_draw: Vec<UIMesh>,
     render_targets: RenderTargets,
-    render_image: RenderTargetHandle,
     depth_image: RenderTargetHandle,
     directional_light_shadow_image: RenderTargetHandle,
     descriptor_layout_cache: DescriptorLayoutCache,
@@ -91,13 +90,8 @@ impl Renderer {
         let mut descriptor_layout_cache = DescriptorLayoutCache::new(device.vk_device.clone());
         let mut descriptor_allocator = DescriptorAllocator::new(device.vk_device.clone());
 
-        let render_image_format = vk::Format::R8G8B8A8_SRGB;
+        let render_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
-        let render_image = render_targets.create_render_target(
-            render_image_format,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
         let depth_image = render_targets.create_render_target(
             depth_image_format,
             RenderTargetSize::Fullscreen,
@@ -461,7 +455,6 @@ impl Renderer {
             index_buffer,
             ui_to_draw: Vec::new(),
             ui_uniform_data,
-            render_image,
             depth_image,
             directional_light_shadow_image,
             render_targets,
@@ -513,7 +506,6 @@ impl Renderer {
 
         let resource_index = self.device.buffered_resource_number();
 
-        let render_image = self.render_targets.get(self.render_image).unwrap();
         let depth_image = self.render_targets.get(self.depth_image).unwrap();
         let shadow_image = self
             .render_targets
@@ -635,14 +627,7 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::SwapchainImage(),
-                dst_stage_mask: PipelineStageFlags2::BLIT,
-                dst_access_mask: AccessFlags2::TRANSFER_WRITE,
-                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(render_image),
+                image: ImageHandleType::SwapchainImage,
                 dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
@@ -745,7 +730,7 @@ impl Renderer {
         let clear_colour: Vector3<f32> = self.clear_colour.into();
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::Image(render_image),
+                target: AttachmentHandle::SwapchainImage,
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
@@ -878,7 +863,7 @@ impl Renderer {
         );
         RenderPassBuilder::new((self.device.size().width, self.device.size().height))
             .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::Image(render_image),
+                target: AttachmentHandle::SwapchainImage,
                 clear_value: vk::ClearValue {
                     color: vk::ClearColorValue {
                         float32: clear_colour.extend(0f32).into(),
@@ -958,71 +943,10 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(self.render_targets.get(self.render_image).unwrap()),
+                image: ImageHandleType::SwapchainImage,
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_stage_mask: PipelineStageFlags2::BLIT,
-                dst_access_mask: AccessFlags2::TRANSFER_READ,
                 old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                new_layout: ImageLayout::TRANSFER_SRC_OPTIMAL,
-                ..Default::default()
-            })
-            .build(&self.device, &self.device.graphics_command_buffer())?;
-
-        // Blit to swapchain
-
-        let image_blit = vk::ImageBlit::builder()
-            .src_subresource(vk::ImageSubresourceLayers {
-                aspect_mask: ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
-            .src_offsets([
-                vk::Offset3D { x: 0, y: 0, z: 0 },
-                vk::Offset3D {
-                    x: self.device.size().width as i32,
-                    y: self.device.size().height as i32,
-                    z: 1,
-                },
-            ])
-            .dst_subresource(vk::ImageSubresourceLayers {
-                aspect_mask: ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
-            .dst_offsets([
-                vk::Offset3D { x: 0, y: 0, z: 0 },
-                vk::Offset3D {
-                    x: self.device.size().width as i32,
-                    y: self.device.size().height as i32,
-                    z: 1,
-                },
-            ]);
-        let regions = [*image_blit];
-        unsafe {
-            self.device.vk_device.cmd_blit_image(
-                self.device.graphics_command_buffer(),
-                self.device
-                    .resource_manager
-                    .get_image(self.render_targets.get(self.render_image).unwrap())
-                    .unwrap()
-                    .image(),
-                ImageLayout::TRANSFER_SRC_OPTIMAL,
-                self.device.get_present_image(),
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                &regions,
-                vk::Filter::NEAREST,
-            )
-        }
-
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::SwapchainImage(),
-                src_stage_mask: PipelineStageFlags2::BLIT,
-                src_access_mask: AccessFlags2::TRANSFER_WRITE,
-                old_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
                 new_layout: ImageLayout::PRESENT_SRC_KHR,
                 ..Default::default()
             })

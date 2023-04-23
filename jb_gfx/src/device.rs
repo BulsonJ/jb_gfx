@@ -22,7 +22,7 @@ use crate::resource::{
 };
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
-pub const SHADOWMAP_SIZE: u32 = 4096u32*2;
+pub const SHADOWMAP_SIZE: u32 = 4096u32;
 pub const QUERY_COUNT: u32 = 6u32;
 
 pub struct GraphicsDevice {
@@ -352,14 +352,16 @@ impl GraphicsDevice {
 
         let shadow_sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
-                .mag_filter(vk::Filter::NEAREST)
-                .min_filter(vk::Filter::NEAREST)
-                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_BORDER)
-                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_BORDER)
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                 .min_lod(0.0f32)
                 .max_lod(1.0f32)
+                .mip_lod_bias(0.0)
+                .max_anisotropy(1.0)
                 .border_color(vk::BorderColor::FLOAT_OPAQUE_WHITE);
 
             unsafe { device.create_sampler(&sampler_info, None)? }
@@ -1081,13 +1083,13 @@ impl GraphicsDevice {
 }
 
 impl GraphicsDevice {
-    pub fn default_sampler(&self) -> vk::Sampler{
+    pub fn default_sampler(&self) -> vk::Sampler {
         self.default_sampler
     }
-    pub fn shadow_sampler(&self) -> vk::Sampler{
+    pub fn shadow_sampler(&self) -> vk::Sampler {
         self.shadow_sampler
     }
-    pub fn ui_sampler(&self) -> vk::Sampler{
+    pub fn ui_sampler(&self) -> vk::Sampler {
         self.ui_sampler
     }
 }

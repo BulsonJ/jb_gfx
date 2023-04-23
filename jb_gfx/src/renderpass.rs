@@ -90,13 +90,20 @@ impl RenderPassBuilder {
         command_buffer: &vk::CommandBuffer,
         render_pass: F,
     ) -> Result<()> {
-        let viewport = vk::Viewport::builder()
-            .x(0.0f32)
-            .y(self.viewport_size.1 as f32)
-            .width(self.viewport_size.0 as f32)
-            .height(-(self.viewport_size.1 as f32))
-            .min_depth(0.0f32)
-            .max_depth(1.0f32);
+        let viewport = {
+            if let Some(attach) = self.colour_attachments.first() {
+                match attach.target {
+                    AttachmentHandle::SwapchainImage => {
+                        get_viewport_info(self.viewport_size, true)
+                    }
+                    AttachmentHandle::Image(_) => {
+                        get_viewport_info(self.viewport_size, false)
+                    }
+                }
+            } else {
+                get_viewport_info(self.viewport_size, false)
+            }
+        };
 
         let scissor = vk::Rect2D::builder()
             .offset(vk::Offset2D { x: 0, y: 0 })
@@ -108,7 +115,7 @@ impl RenderPassBuilder {
         unsafe {
             device
                 .vk_device
-                .cmd_set_viewport(*command_buffer, 0u32, &[*viewport])
+                .cmd_set_viewport(*command_buffer, 0u32, &[viewport])
         };
         unsafe {
             device
@@ -238,7 +245,7 @@ pub struct AttachmentInfo {
 #[derive(Copy, Clone)]
 pub enum AttachmentHandle {
     Image(ImageHandle),
-    SwapchainImage(),
+    SwapchainImage,
 }
 
 impl Default for AttachmentInfo {
@@ -264,7 +271,7 @@ fn convert_attach_info(
                 .get_image(image)
                 .unwrap()
                 .image_view(),
-            AttachmentHandle::SwapchainImage() => device.get_present_image_view(),
+            AttachmentHandle::SwapchainImage => device.get_present_image_view(),
         }
     };
 
@@ -276,4 +283,26 @@ fn convert_attach_info(
         .clear_value(attachment.clear_value);
 
     *attach_info
+}
+
+fn get_viewport_info(size: (u32, u32), flipped: bool) -> vk::Viewport {
+    if flipped {
+        vk::Viewport::builder()
+            .x(0.0f32)
+            .y(size.1 as f32)
+            .width(size.0 as f32)
+            .height(-(size.1 as f32))
+            .min_depth(0.0f32)
+            .max_depth(1.0f32)
+            .build()
+    } else {
+        vk::Viewport::builder()
+            .x(0.0f32)
+            .y(0.0f32)
+            .width(size.0 as f32)
+            .height(size.1 as f32)
+            .min_depth(0.0f32)
+            .max_depth(1.0f32)
+            .build()
+    }
 }

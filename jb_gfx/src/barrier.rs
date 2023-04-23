@@ -19,7 +19,7 @@ pub struct ImageBarrier {
 
 pub enum ImageHandleType {
     Image(ImageHandle),
-    SwapchainImage(),
+    SwapchainImage,
 }
 
 impl Default for ImageBarrier {
@@ -60,7 +60,7 @@ impl ImageBarrierBuilder {
             };
 
             let image_handle = match image_barrier.image {
-                ImageHandleType::SwapchainImage() => device.get_present_image(),
+                ImageHandleType::SwapchainImage => device.get_present_image(),
                 _ => image.unwrap().image(),
             };
 
