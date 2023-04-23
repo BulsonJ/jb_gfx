@@ -372,11 +372,12 @@ impl AssetManager {
         }
 
         let models: Vec<Model> = models.values().cloned().collect();
+        let meshes_amount : usize = meshes.values().map(|mesh|mesh.submeshes.len()).sum();
         info!(
-            "Loaded GLTF Model. Name: [{}], Models: [{}], Meshes:[{}]",
+            "Loaded GLTF Model. Name: [{}], Models: [{}], Mesh/Submeshes:[{}]",
             asset_name,
             models.len(),
-            meshes.len(),
+            meshes_amount,
         );
         Ok(models)
     }

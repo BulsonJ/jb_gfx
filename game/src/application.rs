@@ -95,48 +95,52 @@ pub fn run_game<T: Project + 'static>() {
             Event::NewEvents(_) => {
                 app.input.prev_keys.copy_from_slice(&app.input.now_keys);
             }
-            Event::WindowEvent { ref event, .. } => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state,
-                            virtual_keycode: Some(keycode),
-                            ..
-                        },
-                    ..
-                } => match state {
-                    ElementState::Pressed => {
-                        app.input.now_keys[*keycode as usize] = true;
+            Event::WindowEvent { ref event, .. } => {
+                let response = project.on_window_event(event);
+                match event {
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    } => *control_flow = ControlFlow::Exit,
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state,
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
+                        ..
+                    } => {
+                        if !response.consumed {
+                            match state {
+                                ElementState::Pressed => {
+                                    app.input.now_keys[*keycode as usize] = true;
+                                }
+                                ElementState::Released => {
+                                    app.input.now_keys[*keycode as usize] = false;
+                                }
+                            }
+                        }
                     }
-                    ElementState::Released => {
-                        app.input.now_keys[*keycode as usize] = false;
+                    WindowEvent::Resized(physical_size) => {
+                        if initial_resize {
+                            initial_resize = false;
+                        } else {
+                            app.renderer.resize(*physical_size).unwrap();
+                        }
                     }
-                },
-                WindowEvent::Resized(physical_size) => {
-                    if initial_resize {
-                        initial_resize = false;
-                    } else {
-                        app.renderer.resize(*physical_size).unwrap();
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                        app.renderer.resize(**new_inner_size).unwrap();
                     }
+                    _ => {}
                 }
-                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                    app.renderer.resize(**new_inner_size).unwrap();
-                }
-                event => {
-                    let _response = project.on_window_event(event);
-                    // TODO : Deal with response
-                }
-            },
+            }
             _ => {}
         };
         profiling::finish_frame!()
