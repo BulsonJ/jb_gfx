@@ -38,7 +38,6 @@ pub struct LookAtCamera {
     pub zfar: f32,
 }
 
-
 impl jb_gfx::Camera for LookAtCamera {
     fn build_projection_matrix(&self) -> Matrix4<f32> {
         cgmath::perspective(Deg(self.fovy), self.aspect, self.znear, self.zfar)

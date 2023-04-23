@@ -30,8 +30,8 @@ use crate::gpu_structs::{
     UIVertexData,
 };
 use crate::pipeline::{
-    PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineManager,
-    VertexInputDescription,
+    PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
+    PipelineManager, VertexInputDescription,
 };
 use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
@@ -74,6 +74,7 @@ pub struct Renderer {
     descriptor_layout_cache: DescriptorLayoutCache,
     descriptor_allocator: DescriptorAllocator,
     timestamps: TimeStamp,
+    pipeline_layout_cache: PipelineLayoutCache,
 }
 
 impl Renderer {
@@ -86,6 +87,7 @@ impl Renderer {
 
         let mut descriptor_layout_cache = DescriptorLayoutCache::new(device.vk_device.clone());
         let mut descriptor_allocator = DescriptorAllocator::new(device.vk_device.clone());
+        let mut pipeline_layout_cache = PipelineLayoutCache::new(device.vk_device.clone());
 
         let render_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
@@ -259,7 +261,7 @@ impl Renderer {
             .size(size_of::<PushConstants>() as u32)
             .offset(0u32);
 
-        let pso_layout = pipeline_manager.create_pipeline_layout(
+        let pso_layout = pipeline_layout_cache.create_pipeline_layout(
             &[
                 device.bindless_descriptor_set_layout(),
                 descriptor_set_layout,
@@ -389,7 +391,7 @@ impl Renderer {
         };
 
         let (ui_pso, ui_pso_layout) = {
-            let pso_layout = pipeline_manager.create_pipeline_layout(
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
                 &[
                     device.bindless_descriptor_set_layout(),
                     ui_descriptor_set_layout,
@@ -458,6 +460,7 @@ impl Renderer {
             descriptor_layout_cache,
             descriptor_allocator,
             timestamps: TimeStamp::default(),
+            pipeline_layout_cache,
         })
     }
 
