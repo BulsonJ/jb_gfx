@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::ops::RangeInclusive;
 
 use cgmath::Vector3;
@@ -155,15 +156,20 @@ impl Editor {
 
         ui.horizontal(|ui| {
             ui.label("Shadow Pass:");
-            ui.label(timestamps.shadow_pass.to_string());
+            ui.label(format!("{:.6}", timestamps.shadow_pass.to_string()));
         });
         ui.horizontal(|ui| {
             ui.label("Forward Pass:");
-            ui.label(timestamps.forward_pass.to_string());
+            ui.label(format!("{:.6}", timestamps.forward_pass.to_string()));
         });
         ui.horizontal(|ui| {
             ui.label("UI Pass:");
-            ui.label(timestamps.ui_pass.to_string());
+            ui.label(format!("{:.6}", timestamps.ui_pass.to_string()));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Frametime:");
+            let total = timestamps.shadow_pass + timestamps.forward_pass + timestamps.ui_pass;
+            ui.label(format!("{:.6}", total));
         });
 
         if ui.button("Reload Shaders").clicked() {

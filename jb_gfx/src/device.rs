@@ -22,7 +22,7 @@ use crate::resource::{
 };
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
-pub const SHADOWMAP_SIZE: u32 = 8192u32 * 2u32;
+pub const SHADOWMAP_SIZE: u32 = 4096u32*2;
 pub const QUERY_COUNT: u32 = 6u32;
 
 pub struct GraphicsDevice {
