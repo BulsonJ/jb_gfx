@@ -11,7 +11,7 @@ use game::components::{CameraComponent, LightComponent};
 use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
 use game::project::Project;
-use game::DirectionCamera;
+use game::{Camera, DirectionCamera, LookAtCamera};
 use jb_gfx::renderer::Renderer;
 use jb_gfx::{Colour, DefaultCamera, Light};
 
@@ -136,8 +136,15 @@ impl Project for EditorProject {
         }
         // Update render objects & then render
         update_renderer_object_states(&mut ctx.renderer, &self.lights);
-        ctx.renderer
-            .set_camera(&self.cameras[self.editor.camera_panel().selected_camera_index()].camera);
+        let camera = &self.cameras[self.editor.camera_panel().selected_camera_index()];
+        match &camera.camera {
+            Camera::Directional(camera) => {
+                ctx.renderer.set_camera(camera);
+            }
+            Camera::LookAt(camera) => {
+                ctx.renderer.set_camera(camera);
+            }
+        }
     }
 
     fn draw(&mut self, app: &mut Application) {
@@ -215,37 +222,37 @@ fn setup_scene(
 
     let cameras = vec![
         {
-            let camera = DirectionCamera {
+            let camera = Camera::LookAt(LookAtCamera {
                 position: (-8.0, 0.0, 0.0).into(),
-                direction: (1.0, 0.0, 0.0).into(),
+                target: (1.0, 0.0, 0.0).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
                 znear: 0.1,
                 zfar: 4000.0,
-            };
+            });
             CameraComponent { camera }
         },
         {
-            let camera = DirectionCamera {
+            let camera = Camera::Directional(DirectionCamera {
                 position: (-50.0, 0.0, 20.0).into(),
                 direction: (1.0, 0.25, -0.5).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
                 znear: 0.1,
                 zfar: 4000.0,
-            };
+            });
             CameraComponent { camera }
         },
         {
             CameraComponent {
-                camera: DirectionCamera {
+                camera: Camera::Directional(DirectionCamera {
                     position: (-75.0, 100.0, 20.0).into(),
                     direction: (1.0, -0.75, -0.5).into(),
                     aspect: screen_size.0 as f32 / screen_size.1 as f32,
                     fovy: 90.0,
                     znear: 0.1,
                     zfar: 4000.0,
-                },
+                }),
             }
         },
     ];

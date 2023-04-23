@@ -9,6 +9,7 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle};
 use kira::tween::Tween;
 use winit::event::VirtualKeyCode;
 
+use crate::Camera;
 use jb_gfx::renderer::Renderer;
 
 use crate::components::{CameraComponent, LightComponent};
@@ -208,37 +209,62 @@ impl CameraPanel {
         ui.separator();
         ui.label("Controls");
         if let Some(camera) = dependencies.cameras.get_mut(self.selected_camera_index) {
-            ui.horizontal(|ui| {
-                ui.label("Position: ");
-                ui.add(egui::DragValue::new(&mut camera.camera.position.x).speed(0.1));
-                ui.add(egui::DragValue::new(&mut camera.camera.position.y).speed(0.1));
-                ui.add(egui::DragValue::new(&mut camera.camera.position.z).speed(0.1));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Direction: ");
-                ui.add(
-                    egui::DragValue::new(&mut camera.camera.direction.x)
-                        .speed(0.01)
-                        .clamp_range(RangeInclusive::new(-1, 1)),
-                );
-                ui.add(
-                    egui::DragValue::new(&mut camera.camera.direction.y)
-                        .speed(0.01)
-                        .clamp_range(RangeInclusive::new(-1, 1)),
-                );
-                ui.add(
-                    egui::DragValue::new(&mut camera.camera.direction.z)
-                        .speed(0.01)
-                        .clamp_range(RangeInclusive::new(-1, 1)),
-                );
-            });
-            ui.horizontal(|ui| {
-                ui.label("FOV: ");
-                ui.add(
-                    egui::DragValue::new(&mut camera.camera.fovy)
-                        .clamp_range(RangeInclusive::new(45, 120)),
-                );
-            });
+            match &mut camera.camera {
+                Camera::Directional(camera) => {
+                    ui.horizontal(|ui| {
+                        ui.label("Position: ");
+                        ui.add(egui::DragValue::new(&mut camera.position.x).speed(0.1));
+                        ui.add(egui::DragValue::new(&mut camera.position.y).speed(0.1));
+                        ui.add(egui::DragValue::new(&mut camera.position.z).speed(0.1));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Direction: ");
+                        ui.add(
+                            egui::DragValue::new(&mut camera.direction.x)
+                                .speed(0.01)
+                                .clamp_range(RangeInclusive::new(-1, 1)),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut camera.direction.y)
+                                .speed(0.01)
+                                .clamp_range(RangeInclusive::new(-1, 1)),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut camera.direction.z)
+                                .speed(0.01)
+                                .clamp_range(RangeInclusive::new(-1, 1)),
+                        );
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("FOV: ");
+                        ui.add(
+                            egui::DragValue::new(&mut camera.fovy)
+                                .clamp_range(RangeInclusive::new(45, 120)),
+                        );
+                    });
+                }
+                Camera::LookAt(camera) => {
+                    ui.horizontal(|ui| {
+                        ui.label("Position: ");
+                        ui.add(egui::DragValue::new(&mut camera.position.x).speed(0.1));
+                        ui.add(egui::DragValue::new(&mut camera.position.y).speed(0.1));
+                        ui.add(egui::DragValue::new(&mut camera.position.z).speed(0.1));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Target: ");
+                        ui.add(egui::DragValue::new(&mut camera.target.x).speed(0.01));
+                        ui.add(egui::DragValue::new(&mut camera.target.y).speed(0.01));
+                        ui.add(egui::DragValue::new(&mut camera.target.z).speed(0.01));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("FOV: ");
+                        ui.add(
+                            egui::DragValue::new(&mut camera.fovy)
+                                .clamp_range(RangeInclusive::new(45, 120)),
+                        );
+                    });
+                }
+            }
         }
     }
 }
