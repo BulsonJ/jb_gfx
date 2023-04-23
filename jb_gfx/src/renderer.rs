@@ -73,11 +73,15 @@ pub struct Renderer {
     directional_light_shadow_image: RenderTargetHandle,
     descriptor_layout_cache: DescriptorLayoutCache,
     descriptor_allocator: DescriptorAllocator,
+    frame_descriptor_allocator: [DescriptorAllocator; FRAMES_IN_FLIGHT],
     timestamps: TimeStamp,
     pipeline_layout_cache: PipelineLayoutCache,
     forward_image: RenderTargetHandle,
     bright_extracted_image: RenderTargetHandle,
     bloom_image: [RenderTargetHandle; 2],
+    bloom_pso: PipelineHandle,
+    bloom_pso_layout: vk::PipelineLayout,
+    bloom_descriptor_layout: vk::DescriptorSetLayout,
 }
 
 impl Renderer {
@@ -90,6 +94,10 @@ impl Renderer {
 
         let mut descriptor_layout_cache = DescriptorLayoutCache::new(device.vk_device.clone());
         let mut descriptor_allocator = DescriptorAllocator::new(device.vk_device.clone());
+        let mut frame_descriptor_allocator = [
+            DescriptorAllocator::new(device.vk_device.clone()),
+            DescriptorAllocator::new(device.vk_device.clone()),
+        ];
         let mut pipeline_layout_cache = PipelineLayoutCache::new(device.vk_device.clone());
 
         let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
@@ -122,11 +130,62 @@ impl Renderer {
                 RenderImageType::Colour,
             )?,
             render_targets.create_render_target(
-                depth_image_format,
+                render_image_format,
                 RenderTargetSize::Fullscreen,
                 RenderImageType::Colour,
             )?,
         ];
+
+        let (_, bloom_set_layout) = JBDescriptorBuilder::new(
+            &device.resource_manager,
+            &mut descriptor_layout_cache,
+            &mut frame_descriptor_allocator[0],
+        )
+        .bind_image(ImageDescriptorInfo {
+            binding: 0,
+            image: render_targets.get(bright_extracted_image).unwrap(),
+            sampler: device.ui_sampler(),
+            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+        })
+        .build()
+        .unwrap();
+
+        let (bloom_pso, bloom_pso_layout) = {
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                &[bloom_set_layout],
+                &[*vk::PushConstantRange::builder()
+                    .size(size_of::<i32>() as u32)
+                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)],
+            )?;
+
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(false)
+                .depth_write_enable(false)
+                .depth_compare_op(vk::CompareOp::ALWAYS)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/blur.vert".to_string(),
+                fragment_shader: "assets/shaders/blur.frag".to_string(),
+                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: render_image_format,
+                    blend: false,
+                    ..Default::default()
+                }],
+                depth_attachment_format: None,
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::NONE,
+            };
+
+            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
+            (pso, pso_layout)
+        };
 
         let sun = DirectionalLight::new((0.0, -1.0, -0.1).into(), (1.0, 1.0, 1.0).into(), 200f32);
         let mut camera_uniform = {
@@ -310,11 +369,18 @@ impl Renderer {
                 vertex_shader: "assets/shaders/default.vert".to_string(),
                 fragment_shader: "assets/shaders/default.frag".to_string(),
                 vertex_input_state: Vertex::get_vertex_input_desc(),
-                color_attachment_formats: vec![PipelineColorAttachment {
-                    format: swapchain_image_format,
-                    blend: false,
-                    ..Default::default()
-                }],
+                color_attachment_formats: vec![
+                    PipelineColorAttachment {
+                        format: render_image_format,
+                        blend: false,
+                        ..Default::default()
+                    },
+                    PipelineColorAttachment {
+                        format: render_image_format,
+                        blend: false,
+                        ..Default::default()
+                    },
+                ],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::BACK,
@@ -490,6 +556,10 @@ impl Renderer {
             forward_image,
             bright_extracted_image,
             bloom_image,
+            frame_descriptor_allocator,
+            bloom_pso,
+            bloom_pso_layout,
+            bloom_descriptor_layout: bloom_set_layout,
         })
     }
 
@@ -1417,8 +1487,12 @@ impl Drop for Renderer {
     fn drop(&mut self) {
         unsafe {
             self.device.vk_device.device_wait_idle().unwrap();
+            for cache in self.frame_descriptor_allocator.iter_mut() {
+                cache.cleanup();
+            }
             self.descriptor_layout_cache.cleanup();
             self.descriptor_allocator.cleanup();
+            self.pipeline_layout_cache.cleanup();
             self.pipeline_manager.deinit();
         }
     }
