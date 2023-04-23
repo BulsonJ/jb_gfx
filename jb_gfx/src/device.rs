@@ -3,12 +3,12 @@ use std::ffi::CString;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::CStr};
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
 use ash::vk::{
     self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
-    PhysicalDeviceHostQueryResetFeatures, SurfaceTransformFlagsKHR,
+    SurfaceTransformFlagsKHR,
 };
 use log::{error, info};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};

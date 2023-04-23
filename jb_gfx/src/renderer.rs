@@ -23,7 +23,7 @@ use crate::descriptor::{
     JBDescriptorBuilder,
 };
 use crate::device::{
-    cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, QUERY_COUNT, SHADOWMAP_SIZE,
+    cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,

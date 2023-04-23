@@ -2,7 +2,7 @@ use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vec
 use egui_winit::EventResponse;
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
-use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundSettings};
+use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 
