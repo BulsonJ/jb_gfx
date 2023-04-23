@@ -1,5 +1,8 @@
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
 use egui_winit::EventResponse;
+use kira::manager::{AudioManager, AudioManagerSettings};
+use kira::manager::backend::cpal::CpalBackend;
+use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 
@@ -20,6 +23,7 @@ struct EditorProject {
     cameras: Vec<CameraComponent>,
     egui: EguiContext,
     editor: Editor,
+    audio_manager: AudioManager,
 }
 
 impl Project for EditorProject {
@@ -107,11 +111,16 @@ impl Project for EditorProject {
         let egui = EguiContext::new(event_loop);
         let editor = Editor::new();
 
+        let mut audio_manager = AudioManager::<CpalBackend>::new(AudioManagerSettings::default()).unwrap();
+        let sound_data = StaticSoundData::from_file("assets/sounds/prelude.ogg", StaticSoundSettings::default()).unwrap();
+        audio_manager.play(sound_data).unwrap();
+
         Self {
             egui,
             editor,
             lights,
             cameras,
+            audio_manager,
         }
     }
 
