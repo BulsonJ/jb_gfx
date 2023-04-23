@@ -43,7 +43,7 @@ layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
 	MaterialParameters materials[];
 } materialData;
 
-layout (set = 1, binding = 4) uniform sampler2DShadow sceneShadowMap;
+layout (set = 1, binding = 4) uniform sampler2D sceneShadowMap;
 
 layout( push_constant ) uniform constants
 {
@@ -52,14 +52,25 @@ layout( push_constant ) uniform constants
 
 float ShadowCalculation(vec4 projCoords)
 {
-	if(projCoords.z > 1.0)
-		return 0.0;
-
-	float closestDepth = texture(sceneShadowMap, projCoords.xyz);
+	float closestDepth = texture(sceneShadowMap, projCoords.xy).r;
 	float currentDepth = projCoords.z;
 	float bias = 0.005;
 	float ambient = 0.01;
-	float shadow = currentDepth - bias > closestDepth ? 1.0 - ambient : 0.0;
+	float shadow = 0.0;
+	vec2 texelSize = 1.0 / textureSize(sceneShadowMap, 0);
+	for(int x = -1; x <= 1; ++x)
+	{
+		for(int y = -1; y <= 1; ++y)
+		{
+			float pcfDepth = texture(sceneShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+			shadow += currentDepth - bias > pcfDepth  ? 1.0 - ambient : 0.0;
+		}
+	}
+	shadow /= 9.0;
+
+	if (projCoords.z > 1.0) {
+		return 0.0;
+	}
 
 	return shadow;
 }
