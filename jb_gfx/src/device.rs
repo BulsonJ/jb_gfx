@@ -744,6 +744,9 @@ impl GraphicsDevice {
                         &self.graphics_command_buffer[self.buffered_resource_number()],
                     )?;
             }
+            self.buffers_to_delete
+                .borrow_mut()
+                .push((image.buffer_handle, 2));
         }
         self.images_to_upload.borrow_mut().clear();
 
