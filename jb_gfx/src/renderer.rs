@@ -77,6 +77,7 @@ pub struct Renderer {
     directional_light_shadow_image: RenderTargetHandle,
     descriptor_layout_cache: DescriptorLayoutCache,
     descriptor_allocator: DescriptorAllocator,
+    timestamps: TimeStamp,
 }
 
 impl Renderer {
@@ -466,6 +467,7 @@ impl Renderer {
             render_targets,
             descriptor_layout_cache,
             descriptor_allocator,
+            timestamps: TimeStamp::default(),
         })
     }
 
@@ -1029,8 +1031,6 @@ impl Renderer {
                 image: ImageHandleType::SwapchainImage(),
                 src_stage_mask: PipelineStageFlags2::BLIT,
                 src_access_mask: AccessFlags2::TRANSFER_WRITE,
-                dst_stage_mask: PipelineStageFlags2::NONE,
-                dst_access_mask: AccessFlags2::NONE,
                 old_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
                 new_layout: ImageLayout::PRESENT_SRC_KHR,
                 ..Default::default()
@@ -1047,20 +1047,6 @@ impl Renderer {
                 .vk_device
                 .end_command_buffer(self.device.graphics_command_buffer[resource_index])
         }?;
-
-        if let Some(results) = self.device.get_timestamp_result() {
-            for (i, _) in results.iter().step_by(2usize).enumerate() {
-                let start = results[i];
-                let end = results[i + 1];
-                if start.1 == 0 || end.1 == 0 {
-                    continue;
-                }
-
-                let delta =
-                    ((end.0 - start.0) as f64 * self.device.timestamp_period() as f64)  / 1000000.0f64;
-                info!("TimeStamp:{}", delta);
-            }
-        }
 
         let wait_semaphores = [self.device.present_complete_semaphore[resource_index]];
         let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -1082,6 +1068,16 @@ impl Renderer {
         };
         if let Some(error) = result.err() {
             error!("{}", error);
+        }
+
+        if let Some(results) = self.device.get_timestamp_result() {
+            let get_time = |start: u64, end: u64| {
+                ((end - start) as f64 * self.device.timestamp_period() as f64) / 1000000.0f64
+            };
+
+            self.timestamps.shadow_pass = get_time(results[0], results[1]);
+            self.timestamps.forward_pass = get_time(results[2], results[3]);
+            self.timestamps.ui_pass = get_time(results[4], results[5]);
         }
 
         self.device.end_frame()?;
@@ -1342,6 +1338,10 @@ impl Renderer {
                 Ok(self.meshes.insert(render_mesh))
             }
         }
+    }
+
+    pub fn timestamps(&self) -> TimeStamp {
+        self.timestamps
     }
 
     fn get_material_ssbo_from_instance(&self, instance: &MaterialInstance) -> MaterialParamSSBO {
@@ -1612,4 +1612,11 @@ struct UIDrawCall {
     index_offset: usize,
     amount: usize,
     scissor: ([f32; 2], [f32; 2]),
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct TimeStamp {
+    pub shadow_pass: f64,
+    pub forward_pass: f64,
+    pub ui_pass: f64,
 }

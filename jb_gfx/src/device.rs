@@ -10,7 +10,7 @@ use ash::vk::{
     self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
     PhysicalDeviceHostQueryResetFeatures, SurfaceTransformFlagsKHR,
 };
-use log::info;
+use log::{error, info};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -199,6 +199,9 @@ impl GraphicsDevice {
 
             unsafe { device.create_query_pool(&create_info, None) }
         }?;
+        unsafe {
+            device.reset_query_pool(query_pool, 0, QUERY_COUNT);
+        }
 
         let resource_manager = ResourceManager::new(&instance, &pdevice, device.clone());
 
@@ -577,11 +580,11 @@ impl GraphicsDevice {
         }?;
 
         // Reset query pool
-        *self.timestamp_frame_count.borrow_mut() = 0;
         unsafe {
             self.vk_device
-                .reset_query_pool(self.query_pool, 0, *self.timestamp_frame_count.borrow() as u32);
+                .reset_query_pool(self.query_pool, 0, QUERY_COUNT);
         }
+        *self.timestamp_frame_count.borrow_mut() = 0;
 
         // Begin command buffer
 
@@ -1024,20 +1027,22 @@ impl GraphicsDevice {
         self.timestamp_period
     }
 
-    pub fn get_timestamp_result(&self) -> Option<Vec<(u64, u64)>> {
-        let mut query_pool_results = [(0u64, 0u64); QUERY_COUNT as usize];
+    pub fn get_timestamp_result(&self) -> Option<Vec<u64>> {
+        let mut query_pool_results = [0u64; QUERY_COUNT as usize];
         let result = unsafe {
             self.vk_device.get_query_pool_results(
                 self.query_pool,
                 0,
                 QUERY_COUNT,
                 &mut query_pool_results,
-                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WITH_AVAILABILITY,
+                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
             )
         };
         if result.is_ok() {
             Some(Vec::from(query_pool_results))
         } else {
+            //Some(Vec::from(query_pool_results))
+            error!("{}", result.err().unwrap());
             None
         }
     }

@@ -151,6 +151,21 @@ impl Editor {
     }
 
     fn engine_utils_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
+        let timestamps = dependencies.renderer.timestamps();
+
+        ui.horizontal(|ui| {
+            ui.label("Shadow Pass:");
+            ui.label(timestamps.shadow_pass.to_string());
+        });
+        ui.horizontal(|ui| {
+            ui.label("Forward Pass:");
+            ui.label(timestamps.forward_pass.to_string());
+        });
+        ui.horizontal(|ui| {
+            ui.label("UI Pass:");
+            ui.label(timestamps.ui_pass.to_string());
+        });
+
         if ui.button("Reload Shaders").clicked() {
             dependencies.renderer.reload_shaders().unwrap();
         }
