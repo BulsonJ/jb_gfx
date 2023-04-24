@@ -9,3 +9,4 @@ pub mod editor;
 pub mod egui_context;
 pub mod input;
 pub mod project;
+pub mod asset_test;
