@@ -185,11 +185,11 @@ fn setup_scene(
         ),
         Light::new(
             Point3::new(10.0f32, 5.0f32, -16.0f32),
-            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            Vector3::new(5.0f32, 5.0f32, 5.0f32),
         ),
         Light::new(
             Point3::new(-10.0f32, -5.0f32, 16.0f32),
-            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            Vector3::new(5.0f32, 5.0f32, 5.0f32),
         ),
     ];
 

@@ -1082,7 +1082,7 @@ impl Renderer {
             let bloom_sets = [bloom_set, bloom_set_two];
 
             let mut horizontal = true;
-            for i in 0..4 {
+            for i in 0..10 {
                 if i == 0 {
                     ImageBarrierBuilder::default()
                         .add_image_barrier(ImageBarrier {
