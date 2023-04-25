@@ -105,3 +105,12 @@ pub struct UIVertexData {
     pub colour: [f32; 4],
     pub texture_id: [i32; 4],
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct WorldDebugUIDrawData {
+    pub position: [f32; 3],
+    pub texture_index: i32,
+    pub colour: [f32; 3],
+    pub size: f32,
+}

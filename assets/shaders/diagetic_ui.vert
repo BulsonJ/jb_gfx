@@ -14,54 +14,54 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 sunView;
 } cameraData;
 
-struct ModelMatrix{
-	mat4 model;
-	mat4 normal;
+struct DiageticUIDrawData{
+	vec3 position;
+	int textureIndex;
+	vec3 colour;
+	float size;
 };
 
-layout(std140,set = 1, binding = 2) readonly buffer ModelBuffer{
-	ModelMatrix models[];
-} modelData;
+layout(std140,set = 1, binding = 1) readonly buffer DrawDataBuffer{
+	DiageticUIDrawData draw[];
+} drawData;
 
 layout( push_constant ) uniform constants
 {
-	ivec4 handles;
+	int handle;
 } pushConstants;
 
 void main()
 {
 	const vec2 positions[] = vec2[](
-	vec2(-1.f,-1.f),
-	vec2(1.f,-1.f),
-	vec2(1.f,1.f),
-	vec2(-1.f,-1.f),
-	vec2(1.f,1.f),
-	vec2(-1.f,1.f)
+		vec2(-1.f,-1.f),
+		vec2(1.f,-1.f),
+		vec2(1.f,1.f),
+		vec2(-1.f,-1.f),
+		vec2(1.f,1.f),
+		vec2(-1.f,1.f)
 	);
 
 	const vec2 texCoords[] = vec2[](
-	vec2(1.f,1.f),
-	vec2(0.f,1.f),
-	vec2(0.f,0.f),
-	vec2(1.f,1.f),
-	vec2(0.f,0.f),
-	vec2(1.f,0.f)
+		vec2(1.f,1.f),
+		vec2(0.f,1.f),
+		vec2(0.f,0.f),
+		vec2(1.f,1.f),
+		vec2(0.f,0.f),
+		vec2(1.f,0.f)
 	);
 
 	int vertexIndex = gl_VertexIndex % 6;
 	outTexCoords = texCoords[vertexIndex];
 
-	vec3 CameraRight_worldspace = vec3(cameraData.view[0][0], cameraData.view[1][0], cameraData.view[2][0]);
-	vec3 CameraUp_worldspace = vec3(cameraData.view[0][1], cameraData.view[1][1], cameraData.view[2][1]);
+	vec3 camera_right_world = vec3(cameraData.view[0][0], cameraData.view[1][0], cameraData.view[2][0]);
+	vec3 camera_up_world = vec3(cameraData.view[0][1], cameraData.view[1][1], cameraData.view[2][1]);
 
-	mat4 modelMatrix = modelData.models[pushConstants.handles.x].model;
+	vec2 billboard_size = vec2(drawData.draw[pushConstants.handle].size);
+	vec3 position = drawData.draw[pushConstants.handle].position;
 
-	vec2 BillboardSize = vec2(2.5,2.5);
-	vec3 position = vec3(0,10,0);
+	vec3 vertex_pos_world = position
+		+ (camera_right_world * positions[vertexIndex].x * billboard_size.x)
+		+ (camera_up_world * positions[vertexIndex].y * billboard_size.y);
 
-	vec3 vertexPosition_worldspace = //position +
-		CameraRight_worldspace * positions[vertexIndex].x * BillboardSize.x
-		+ CameraUp_worldspace * positions[vertexIndex].y * BillboardSize.y;
-
-	gl_Position = cameraData.proj * cameraData.view * modelMatrix * vec4(vertexPosition_worldspace, 1.0f);
+	gl_Position = cameraData.proj * cameraData.view * vec4(vertex_pos_world, 1.0f);
 }

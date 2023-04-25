@@ -27,7 +27,7 @@ use crate::device::{
 };
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
-    UIVertexData,
+    UIVertexData, WorldDebugUIDrawData,
 };
 use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
@@ -40,6 +40,7 @@ use crate::{Camera, Colour, DefaultCamera, DirectionalLight, Light, MeshData, Ve
 
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
+const MAX_DEBUG_UI: u64 = 100u64;
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -86,9 +87,13 @@ pub struct Renderer {
     combine_pso_layout: vk::PipelineLayout,
     combine_set_layout: vk::DescriptorSetLayout,
     pub enable_bloom_pass: bool,
-    diagetic_pso: PipelineHandle,
-    diagetic_pso_layout: vk::PipelineLayout,
+    world_debug_pso: PipelineHandle,
+    world_debug_pso_layout: vk::PipelineLayout,
+    world_debug_desc_layout: vk::DescriptorSetLayout,
+    world_debug_desc_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    world_debug_draw_data: [BufferHandle; FRAMES_IN_FLIGHT],
     pub draw_debug_ui: bool,
+    pub debug_ui_size: f32,
 }
 
 impl Renderer {
@@ -567,13 +572,58 @@ impl Renderer {
             (pso, pso_layout)
         };
 
-        let (diagetic_pso, diagetic_pso_layout) = {
+        let world_debug_draw_data = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<WorldDebugUIDrawData>() * MAX_DEBUG_UI as usize,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                storage_type: BufferStorageType::HostLocal,
+            };
+
+            [
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+            ]
+        };
+
+        let (world_debug_desc_set, world_debug_desc_layout) = {
+            let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
+            let mut layout = None;
+            for i in 0..FRAMES_IN_FLIGHT {
+                let (set, set_layout) = JBDescriptorBuilder::new(
+                    &device.resource_manager,
+                    &mut descriptor_layout_cache,
+                    &mut descriptor_allocator,
+                )
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 0,
+                    buffer: camera_buffer[i],
+                    desc_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 1,
+                    buffer: world_debug_draw_data[i],
+                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
+
+                sets[i] = set;
+                layout = Some(set_layout);
+            }
+            (sets, layout.unwrap())
+        };
+
+        let (world_debug_pso, world_debug_pso_layout) = {
             let pso_layout = pipeline_layout_cache.create_pipeline_layout(
                 &[
                     device.bindless_descriptor_set_layout(),
-                    descriptor_set_layout,
+                    world_debug_desc_layout,
                 ],
-                &[push_constant_range],
+                &[*vk::PushConstantRange::builder()
+                    .size(size_of::<i32>() as u32)
+                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)],
             )?;
 
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
@@ -649,9 +699,13 @@ impl Renderer {
             combine_pso_layout,
             combine_set_layout,
             enable_bloom_pass: true,
-            diagetic_pso,
-            diagetic_pso_layout,
+            world_debug_pso,
+            world_debug_pso_layout,
             draw_debug_ui: true,
+            world_debug_desc_set,
+            world_debug_desc_layout,
+            world_debug_draw_data,
+            debug_ui_size: 2.5f32,
         })
     }
 
@@ -749,18 +803,6 @@ impl Renderer {
                 };
                 transform_matrices.push(transform);
             }
-            // TODO : Create diagetic UI buffer instead of using model matrices(wasteful)
-            for light in self.stored_lights.values() {
-                let transform = TransformSSBO {
-                    model: Matrix4::from_translation(light.position.to_vec()).into(),
-                    normal: Matrix4::from_translation(light.position.to_vec())
-                        .invert()
-                        .unwrap()
-                        .transpose()
-                        .into(),
-                };
-                transform_matrices.push(transform);
-            }
 
             self.device
                 .resource_manager
@@ -811,19 +853,32 @@ impl Renderer {
             }
             draw_data
         };
-        let diagetic_ui = {
-            let mut diagetic_ui = Vec::new();
-            if let Some(texture) = self.light_texture {
-                for i in 0..self.stored_lights.len() {
-                    let i = i + self.render_models.len();
 
-                    diagetic_ui.push(DiageticUIDrawData {
-                        transform_index: i,
-                        texture_index: self.device.get_descriptor_index(&texture).unwrap(),
-                    });
+        // Copy debug UI
+
+        let mut debug_ui_draw_amount = {
+            let mut debug_ui_draw_data = Vec::new();
+            if let Some(texture) = self.light_texture {
+                for light in self.stored_lights.values() {
+                    let draw = WorldDebugUIDrawData {
+                        position: light.position.into(),
+                        texture_index: self.device.get_descriptor_index(&texture).unwrap() as i32,
+                        colour: light.colour.into(),
+                        size: self.debug_ui_size,
+                    };
+                    debug_ui_draw_data.push(draw);
                 }
             }
-            diagetic_ui
+
+            self.device
+                .resource_manager
+                .get_buffer(self.world_debug_draw_data[resource_index])
+                .unwrap()
+                .view_custom(0, debug_ui_draw_data.len())?
+                .mapped_slice()?
+                .copy_from_slice(&debug_ui_draw_data);
+
+            debug_ui_draw_data.len()
         };
 
         // Copy UI
@@ -1403,7 +1458,7 @@ impl Renderer {
 
                         // Diagetic UI
                         if self.draw_debug_ui {
-                            let pipeline = self.pipeline_manager.get_pipeline(self.diagetic_pso);
+                            let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
 
                             unsafe {
                                 self.device.vk_device.cmd_bind_pipeline(
@@ -1414,25 +1469,17 @@ impl Renderer {
                                 self.device.vk_device.cmd_bind_descriptor_sets(
                                     self.device.graphics_command_buffer(),
                                     vk::PipelineBindPoint::GRAPHICS,
-                                    self.pso_layout,
+                                    self.world_debug_pso_layout,
                                     0u32,
                                     &[
                                         self.device.bindless_descriptor_set(),
-                                        self.descriptor_set[resource_index],
+                                        self.world_debug_desc_set[resource_index],
                                     ],
                                     &[],
                                 );
                             };
 
-                            for draw in diagetic_ui.iter() {
-                                let push_constants = PushConstants {
-                                    handles: [
-                                        draw.transform_index as i32,
-                                        draw.texture_index as i32,
-                                        0,
-                                        0,
-                                    ],
-                                };
+                            for draw_index in 0..debug_ui_draw_amount {
                                 unsafe {
                                     self.device.vk_device.cmd_push_constants(
                                         self.device.graphics_command_buffer(),
@@ -1440,7 +1487,7 @@ impl Renderer {
                                         vk::ShaderStageFlags::VERTEX
                                             | vk::ShaderStageFlags::FRAGMENT,
                                         0u32,
-                                        bytemuck::cast_slice(&[push_constants]),
+                                        bytemuck::cast_slice(&[draw_index as i32]),
                                     );
                                     self.device.vk_device.cmd_draw(
                                         self.device.graphics_command_buffer(),
@@ -2134,9 +2181,4 @@ pub struct TimeStamp {
     pub combine_pass: f64,
     pub ui_pass: f64,
     pub total: f64,
-}
-
-struct DiageticUIDrawData {
-    transform_index: usize,
-    texture_index: usize,
 }

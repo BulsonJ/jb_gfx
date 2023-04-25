@@ -191,6 +191,15 @@ impl Editor {
             ui.checkbox(&mut dependencies.renderer.draw_debug_ui, "Debug UI");
         });
         ui.horizontal(|ui| {
+            let min_size = 1.0f32;
+            let max_size = 3.0f32;
+            ui.label("Debug UI Size: ");
+            ui.add(egui::Slider::new(
+                &mut dependencies.renderer.debug_ui_size,
+                min_size..=max_size,
+            ));
+        });
+        ui.horizontal(|ui| {
             ui.checkbox(&mut dependencies.renderer.enable_bloom_pass, "Bloom");
         });
         ui.separator();
