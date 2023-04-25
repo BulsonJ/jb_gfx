@@ -19,6 +19,7 @@ use crate::input::Input;
 pub struct Editor {
     camera_controls_show: bool,
     light_controls_show: bool,
+    engine_timings_show: bool,
     engine_utils_show: bool,
     audio_show: bool,
     camera_panel: CameraPanel,
@@ -28,6 +29,7 @@ pub struct Editor {
 impl Editor {
     pub fn new() -> Self {
         Self {
+            engine_timings_show: true,
             ..Default::default()
         }
     }
@@ -68,6 +70,14 @@ impl Editor {
                 .show(ctx, |ui| {
                     Editor::engine_utils_panel(ui, dependencies);
                 });
+            egui::Window::new("Engine Timings")
+                .vscroll(false)
+                .resizable(false)
+                .open(&mut self.engine_timings_show)
+                .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 30.0))
+                .show(ctx, |ui| {
+                    Editor::engine_timings_panel(ui, dependencies);
+                });
             egui::Window::new("Audio")
                 .vscroll(false)
                 .resizable(false)
@@ -87,6 +97,9 @@ impl Editor {
         }
         if ui.button("Utils").clicked() {
             self.engine_utils_show = !self.engine_utils_show;
+        }
+        if ui.button("Timings").clicked() {
+            self.engine_timings_show = !self.engine_timings_show;
         }
         if ui.button("Audio").clicked() {
             self.audio_show = !self.audio_show;
@@ -142,7 +155,7 @@ impl Editor {
         ui.separator();
     }
 
-    fn engine_utils_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
+    fn engine_timings_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
         let timestamps = dependencies.renderer.timestamps();
 
         ui.horizontal(|ui| {
@@ -165,14 +178,22 @@ impl Editor {
             ui.label("UI Pass:");
             ui.label(format!("{:.6}", timestamps.ui_pass.to_string()));
         });
+        ui.separator();
         ui.horizontal(|ui| {
             ui.label("Frametime:");
             ui.label(format!("{:.6}", timestamps.total.to_string()));
         });
+    }
 
+    fn engine_utils_panel(ui: &mut Ui, dependencies: &mut EditorDependencies) {
+        ui.label("Options:");
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut dependencies.renderer.draw_debug_ui, "Debug UI");
+        });
         ui.horizontal(|ui| {
             ui.checkbox(&mut dependencies.renderer.enable_bloom_pass, "Bloom");
         });
+        ui.separator();
         if ui.button("Reload Shaders").clicked() {
             dependencies.renderer.reload_shaders().unwrap();
         }

@@ -57,7 +57,7 @@ pub struct Renderer {
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    pub light_mesh: Option<MeshHandle>,
+    pub light_texture: Option<ImageHandle>,
     stored_lights: SlotMap<LightHandle, Light>,
     shadow_pso: PipelineHandle,
     pub sun: DirectionalLight,
@@ -86,6 +86,9 @@ pub struct Renderer {
     combine_pso_layout: vk::PipelineLayout,
     combine_set_layout: vk::DescriptorSetLayout,
     pub enable_bloom_pass: bool,
+    diagetic_pso: PipelineHandle,
+    diagetic_pso_layout: vk::PipelineLayout,
+    pub draw_debug_ui: bool,
 }
 
 impl Renderer {
@@ -564,6 +567,44 @@ impl Renderer {
             (pso, pso_layout)
         };
 
+        let (diagetic_pso, diagetic_pso_layout) = {
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                &[
+                    device.bindless_descriptor_set_layout(),
+                    descriptor_set_layout,
+                ],
+                &[push_constant_range],
+            )?;
+
+            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(false)
+                .depth_compare_op(vk::CompareOp::ALWAYS)
+                .depth_bounds_test_enable(false)
+                .stencil_test_enable(false)
+                .min_depth_bounds(0.0f32)
+                .max_depth_bounds(1.0f32);
+
+            let pso_build_info = PipelineCreateInfo {
+                pipeline_layout: pso_layout,
+                vertex_shader: "assets/shaders/diagetic_ui.vert".to_string(),
+                fragment_shader: "assets/shaders/diagetic_ui.frag".to_string(),
+                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                color_attachment_formats: vec![PipelineColorAttachment {
+                    format: swapchain_image_format,
+                    blend: true,
+                    src_blend_factor_color: vk::BlendFactor::ONE,
+                    dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                }],
+                depth_attachment_format: None,
+                depth_stencil_state: *depth_stencil_state,
+                cull_mode: vk::CullModeFlags::NONE,
+            };
+
+            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
+            (pso, pso_layout)
+        };
+
         info!("Renderer Created");
         Ok(Self {
             device,
@@ -579,7 +620,7 @@ impl Renderer {
             light_buffer,
             transform_buffer,
             material_buffer,
-            light_mesh: None,
+            light_texture: None,
             stored_lights: SlotMap::default(),
             shadow_pso,
             sun,
@@ -608,6 +649,9 @@ impl Renderer {
             combine_pso_layout,
             combine_set_layout,
             enable_bloom_pass: true,
+            diagetic_pso,
+            diagetic_pso_layout,
+            draw_debug_ui: true,
         })
     }
 
@@ -705,6 +749,7 @@ impl Renderer {
                 };
                 transform_matrices.push(transform);
             }
+            // TODO : Create diagetic UI buffer instead of using model matrices(wasteful)
             for light in self.stored_lights.values() {
                 let transform = TransformSSBO {
                     model: Matrix4::from_translation(light.position.to_vec()).into(),
@@ -764,23 +809,24 @@ impl Renderer {
                     });
                 }
             }
-            for i in 0..self.stored_lights.len() {
-                let i = i + self.render_models.len();
-                if let Some(mesh) = self.meshes.get(self.light_mesh.unwrap()) {
-                    draw_data.push(DrawData {
-                        vertex_buffer: mesh.vertex_buffer,
-                        index_buffer: mesh.index_buffer,
-                        index_count: mesh.vertex_count,
+            draw_data
+        };
+        let diagetic_ui = {
+            let mut diagetic_ui = Vec::new();
+            if let Some(texture) = self.light_texture {
+                for i in 0..self.stored_lights.len() {
+                    let i = i + self.render_models.len();
+
+                    diagetic_ui.push(DiageticUIDrawData {
                         transform_index: i,
-                        material_index: i,
+                        texture_index: self.device.get_descriptor_index(&texture).unwrap(),
                     });
                 }
             }
-            draw_data
+            diagetic_ui
         };
 
         // Copy UI
-
         {
             let ui_uniform = UIUniformData {
                 screen_size: [
@@ -1354,6 +1400,59 @@ impl Renderer {
                     &self.device.graphics_command_buffer(),
                     |render_pass| {
                         profiling::scope!("UI Pass");
+
+                        // Diagetic UI
+                        if self.draw_debug_ui {
+                            let pipeline = self.pipeline_manager.get_pipeline(self.diagetic_pso);
+
+                            unsafe {
+                                self.device.vk_device.cmd_bind_pipeline(
+                                    self.device.graphics_command_buffer(),
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    pipeline,
+                                );
+                                self.device.vk_device.cmd_bind_descriptor_sets(
+                                    self.device.graphics_command_buffer(),
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    self.pso_layout,
+                                    0u32,
+                                    &[
+                                        self.device.bindless_descriptor_set(),
+                                        self.descriptor_set[resource_index],
+                                    ],
+                                    &[],
+                                );
+                            };
+
+                            for draw in diagetic_ui.iter() {
+                                let push_constants = PushConstants {
+                                    handles: [
+                                        draw.transform_index as i32,
+                                        draw.texture_index as i32,
+                                        0,
+                                        0,
+                                    ],
+                                };
+                                unsafe {
+                                    self.device.vk_device.cmd_push_constants(
+                                        self.device.graphics_command_buffer(),
+                                        self.pso_layout,
+                                        vk::ShaderStageFlags::VERTEX
+                                            | vk::ShaderStageFlags::FRAGMENT,
+                                        0u32,
+                                        bytemuck::cast_slice(&[push_constants]),
+                                    );
+                                    self.device.vk_device.cmd_draw(
+                                        self.device.graphics_command_buffer(),
+                                        6u32,
+                                        1u32,
+                                        0u32,
+                                        0u32,
+                                    );
+                                };
+                            }
+                        }
+
                         let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
 
                         unsafe {
@@ -2035,4 +2134,9 @@ pub struct TimeStamp {
     pub combine_pass: f64,
     pub ui_pass: f64,
     pub total: f64,
+}
+
+struct DiageticUIDrawData {
+    transform_index: usize,
+    texture_index: usize,
 }

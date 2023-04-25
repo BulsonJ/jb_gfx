@@ -12,6 +12,7 @@ use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
 use game::project::Project;
 use game::{Camera, DirectionCamera, LookAtCamera};
+use jb_gfx::device::ImageFormatType;
 use jb_gfx::renderer::Renderer;
 use jb_gfx::{Colour, DefaultCamera, Light};
 
@@ -31,17 +32,15 @@ struct EditorProject {
 impl Project for EditorProject {
     fn new(app: &mut Application, event_loop: &EventLoop<()>) -> Self {
         // Load cube
-        {
-            let models = app
-                .asset_manager
-                .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
-                .unwrap();
-            for model in models.iter() {
-                for submesh in model.mesh.submeshes.iter() {
-                    app.renderer.light_mesh = Some(submesh.mesh);
-                }
-            }
-        }
+        let texture = app
+            .asset_manager
+            .load_texture(
+                &mut app.renderer,
+                "assets/textures/light.png",
+                &ImageFormatType::Default,
+            )
+            .unwrap();
+        app.renderer.light_texture = Some(texture);
         // Load sponza
         {
             let models = app
@@ -117,7 +116,7 @@ impl Project for EditorProject {
                 .unwrap();
 
         let egui = EguiContext::new(event_loop);
-        let editor = Editor::default();
+        let editor = Editor::new();
 
         Self {
             egui,
