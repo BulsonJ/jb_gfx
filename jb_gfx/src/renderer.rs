@@ -671,122 +671,131 @@ impl Renderer {
             self.render_targets.get(self.bloom_image[1]).unwrap(),
         ];
 
-        // Copy light
-        self.camera_uniform.update_light(&self.sun);
+        // Copy gpu data
+        {
+            self.camera_uniform.update_light(&self.sun);
 
-        self.device
-            .resource_manager
-            .get_buffer(self.camera_buffer[resource_index])
-            .unwrap()
-            .view()
-            .mapped_slice()?
-            .copy_from_slice(&[self.camera_uniform]);
+            self.device
+                .resource_manager
+                .get_buffer(self.camera_buffer[resource_index])
+                .unwrap()
+                .view()
+                .mapped_slice()?
+                .copy_from_slice(&[self.camera_uniform]);
 
-        let test = self.stored_lights.values();
-        let uniforms: Vec<LightUniform> = test.map(|&light| LightUniform::from(light)).collect();
+            let test = self.stored_lights.values();
+            let uniforms: Vec<LightUniform> =
+                test.map(|&light| LightUniform::from(light)).collect();
 
-        self.device
-            .resource_manager
-            .get_buffer(self.light_buffer[resource_index])
-            .unwrap()
-            .view_custom::<LightUniform>(0, uniforms.len())?
-            .mapped_slice()?
-            .copy_from_slice(&uniforms);
+            self.device
+                .resource_manager
+                .get_buffer(self.light_buffer[resource_index])
+                .unwrap()
+                .view_custom::<LightUniform>(0, uniforms.len())?
+                .mapped_slice()?
+                .copy_from_slice(&uniforms);
 
-        // Copy objects model matrix
+            // Copy objects model matrix
 
-        let mut transform_matrices = Vec::new();
-        for model in self.render_models.values() {
-            let transform = TransformSSBO {
-                model: model.transform.into(),
-                normal: model.transform.invert().unwrap().transpose().into(),
-            };
-            transform_matrices.push(transform);
+            let mut transform_matrices = Vec::new();
+            for model in self.render_models.values() {
+                let transform = TransformSSBO {
+                    model: model.transform.into(),
+                    normal: model.transform.invert().unwrap().transpose().into(),
+                };
+                transform_matrices.push(transform);
+            }
+            for light in self.stored_lights.values() {
+                let transform = TransformSSBO {
+                    model: Matrix4::from_translation(light.position.to_vec()).into(),
+                    normal: Matrix4::from_translation(light.position.to_vec())
+                        .invert()
+                        .unwrap()
+                        .transpose()
+                        .into(),
+                };
+                transform_matrices.push(transform);
+            }
+
+            self.device
+                .resource_manager
+                .get_buffer(self.transform_buffer[resource_index])
+                .unwrap()
+                .view_custom(0, transform_matrices.len())?
+                .mapped_slice()?
+                .copy_from_slice(&transform_matrices);
+
+            let mut materials = Vec::new();
+            for model in self.render_models.values() {
+                let material_params =
+                    self.get_material_ssbo_from_instance(&model.material_instance);
+                materials.push(material_params);
+            }
+            // Push light materials
+            for light in self.stored_lights.values() {
+                materials.push(self.get_material_ssbo_from_instance(&MaterialInstance {
+                    diffuse: Vector4::zero(),
+                    emissive: light.colour,
+                    ..Default::default()
+                }));
+            }
+
+            self.device
+                .resource_manager
+                .get_buffer(self.material_buffer[resource_index])
+                .unwrap()
+                .view_custom(0, materials.len())?
+                .mapped_slice()?
+                .copy_from_slice(&materials);
         }
-        for light in self.stored_lights.values() {
-            let transform = TransformSSBO {
-                model: Matrix4::from_translation(light.position.to_vec()).into(),
-                normal: Matrix4::from_translation(light.position.to_vec())
-                    .invert()
-                    .unwrap()
-                    .transpose()
-                    .into(),
-            };
-            transform_matrices.push(transform);
-        }
-
-        self.device
-            .resource_manager
-            .get_buffer(self.transform_buffer[resource_index])
-            .unwrap()
-            .view_custom(0, transform_matrices.len())?
-            .mapped_slice()?
-            .copy_from_slice(&transform_matrices);
-
-        let mut materials = Vec::new();
-        for model in self.render_models.values() {
-            let material_params = self.get_material_ssbo_from_instance(&model.material_instance);
-            materials.push(material_params);
-        }
-        // Push light materials
-        for light in self.stored_lights.values() {
-            materials.push(self.get_material_ssbo_from_instance(&MaterialInstance {
-                diffuse: Vector4::zero(),
-                emissive: light.colour,
-                ..Default::default()
-            }));
-        }
-
-        self.device
-            .resource_manager
-            .get_buffer(self.material_buffer[resource_index])
-            .unwrap()
-            .view_custom(0, materials.len())?
-            .mapped_slice()?
-            .copy_from_slice(&materials);
 
         // Fill draw commands
-        let mut draw_data: Vec<DrawData> = Vec::new();
-        for (i, model) in self.render_models.keys().enumerate() {
-            let model = self.render_models.get(model).unwrap();
-            if let Some(mesh) = self.meshes.get(model.mesh_handle) {
-                draw_data.push(DrawData {
-                    vertex_buffer: mesh.vertex_buffer,
-                    index_buffer: mesh.index_buffer,
-                    index_count: mesh.vertex_count,
-                    transform_index: i,
-                    material_index: i,
-                });
+        let draw_data = {
+            let mut draw_data = Vec::new();
+            for (i, model) in self.render_models.keys().enumerate() {
+                let model = self.render_models.get(model).unwrap();
+                if let Some(mesh) = self.meshes.get(model.mesh_handle) {
+                    draw_data.push(DrawData {
+                        vertex_buffer: mesh.vertex_buffer,
+                        index_buffer: mesh.index_buffer,
+                        index_count: mesh.vertex_count,
+                        transform_index: i,
+                        material_index: i,
+                    });
+                }
             }
-        }
-        for i in 0..self.stored_lights.len() {
-            let i = i + self.render_models.len();
-            if let Some(mesh) = self.meshes.get(self.light_mesh.unwrap()) {
-                draw_data.push(DrawData {
-                    vertex_buffer: mesh.vertex_buffer,
-                    index_buffer: mesh.index_buffer,
-                    index_count: mesh.vertex_count,
-                    transform_index: i,
-                    material_index: i,
-                });
+            for i in 0..self.stored_lights.len() {
+                let i = i + self.render_models.len();
+                if let Some(mesh) = self.meshes.get(self.light_mesh.unwrap()) {
+                    draw_data.push(DrawData {
+                        vertex_buffer: mesh.vertex_buffer,
+                        index_buffer: mesh.index_buffer,
+                        index_count: mesh.vertex_count,
+                        transform_index: i,
+                        material_index: i,
+                    });
+                }
             }
-        }
+            draw_data
+        };
 
         // Copy UI
 
-        let ui_uniform = UIUniformData {
-            screen_size: [
-                self.device.size().width as f32,
-                self.device.size().height as f32,
-            ],
-        };
-        self.device
-            .resource_manager
-            .get_buffer(self.ui_uniform_data[resource_index])
-            .unwrap()
-            .view()
-            .mapped_slice()?
-            .copy_from_slice(&[ui_uniform]);
+        {
+            let ui_uniform = UIUniformData {
+                screen_size: [
+                    self.device.size().width as f32,
+                    self.device.size().height as f32,
+                ],
+            };
+            self.device
+                .resource_manager
+                .get_buffer(self.ui_uniform_data[resource_index])
+                .unwrap()
+                .view()
+                .mapped_slice()?
+                .copy_from_slice(&[ui_uniform]);
+        }
 
         let ui_draw_calls = {
             let mut ui_draw_calls = Vec::new();
@@ -846,284 +855,365 @@ impl Renderer {
         // Barrier images
 
         // Shadow pass
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(shadow_image),
-                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .build(&self.device, &self.device.graphics_command_buffer())?;
+        {
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::TOP_OF_PIPE,
+            );
+            ImageBarrierBuilder::default()
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(shadow_image),
+                    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    ..Default::default()
+                })
+                .build(&self.device, &self.device.graphics_command_buffer())?;
 
-        RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
-            .set_depth_attachment(AttachmentInfo {
-                target: AttachmentHandle::Image(shadow_image),
-                clear_value: vk::ClearValue {
-                    depth_stencil: ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
+            RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
+                .set_depth_attachment(AttachmentInfo {
+                    target: AttachmentHandle::Image(shadow_image),
+                    clear_value: vk::ClearValue {
+                        depth_stencil: ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
                     },
-                },
-                ..Default::default()
-            })
-            .start(
-                &self.device,
-                &self.device.graphics_command_buffer(),
-                |_render_pass| {
-                    profiling::scope!("Shadow Pass");
+                    ..Default::default()
+                })
+                .start(
+                    &self.device,
+                    &self.device.graphics_command_buffer(),
+                    |_render_pass| {
+                        profiling::scope!("Shadow Pass");
 
-                    let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
-                    unsafe {
-                        self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline,
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pso_layout,
-                            0u32,
-                            &[
-                                self.device.bindless_descriptor_set(),
-                                self.descriptor_set[resource_index],
-                            ],
-                            &[],
-                        );
-                    };
+                        let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
+                        unsafe {
+                            self.device.vk_device.cmd_bind_pipeline(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline,
+                            );
+                            self.device.vk_device.cmd_bind_descriptor_sets(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                self.pso_layout,
+                                0u32,
+                                &[
+                                    self.device.bindless_descriptor_set(),
+                                    self.descriptor_set[resource_index],
+                                ],
+                                &[],
+                            );
+                        };
 
-                    // Draw commands
-                    self.draw_objects(&draw_data)?;
-                    Ok(())
-                },
-            )?;
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
+                        // Draw commands
+                        self.draw_objects(&draw_data)?;
+                        Ok(())
+                    },
+                )?;
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+            );
 
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(forward_image),
-                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(bright_extracted_image),
-                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(depth_image),
-                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(
-                    self.render_targets
-                        .get(self.directional_light_shadow_image)
-                        .unwrap(),
-                ),
-                src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-                src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                dst_access_mask: AccessFlags2::SHADER_READ,
-                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                ..Default::default()
-            })
-            .build(&self.device, &self.device.graphics_command_buffer())?;
+            ImageBarrierBuilder::default()
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(forward_image),
+                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    ..Default::default()
+                })
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(bright_extracted_image),
+                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    ..Default::default()
+                })
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(depth_image),
+                    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    ..Default::default()
+                })
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(
+                        self.render_targets
+                            .get(self.directional_light_shadow_image)
+                            .unwrap(),
+                    ),
+                    src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                    dst_access_mask: AccessFlags2::SHADER_READ,
+                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ..Default::default()
+                })
+                .build(&self.device, &self.device.graphics_command_buffer())?;
 
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::TOP_OF_PIPE,
+            );
+        }
         // Normal Pass
-        let clear_colour: Vector3<f32> = self.clear_colour.into();
-        RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-            .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::Image(forward_image),
-                clear_value: vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: clear_colour.extend(0f32).into(),
+        {
+            let clear_colour: Vector3<f32> = self.clear_colour.into();
+            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                .add_colour_attachment(AttachmentInfo {
+                    target: AttachmentHandle::Image(forward_image),
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: clear_colour.extend(0f32).into(),
+                        },
                     },
-                },
-                ..Default::default()
-            })
-            .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::Image(bright_extracted_image),
-                clear_value: vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
+                    ..Default::default()
+                })
+                .add_colour_attachment(AttachmentInfo {
+                    target: AttachmentHandle::Image(bright_extracted_image),
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 1.0],
+                        },
                     },
-                },
-                ..Default::default()
-            })
-            .set_depth_attachment(AttachmentInfo {
-                target: AttachmentHandle::Image(depth_image),
-                clear_value: vk::ClearValue {
-                    depth_stencil: ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
+                    ..Default::default()
+                })
+                .set_depth_attachment(AttachmentInfo {
+                    target: AttachmentHandle::Image(depth_image),
+                    clear_value: vk::ClearValue {
+                        depth_stencil: ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
                     },
-                },
-                ..Default::default()
-            })
-            .start(
-                &self.device,
-                &self.device.graphics_command_buffer(),
-                |_render_pass| {
-                    profiling::scope!("Forward Pass");
-                    let pipeline = self.pipeline_manager.get_pipeline(self.pso);
+                    ..Default::default()
+                })
+                .start(
+                    &self.device,
+                    &self.device.graphics_command_buffer(),
+                    |_render_pass| {
+                        profiling::scope!("Forward Pass");
+                        let pipeline = self.pipeline_manager.get_pipeline(self.pso);
 
-                    unsafe {
-                        self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline,
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pso_layout,
-                            0u32,
-                            &[
-                                self.device.bindless_descriptor_set(),
-                                self.descriptor_set[resource_index],
-                            ],
-                            &[],
-                        );
-                    };
+                        unsafe {
+                            self.device.vk_device.cmd_bind_pipeline(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline,
+                            );
+                            self.device.vk_device.cmd_bind_descriptor_sets(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                self.pso_layout,
+                                0u32,
+                                &[
+                                    self.device.bindless_descriptor_set(),
+                                    self.descriptor_set[resource_index],
+                                ],
+                                &[],
+                            );
+                        };
 
-                    // Draw commands
+                        // Draw commands
 
-                    self.draw_objects(&draw_data)?;
-                    Ok(())
-                },
-            )?;
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
+                        self.draw_objects(&draw_data)?;
+                        Ok(())
+                    },
+                )?;
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+            );
+        }
 
         // Bloom pass
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
-        if self.enable_bloom_pass {
-            let (first_bloom_set, bloom_set_layout) = JBDescriptorBuilder::new(
-                &self.device.resource_manager,
-                &mut self.descriptor_layout_cache,
-                &mut self.frame_descriptor_allocator[resource_index],
-            )
-            .bind_image(ImageDescriptorInfo {
-                binding: 0,
-                image: bright_extracted_image,
-                sampler: self.device.ui_sampler(),
-                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            })
-            .build()
-            .unwrap();
-            let (bloom_set, _) = JBDescriptorBuilder::new(
-                &self.device.resource_manager,
-                &mut self.descriptor_layout_cache,
-                &mut self.frame_descriptor_allocator[resource_index],
-            )
-            .bind_image(ImageDescriptorInfo {
-                binding: 0,
-                image: bloom_image[0],
-                sampler: self.device.ui_sampler(),
-                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            })
-            .build()
-            .unwrap();
-            let (bloom_set_two, _) = JBDescriptorBuilder::new(
-                &self.device.resource_manager,
-                &mut self.descriptor_layout_cache,
-                &mut self.frame_descriptor_allocator[resource_index],
-            )
-            .bind_image(ImageDescriptorInfo {
-                binding: 0,
-                image: bloom_image[1],
-                sampler: self.device.ui_sampler(),
-                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            })
-            .build()
-            .unwrap();
-            let bloom_sets = [bloom_set, bloom_set_two];
+        {
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::TOP_OF_PIPE,
+            );
+            if self.enable_bloom_pass {
+                let (first_bloom_set, bloom_set_layout) = JBDescriptorBuilder::new(
+                    &self.device.resource_manager,
+                    &mut self.descriptor_layout_cache,
+                    &mut self.frame_descriptor_allocator[resource_index],
+                )
+                .bind_image(ImageDescriptorInfo {
+                    binding: 0,
+                    image: bright_extracted_image,
+                    sampler: self.device.ui_sampler(),
+                    desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
+                let (bloom_set, _) = JBDescriptorBuilder::new(
+                    &self.device.resource_manager,
+                    &mut self.descriptor_layout_cache,
+                    &mut self.frame_descriptor_allocator[resource_index],
+                )
+                .bind_image(ImageDescriptorInfo {
+                    binding: 0,
+                    image: bloom_image[0],
+                    sampler: self.device.ui_sampler(),
+                    desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
+                let (bloom_set_two, _) = JBDescriptorBuilder::new(
+                    &self.device.resource_manager,
+                    &mut self.descriptor_layout_cache,
+                    &mut self.frame_descriptor_allocator[resource_index],
+                )
+                .bind_image(ImageDescriptorInfo {
+                    binding: 0,
+                    image: bloom_image[1],
+                    sampler: self.device.ui_sampler(),
+                    desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
+                let bloom_sets = [bloom_set, bloom_set_two];
 
-            let mut horizontal = true;
-            for i in 0..10 {
-                if i == 0 {
-                    ImageBarrierBuilder::default()
-                        .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(bright_extracted_image),
-                            src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                            src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                            dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                            dst_access_mask: AccessFlags2::SHADER_READ,
-                            old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                            new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                let mut horizontal = true;
+                for i in 0..10 {
+                    if i == 0 {
+                        ImageBarrierBuilder::default()
+                            .add_image_barrier(ImageBarrier {
+                                image: ImageHandleType::Image(bright_extracted_image),
+                                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                                dst_access_mask: AccessFlags2::SHADER_READ,
+                                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                                ..Default::default()
+                            })
+                            .add_image_barrier(ImageBarrier {
+                                image: ImageHandleType::Image(bloom_image[1]),
+                                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                                ..Default::default()
+                            })
+                            .add_image_barrier(ImageBarrier {
+                                image: ImageHandleType::Image(bloom_image[0]),
+                                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                                dst_access_mask: AccessFlags2::SHADER_READ,
+                                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                                ..Default::default()
+                            })
+                            .build(&self.device, &self.device.graphics_command_buffer())?;
+                    } else {
+                        ImageBarrierBuilder::default()
+                            .add_image_barrier(ImageBarrier {
+                                image: ImageHandleType::Image(bloom_image[horizontal as usize]),
+                                src_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                                src_access_mask: AccessFlags2::SHADER_READ,
+                                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                                old_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                                ..Default::default()
+                            })
+                            .add_image_barrier(ImageBarrier {
+                                image: ImageHandleType::Image(bloom_image[!horizontal as usize]),
+                                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                                dst_access_mask: AccessFlags2::SHADER_READ,
+                                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                                ..Default::default()
+                            })
+                            .build(&self.device, &self.device.graphics_command_buffer())?;
+                    }
+
+                    RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                        .add_colour_attachment(AttachmentInfo {
+                            target: AttachmentHandle::Image(bloom_image[horizontal as usize]),
+                            clear_value: vk::ClearValue {
+                                color: vk::ClearColorValue {
+                                    float32: [0.0, 0.0, 0.0, 1.0],
+                                },
+                            },
                             ..Default::default()
                         })
-                        .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(bloom_image[1]),
-                            dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                            dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                            new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                            ..Default::default()
-                        })
-                        .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(bloom_image[0]),
-                            dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                            dst_access_mask: AccessFlags2::SHADER_READ,
-                            new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            ..Default::default()
-                        })
-                        .build(&self.device, &self.device.graphics_command_buffer())?;
-                } else {
-                    ImageBarrierBuilder::default()
-                        .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(bloom_image[horizontal as usize]),
-                            src_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                            src_access_mask: AccessFlags2::SHADER_READ,
-                            dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                            dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                            old_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                            ..Default::default()
-                        })
-                        .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(bloom_image[!horizontal as usize]),
-                            src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                            src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                            dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                            dst_access_mask: AccessFlags2::SHADER_READ,
-                            old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                            new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            ..Default::default()
-                        })
-                        .build(&self.device, &self.device.graphics_command_buffer())?;
+                        .start(
+                            &self.device,
+                            &self.device.graphics_command_buffer(),
+                            |_render_pass| {
+                                profiling::scope!("Bloom Pass");
+
+                                let pipeline = self.pipeline_manager.get_pipeline(self.bloom_pso);
+
+                                let set = {
+                                    if i == 0 {
+                                        first_bloom_set
+                                    } else {
+                                        bloom_sets[!horizontal as usize]
+                                    }
+                                };
+                                unsafe {
+                                    self.device.vk_device.cmd_bind_pipeline(
+                                        self.device.graphics_command_buffer(),
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        pipeline,
+                                    );
+                                    self.device.vk_device.cmd_bind_descriptor_sets(
+                                        self.device.graphics_command_buffer(),
+                                        vk::PipelineBindPoint::GRAPHICS,
+                                        self.bloom_pso_layout,
+                                        0u32,
+                                        &[set],
+                                        &[],
+                                    );
+                                };
+
+                                // Draw commands
+
+                                unsafe {
+                                    self.device.vk_device.cmd_push_constants(
+                                        self.device.graphics_command_buffer(),
+                                        self.bloom_pso_layout,
+                                        vk::ShaderStageFlags::FRAGMENT,
+                                        0u32,
+                                        bytemuck::cast_slice(&[horizontal as i32]),
+                                    );
+                                    self.device.vk_device.cmd_draw(
+                                        self.device.graphics_command_buffer(),
+                                        6u32,
+                                        1u32,
+                                        0u32,
+                                        0u32,
+                                    );
+                                };
+
+                                Ok(())
+                            },
+                        )?;
+                    horizontal = !horizontal;
                 }
+            } else {
+                ImageBarrierBuilder::default()
+                    .add_image_barrier(ImageBarrier {
+                        image: ImageHandleType::Image(bloom_image[0]),
+                        dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                        dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                        new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                        ..Default::default()
+                    })
+                    .build(&self.device, &self.device.graphics_command_buffer())?;
 
                 RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                     .add_colour_attachment(AttachmentInfo {
-                        target: AttachmentHandle::Image(bloom_image[horizontal as usize]),
+                        target: AttachmentHandle::Image(bloom_image[0]),
                         clear_value: vk::ClearValue {
                             color: vk::ClearColorValue {
                                 float32: [0.0, 0.0, 0.0, 1.0],
@@ -1136,70 +1226,77 @@ impl Renderer {
                         &self.device.graphics_command_buffer(),
                         |_render_pass| {
                             profiling::scope!("Bloom Pass");
-
-                            let pipeline = self.pipeline_manager.get_pipeline(self.bloom_pso);
-
-                            let set = {
-                                if i == 0 {
-                                    first_bloom_set
-                                } else {
-                                    bloom_sets[!horizontal as usize]
-                                }
-                            };
-                            unsafe {
-                                self.device.vk_device.cmd_bind_pipeline(
-                                    self.device.graphics_command_buffer(),
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    pipeline,
-                                );
-                                self.device.vk_device.cmd_bind_descriptor_sets(
-                                    self.device.graphics_command_buffer(),
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    self.bloom_pso_layout,
-                                    0u32,
-                                    &[set],
-                                    &[],
-                                );
-                            };
-
-                            // Draw commands
-
-                            unsafe {
-                                self.device.vk_device.cmd_push_constants(
-                                    self.device.graphics_command_buffer(),
-                                    self.bloom_pso_layout,
-                                    vk::ShaderStageFlags::FRAGMENT,
-                                    0u32,
-                                    bytemuck::cast_slice(&[horizontal as i32]),
-                                );
-                                self.device.vk_device.cmd_draw(
-                                    self.device.graphics_command_buffer(),
-                                    6u32,
-                                    1u32,
-                                    0u32,
-                                    0u32,
-                                );
-                            };
-
                             Ok(())
                         },
                     )?;
-                horizontal = !horizontal;
             }
-        } else {
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+            );
+        }
+
+        // Combine Pass
+        {
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::TOP_OF_PIPE,
+            );
+
             ImageBarrierBuilder::default()
                 .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(bloom_image[0]),
+                    image: ImageHandleType::SwapchainImage,
                     dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                     dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                     new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                     ..Default::default()
                 })
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(forward_image),
+                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                    dst_access_mask: AccessFlags2::SHADER_READ,
+                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ..Default::default()
+                })
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(bloom_image[0]),
+                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                    dst_access_mask: AccessFlags2::SHADER_READ,
+                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ..Default::default()
+                })
                 .build(&self.device, &self.device.graphics_command_buffer())?;
+            let (combine_set, _) = JBDescriptorBuilder::new(
+                &self.device.resource_manager,
+                &mut self.descriptor_layout_cache,
+                &mut self.frame_descriptor_allocator[resource_index],
+            )
+            .bind_image(ImageDescriptorInfo {
+                binding: 0,
+                image: forward_image,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .bind_image(ImageDescriptorInfo {
+                binding: 1,
+                image: bloom_image[0],
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .build()
+            .unwrap();
 
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                 .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(bloom_image[0]),
+                    target: AttachmentHandle::SwapchainImage,
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
                             float32: [0.0, 0.0, 0.0, 1.0],
@@ -1211,209 +1308,131 @@ impl Renderer {
                     &self.device,
                     &self.device.graphics_command_buffer(),
                     |_render_pass| {
-                        profiling::scope!("Bloom Pass");
-                        Ok(())
-                    },
-                )?;
-        }
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
+                        profiling::scope!("Combine Pass");
 
-        // Combine Pass
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
+                        let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
 
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::SwapchainImage,
-                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(forward_image),
-                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                dst_access_mask: AccessFlags2::SHADER_READ,
-                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(bloom_image[0]),
-                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                dst_access_mask: AccessFlags2::SHADER_READ,
-                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                ..Default::default()
-            })
-            .build(&self.device, &self.device.graphics_command_buffer())?;
-        let (combine_set, _) = JBDescriptorBuilder::new(
-            &self.device.resource_manager,
-            &mut self.descriptor_layout_cache,
-            &mut self.frame_descriptor_allocator[resource_index],
-        )
-        .bind_image(ImageDescriptorInfo {
-            binding: 0,
-            image: forward_image,
-            sampler: self.device.ui_sampler(),
-            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        })
-        .bind_image(ImageDescriptorInfo {
-            binding: 1,
-            image: bloom_image[0],
-            sampler: self.device.ui_sampler(),
-            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        })
-        .build()
-        .unwrap();
-
-        RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-            .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::SwapchainImage,
-                clear_value: vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-                ..Default::default()
-            })
-            .start(
-                &self.device,
-                &self.device.graphics_command_buffer(),
-                |_render_pass| {
-                    profiling::scope!("Combine Pass");
-
-                    let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
-
-                    unsafe {
-                        self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline,
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.combine_pso_layout,
-                            0u32,
-                            &[combine_set],
-                            &[],
-                        );
-                    };
-
-                    // Draw commands
-
-                    unsafe {
-                        self.device.vk_device.cmd_draw(
-                            self.device.graphics_command_buffer(),
-                            6u32,
-                            1u32,
-                            0u32,
-                            0u32,
-                        );
-                    };
-
-                    Ok(())
-                },
-            )?;
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // UI Pass
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
-        RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-            .add_colour_attachment(AttachmentInfo {
-                target: AttachmentHandle::SwapchainImage,
-                clear_value: vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: clear_colour.extend(0f32).into(),
-                    },
-                },
-                load_op: vk::AttachmentLoadOp::LOAD,
-                ..Default::default()
-            })
-            .start(
-                &self.device,
-                &self.device.graphics_command_buffer(),
-                |render_pass| {
-                    profiling::scope!("UI Pass");
-                    let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
-
-                    unsafe {
-                        self.device.vk_device.cmd_bind_pipeline(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline,
-                        );
-                        self.device.vk_device.cmd_bind_descriptor_sets(
-                            self.device.graphics_command_buffer(),
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.ui_pso_layout,
-                            0u32,
-                            &[
-                                self.device.bindless_descriptor_set(),
-                                self.ui_descriptor_set[resource_index],
-                            ],
-                            &[],
-                        );
-                    };
-
-                    let index_buffer = self
-                        .device
-                        .resource_manager
-                        .get_buffer(self.index_buffer[resource_index])
-                        .unwrap();
-
-                    unsafe {
-                        self.device.vk_device.cmd_bind_index_buffer(
-                            self.device.graphics_command_buffer(),
-                            index_buffer.buffer(),
-                            0u64,
-                            vk::IndexType::UINT32,
-                        );
-                    }
-
-                    for draw in ui_draw_calls.iter() {
-                        let max = [
-                            draw.scissor.1[0] - draw.scissor.0[0],
-                            draw.scissor.1[1] - draw.scissor.0[1],
-                        ];
-                        render_pass.set_scissor(draw.scissor.0, max);
-                        // Draw commands
                         unsafe {
-                            self.device.vk_device.cmd_draw_indexed(
+                            self.device.vk_device.cmd_bind_pipeline(
                                 self.device.graphics_command_buffer(),
-                                draw.amount as u32,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline,
+                            );
+                            self.device.vk_device.cmd_bind_descriptor_sets(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                self.combine_pso_layout,
+                                0u32,
+                                &[combine_set],
+                                &[],
+                            );
+                        };
+
+                        // Draw commands
+
+                        unsafe {
+                            self.device.vk_device.cmd_draw(
+                                self.device.graphics_command_buffer(),
+                                6u32,
                                 1u32,
-                                draw.index_offset as u32,
-                                draw.vertex_offset as i32,
+                                0u32,
                                 0u32,
                             );
                         };
-                    }
-                    Ok(())
-                },
-            )?;
-        self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
+
+                        Ok(())
+                    },
+                )?;
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+            );
+        }
+
+        // UI Pass
+        {
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::TOP_OF_PIPE,
+            );
+            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                .add_colour_attachment(AttachmentInfo {
+                    target: AttachmentHandle::SwapchainImage,
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0,0.0,0.0,0.0],
+                        },
+                    },
+                    load_op: vk::AttachmentLoadOp::LOAD,
+                    ..Default::default()
+                })
+                .start(
+                    &self.device,
+                    &self.device.graphics_command_buffer(),
+                    |render_pass| {
+                        profiling::scope!("UI Pass");
+                        let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
+
+                        unsafe {
+                            self.device.vk_device.cmd_bind_pipeline(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline,
+                            );
+                            self.device.vk_device.cmd_bind_descriptor_sets(
+                                self.device.graphics_command_buffer(),
+                                vk::PipelineBindPoint::GRAPHICS,
+                                self.ui_pso_layout,
+                                0u32,
+                                &[
+                                    self.device.bindless_descriptor_set(),
+                                    self.ui_descriptor_set[resource_index],
+                                ],
+                                &[],
+                            );
+                        };
+
+                        let index_buffer = self
+                            .device
+                            .resource_manager
+                            .get_buffer(self.index_buffer[resource_index])
+                            .unwrap();
+
+                        unsafe {
+                            self.device.vk_device.cmd_bind_index_buffer(
+                                self.device.graphics_command_buffer(),
+                                index_buffer.buffer(),
+                                0u64,
+                                vk::IndexType::UINT32,
+                            );
+                        }
+
+                        for draw in ui_draw_calls.iter() {
+                            let max = [
+                                draw.scissor.1[0] - draw.scissor.0[0],
+                                draw.scissor.1[1] - draw.scissor.0[1],
+                            ];
+                            render_pass.set_scissor(draw.scissor.0, max);
+                            // Draw commands
+                            unsafe {
+                                self.device.vk_device.cmd_draw_indexed(
+                                    self.device.graphics_command_buffer(),
+                                    draw.amount as u32,
+                                    1u32,
+                                    draw.index_offset as u32,
+                                    draw.vertex_offset as i32,
+                                    0u32,
+                                );
+                            };
+                        }
+                        Ok(())
+                    },
+                )?;
+            self.device.write_timestamp(
+                self.device.graphics_command_buffer(),
+                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+            );
+        }
 
         // Transition render image to transfer src
 
