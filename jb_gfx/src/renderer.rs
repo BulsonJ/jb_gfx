@@ -855,11 +855,11 @@ impl Renderer {
         // Barrier images
 
         // Shadow pass
+        let shadow_pass_start = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         {
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-            );
             ImageBarrierBuilder::default()
                 .add_image_barrier(ImageBarrier {
                     image: ImageHandleType::Image(shadow_image),
@@ -912,10 +912,6 @@ impl Renderer {
                         Ok(())
                     },
                 )?;
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-            );
 
             ImageBarrierBuilder::default()
                 .add_image_barrier(ImageBarrier {
@@ -954,12 +950,12 @@ impl Renderer {
                     ..Default::default()
                 })
                 .build(&self.device, &self.device.graphics_command_buffer())?;
-
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-            );
         }
+        let shadow_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
+
         // Normal Pass
         {
             let clear_colour: Vector3<f32> = self.clear_colour.into();
@@ -1024,18 +1020,14 @@ impl Renderer {
                         Ok(())
                     },
                 )?;
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-            );
         }
+        let forward_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // Bloom pass
         {
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-            );
             if self.enable_bloom_pass {
                 let (first_bloom_set, bloom_set_layout) = JBDescriptorBuilder::new(
                     &self.device.resource_manager,
@@ -1230,19 +1222,14 @@ impl Renderer {
                         },
                     )?;
             }
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-            );
         }
+        let bloom_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // Combine Pass
         {
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-            );
-
             ImageBarrierBuilder::default()
                 .add_image_barrier(ImageBarrier {
                     image: ImageHandleType::SwapchainImage,
@@ -1343,24 +1330,20 @@ impl Renderer {
                         Ok(())
                     },
                 )?;
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-            );
         }
+        let combine_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // UI Pass
         {
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::TOP_OF_PIPE,
-            );
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::SwapchainImage,
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
-                            float32: [0.0,0.0,0.0,0.0],
+                            float32: [0.0, 0.0, 0.0, 0.0],
                         },
                     },
                     load_op: vk::AttachmentLoadOp::LOAD,
@@ -1428,11 +1411,11 @@ impl Renderer {
                         Ok(())
                     },
                 )?;
-            self.device.write_timestamp(
-                self.device.graphics_command_buffer(),
-                vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-            );
         }
+        let ui_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         // Transition render image to transfer src
 
@@ -1477,17 +1460,41 @@ impl Renderer {
             error!("{}", error);
         }
 
-        if let Some(results) = self.device.get_timestamp_result() {
-            let get_time = |start: u64, end: u64| {
-                ((end - start) as f64 * self.device.timestamp_period() as f64) / 1000000.0f64
-            };
-
-            self.timestamps.shadow_pass = get_time(results[0], results[1]);
-            self.timestamps.forward_pass = get_time(results[2], results[3]);
-            self.timestamps.bloom_pass = get_time(results[4], results[5]);
-            self.timestamps.combine_pass = get_time(results[6], results[7]);
-            self.timestamps.ui_pass = get_time(results[8], results[9]);
-            self.timestamps.total = get_time(results[0], results[9]);
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(shadow_pass_start, shadow_pass_end)
+        {
+            self.timestamps.shadow_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(shadow_pass_end, forward_pass_end)
+        {
+            self.timestamps.forward_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(forward_pass_end, bloom_pass_end)
+        {
+            self.timestamps.bloom_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(bloom_pass_end, combine_pass_end)
+        {
+            self.timestamps.combine_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(combine_pass_end, ui_pass_end)
+        {
+            self.timestamps.ui_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(shadow_pass_start, ui_pass_end)
+        {
+            self.timestamps.total = time;
         }
 
         self.device.end_frame()?;

@@ -56,6 +56,7 @@ pub struct GraphicsDevice {
     default_sampler: vk::Sampler,
     shadow_sampler: vk::Sampler,
     ui_sampler: vk::Sampler,
+    timestamps: RefCell<Vec<u64>>,
 }
 
 impl GraphicsDevice {
@@ -506,6 +507,7 @@ impl GraphicsDevice {
             bindless_descriptor_pool: descriptor_pool,
             shadow_sampler,
             ui_sampler,
+            timestamps: RefCell::default(),
         };
 
         for set in device.bindless_descriptor_set.iter() {
@@ -792,6 +794,30 @@ impl GraphicsDevice {
     pub fn end_frame(&self) -> Result<()> {
         profiling::scope!("End Frame");
 
+        let timestamp_result = {
+            let mut query_pool_results = [0u64; QUERY_COUNT as usize];
+            let result = unsafe {
+                self.vk_device.get_query_pool_results(
+                    self.query_pool,
+                    0,
+                    *self.timestamp_frame_count.borrow() as u32,
+                    &mut query_pool_results,
+                    vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
+                )
+            };
+            if result.is_ok() {
+                Some(Vec::from(query_pool_results))
+            } else {
+                //Some(Vec::from(query_pool_results))
+                error!("{}", result.err().unwrap());
+                None
+            }
+        };
+        match timestamp_result {
+            None => {}
+            Some(timestamps) => *self.timestamps.borrow_mut() = timestamps,
+        }
+
         let wait_semaphores = [self.rendering_complete_semaphore[self.buffered_resource_number()]];
         let swapchains = [self.swapchain.borrow().swapchain];
         let image_indices = [self.present_index() as u32];
@@ -1035,37 +1061,45 @@ impl GraphicsDevice {
         Ok(())
     }
 
-    pub fn write_timestamp(&self, cmd: vk::CommandBuffer, stage: vk::PipelineStageFlags2) {
+    pub fn write_timestamp(
+        &self,
+        cmd: vk::CommandBuffer,
+        stage: vk::PipelineStageFlags2,
+    ) -> TimeStampIndex {
         let mut timestamp_count = self.timestamp_frame_count.borrow_mut();
         let count = *timestamp_count as u32;
         unsafe {
             self.vk_device
                 .cmd_write_timestamp2(cmd, stage, self.query_pool, count);
         }
+        let timestamp_index = TimeStampIndex(*timestamp_count);
         *timestamp_count += 1;
+        timestamp_index
     }
 
     pub fn timestamp_period(&self) -> f32 {
         self.timestamp_period
     }
 
-    pub fn get_timestamp_result(&self) -> Option<Vec<u64>> {
-        let mut query_pool_results = [0u64; QUERY_COUNT as usize];
-        let result = unsafe {
-            self.vk_device.get_query_pool_results(
-                self.query_pool,
-                0,
-                QUERY_COUNT,
-                &mut query_pool_results,
-                vk::QueryResultFlags::TYPE_64 | vk::QueryResultFlags::WAIT,
-            )
-        };
-        if result.is_ok() {
-            Some(Vec::from(query_pool_results))
-        } else {
-            //Some(Vec::from(query_pool_results))
-            error!("{}", result.err().unwrap());
-            None
+    pub fn get_timestamp_result(
+        &self,
+        start_index: TimeStampIndex,
+        end_index: TimeStampIndex,
+    ) -> Option<f64> {
+        let timestamps = self.timestamps.borrow();
+
+        let start = timestamps.get(start_index.0);
+        let end = timestamps.get(end_index.0);
+        match (start, end) {
+            (Some(&start), Some(&end)) => {
+                let get_time = |start: u64, end: u64| {
+                    ((end - start) as f64 * self.timestamp_period() as f64) / 1000000.0f64
+                };
+
+                let result = get_time(start, end);
+                Some(result)
+            }
+            _ => None,
         }
     }
 
@@ -1301,3 +1335,6 @@ struct Surface {
     surface_format: vk::SurfaceFormatKHR,
     surface_resolution: vk::Extent2D,
 }
+
+#[derive(Copy, Clone)]
+pub struct TimeStampIndex(usize);
