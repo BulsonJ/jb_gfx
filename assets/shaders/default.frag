@@ -15,7 +15,8 @@ layout (location = 1) out vec4 outBrightColor;
 
 struct Light{
 	vec4 position;
-	vec4 colour;
+	vec3 colour;
+	float intensity;
 };
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
@@ -23,7 +24,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 view;
 	vec4 cameraPos;
 	vec4 ambientLight;
-	vec4 directionalLightColour;
+	vec3 directionalLightColour;
+	float directionalLightStrength;
 	vec4 directionalLightDirection;
 	mat4 sunProj;
 	mat4 sunView;
@@ -118,7 +120,7 @@ void main()
 
 		vec3 lightDir = -cameraData.directionalLightDirection.xyz;
 		float diff = max(dot(normal, lightDir), 0.0);
-		diffuse += diff * cameraData.directionalLightColour.rgb;
+		diffuse += diff * (cameraData.directionalLightColour * cameraData.directionalLightStrength);
 
 		// Specular
 		float shininess = 32.0;
@@ -126,7 +128,7 @@ void main()
 		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
 		vec3 halfwayDir = normalize(lightDir + viewDir);
 		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-		specular += specularStrength * spec * cameraData.directionalLightColour.rgb;
+		specular += specularStrength * spec * (cameraData.directionalLightColour * cameraData.directionalLightStrength);
 
 		diffuseResult += diffuse;
 		specularResult += specular;
@@ -144,7 +146,7 @@ void main()
 
 		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
 		float diff = max(dot(normal, lightDir), 0.0);
-		diffuse += diff * currentLight.colour.rgb;
+		diffuse += diff * (currentLight.colour * currentLight.intensity);
 
 		// Specular
 		float shininess = 32.0;
@@ -152,7 +154,7 @@ void main()
 		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
 		vec3 halfwayDir = normalize(lightDir + viewDir);
 		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-		specular += specularStrength * spec * currentLight.colour.rgb;
+		specular += specularStrength * spec * (currentLight.colour * currentLight.intensity);
 
 		// attenuation
 		float distance    = length(currentLight.position.xyz - inWorldPos);

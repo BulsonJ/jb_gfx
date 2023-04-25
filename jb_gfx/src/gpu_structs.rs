@@ -61,7 +61,7 @@ impl CameraUniform {
     pub fn update_light(&mut self, light: &DirectionalLight) {
         self.directional_light_proj = light.build_projection_matrix().into();
         self.directional_light_view = light.build_view_matrix().into();
-        self.directional_light_colour = light.colour.extend(0f32).into();
+        self.directional_light_colour = light.colour.extend(light.intensity).into();
         self.directional_light_direction = light.direction.normalize().extend(0f32).into();
     }
 }
@@ -74,9 +74,9 @@ pub(crate) struct LightUniform {
 }
 
 impl LightUniform {
-    pub fn new(position: Point3<f32>, colour: Vector3<f32>) -> Self {
+    pub fn new(position: Point3<f32>, colour: Vector3<f32>, intensity: f32) -> Self {
         let position = position.to_vec().extend(0f32);
-        let colour = colour.extend(0f32);
+        let colour = colour.extend(intensity);
 
         Self {
             pos: position.into(),
@@ -87,7 +87,7 @@ impl LightUniform {
 
 impl From<Light> for LightUniform {
     fn from(value: Light) -> Self {
-        LightUniform::new(value.position, value.colour)
+        LightUniform::new(value.position, value.colour, value.intensity)
     }
 }
 

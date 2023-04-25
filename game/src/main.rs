@@ -176,19 +176,23 @@ fn setup_scene(
     let initial_lights = vec![
         Light::new(
             Point3::new(10.0f32, -5.0f32, -16.0f32),
-            Vector3::new(5.0f32, 0.0f32, 0.0f32),
+            Vector3::new(1.0f32, 0.0f32, 0.0f32),
+            5.0,
         ),
         Light::new(
             Point3::new(-10.0f32, 5.0f32, 16.0f32),
-            Vector3::new(0.0f32, 5.0f32, 0.0f32),
+            Vector3::new(0.0f32, 1.0f32, 0.0f32),
+            5.0,
         ),
         Light::new(
             Point3::new(10.0f32, 5.0f32, -16.0f32),
-            Vector3::new(5.0f32, 5.0f32, 5.0f32),
+            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            5.0,
         ),
         Light::new(
             Point3::new(-10.0f32, -5.0f32, 16.0f32),
-            Vector3::new(5.0f32, 5.0f32, 5.0f32),
+            Vector3::new(1.0f32, 1.0f32, 1.0f32),
+            5.0,
         ),
     ];
 

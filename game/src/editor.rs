@@ -113,6 +113,11 @@ impl Editor {
                 ui.horizontal(|ui| {
                     ui.label(String::from("Light ") + &i.to_string() + ":");
                     ui.color_edit_button_rgb(light.light.colour.as_mut());
+                    ui.add(
+                        egui::DragValue::new(&mut light.light.intensity)
+                            .clamp_range(RangeInclusive::new(0, 20))
+                            .speed(0.1),
+                    )
                 });
             }
         });
@@ -133,6 +138,11 @@ impl Editor {
         ui.horizontal(|ui| {
             ui.label("Colour");
             ui.color_edit_button_rgb(dependencies.renderer.sun.colour.as_mut());
+            ui.add(
+                egui::DragValue::new(&mut dependencies.renderer.sun.intensity)
+                    .clamp_range(RangeInclusive::new(0, 20))
+                    .speed(0.1),
+            )
         });
         ui.horizontal(|ui| {
             ui.label("Direction");

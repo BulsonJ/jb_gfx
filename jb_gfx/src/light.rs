@@ -6,11 +6,16 @@ use cgmath::{abs_diff_eq, EuclideanSpace, InnerSpace, Matrix4, Point3, Vector3};
 pub struct Light {
     pub position: Point3<f32>,
     pub colour: Vector3<f32>,
+    pub intensity: f32,
 }
 
 impl Light {
-    pub fn new(position: Point3<f32>, colour: Vector3<f32>) -> Self {
-        Self { position, colour }
+    pub fn new(position: Point3<f32>, colour: Vector3<f32>, intensity: f32) -> Self {
+        Self {
+            position,
+            colour,
+            intensity,
+        }
     }
 }
 
@@ -18,6 +23,7 @@ impl Light {
 pub struct DirectionalLight {
     pub direction: Vector3<f32>,
     pub colour: Vector3<f32>,
+    pub intensity: f32,
     znear: f32,
     zfar: f32,
     render_offset: f32,
@@ -33,6 +39,7 @@ impl DirectionalLight {
             zfar: 4000.0f32,
             render_offset,
             ortho_size: 300f32,
+            intensity: 1.0,
         }
     }
 
