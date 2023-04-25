@@ -349,6 +349,62 @@ impl<'a> DescriptorBuilder<'a> {
     }
 }
 
+pub struct DescriptorLayoutBuilder<'a> {
+    bindings: Vec<vk::DescriptorSetLayoutBinding>,
+    cache: &'a mut DescriptorLayoutCache,
+}
+
+impl<'a> DescriptorLayoutBuilder<'a> {
+    pub fn new(cache: &'a mut DescriptorLayoutCache) -> Self {
+        Self {
+            cache,
+            bindings: Vec::default(),
+        }
+    }
+
+    pub fn bind_buffer(
+        mut self,
+        binding: u32,
+        desc_type: vk::DescriptorType,
+        stage_flags: vk::ShaderStageFlags,
+    ) -> Self {
+        let new_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(binding)
+            .descriptor_type(desc_type)
+            .descriptor_count(1u32)
+            .stage_flags(stage_flags);
+
+        self.bindings.push(*new_binding);
+
+        self
+    }
+
+    pub fn bind_image(
+        mut self,
+        binding: u32,
+        desc_type: vk::DescriptorType,
+        stage_flags: vk::ShaderStageFlags,
+    ) -> Self {
+        let new_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(binding)
+            .descriptor_type(desc_type)
+            .descriptor_count(1u32)
+            .stage_flags(stage_flags);
+
+        self.bindings.push(*new_binding);
+
+        self
+    }
+
+    pub fn build(mut self) -> anyhow::Result<vk::DescriptorSetLayout> {
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&self.bindings);
+
+        let layout = self.cache.create_descriptor_layout(*layout_info);
+
+        Ok(layout)
+    }
+}
+
 pub struct JBDescriptorBuilder<'a> {
     resource_manager: &'a ResourceManager,
     cache: &'a mut DescriptorLayoutCache,

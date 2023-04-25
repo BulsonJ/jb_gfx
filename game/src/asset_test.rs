@@ -1,10 +1,10 @@
 use anyhow::Result;
 
 struct AssetFile {
-    file_type: [char;4],
+    file_type: [char; 4],
     version: i32,
     json: String,
-    binary_blob: Vec<char>
+    binary_blob: Vec<char>,
 }
 
 impl AssetFile {

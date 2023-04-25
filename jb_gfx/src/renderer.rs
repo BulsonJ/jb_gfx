@@ -19,8 +19,8 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::descriptor::{
-    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutCache, ImageDescriptorInfo,
-    JBDescriptorBuilder,
+    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
+    ImageDescriptorInfo, JBDescriptorBuilder,
 };
 use crate::device::{
     cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
@@ -140,20 +140,14 @@ impl Renderer {
             )?,
         ];
 
-        let (_, bloom_set_layout) = JBDescriptorBuilder::new(
-            &device.resource_manager,
-            &mut descriptor_layout_cache,
-            &mut frame_descriptor_allocator[0],
-        )
-        .bind_image(ImageDescriptorInfo {
-            binding: 0,
-            image: render_targets.get(bright_extracted_image).unwrap(),
-            sampler: device.ui_sampler(),
-            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        })
-        .build()
-        .unwrap();
+        let bloom_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
+            .bind_image(
+                0,
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            )
+            .build()
+            .unwrap();
 
         let (bloom_pso, bloom_pso_layout) = {
             let pso_layout = pipeline_layout_cache.create_pipeline_layout(
@@ -191,27 +185,19 @@ impl Renderer {
             (pso, pso_layout)
         };
 
-        let (_, combine_set_layout) = JBDescriptorBuilder::new(
-            &device.resource_manager,
-            &mut descriptor_layout_cache,
-            &mut frame_descriptor_allocator[0],
-        )
-        .bind_image(ImageDescriptorInfo {
-            binding: 0,
-            image: render_targets.get(forward_image).unwrap(),
-            sampler: device.ui_sampler(),
-            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        })
-        .bind_image(ImageDescriptorInfo {
-            binding: 1,
-            image: render_targets.get(bright_extracted_image).unwrap(),
-            sampler: device.ui_sampler(),
-            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        })
-        .build()
-        .unwrap();
+        let combine_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
+            .bind_image(
+                0,
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            )
+            .bind_image(
+                1,
+                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            )
+            .build()
+            .unwrap();
 
         let (combine_pso, combine_pso_layout) = {
             let pso_layout =
@@ -1227,7 +1213,8 @@ impl Renderer {
                     |_render_pass| {
                         profiling::scope!("Bloom Pass");
                         Ok(())
-                    })?;
+                    },
+                )?;
         }
         self.device.write_timestamp(
             self.device.graphics_command_buffer(),
