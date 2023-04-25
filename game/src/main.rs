@@ -174,26 +174,26 @@ fn setup_scene(
     screen_size: (u32, u32),
 ) -> (Vec<LightComponent>, Vec<CameraComponent>) {
     let initial_lights = vec![
-        Light::new(
-            Point3::new(10.0f32, -5.0f32, -16.0f32),
-            Vector3::new(1.0f32, 0.0f32, 0.0f32),
-            5.0,
-        ),
-        Light::new(
-            Point3::new(-10.0f32, 5.0f32, 16.0f32),
-            Vector3::new(0.0f32, 1.0f32, 0.0f32),
-            5.0,
-        ),
-        Light::new(
-            Point3::new(10.0f32, 5.0f32, -16.0f32),
-            Vector3::new(1.0f32, 1.0f32, 1.0f32),
-            5.0,
-        ),
-        Light::new(
-            Point3::new(-10.0f32, -5.0f32, 16.0f32),
-            Vector3::new(1.0f32, 1.0f32, 1.0f32),
-            5.0,
-        ),
+        Light {
+            position: Point3::new(10.0f32, -5.0f32, -16.0f32),
+            colour: Vector3::new(1.0f32, 0.0f32, 0.0f32),
+            intensity: 5.0,
+        },
+        Light {
+            position: Point3::new(-10.0f32, 5.0f32, 16.0f32),
+            colour: Vector3::new(0.0f32, 1.0f32, 0.0f32),
+            intensity: 5.0,
+        },
+        Light {
+            position: Point3::new(10.0f32, 5.0f32, -16.0f32),
+            intensity: 5.0,
+            ..Default::default()
+        },
+        Light {
+            position: Point3::new(-10.0f32, -5.0f32, 16.0f32),
+            intensity: 5.0,
+            ..Default::default()
+        },
     ];
 
     let light_components = vec![

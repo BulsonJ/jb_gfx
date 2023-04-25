@@ -9,12 +9,12 @@ pub struct Light {
     pub intensity: f32,
 }
 
-impl Light {
-    pub fn new(position: Point3<f32>, colour: Vector3<f32>, intensity: f32) -> Self {
+impl Default for Light {
+    fn default() -> Self {
         Self {
-            position,
-            colour,
-            intensity,
+            position: Point3::new(0f32, 0f32, 0f32),
+            colour: Vector3::new(1f32, 1f32, 1f32),
+            intensity: 1.0,
         }
     }
 }
