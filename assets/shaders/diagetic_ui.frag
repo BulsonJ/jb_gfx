@@ -2,6 +2,7 @@
 #include "assets/shaders/library/texture.glsl"
 
 layout (location = 0) in vec2 inTexCoords;
+layout (location = 1) flat in int inDrawDataIndex;
 
 layout (location = 0) out vec4 outFragColor;
 
@@ -23,8 +24,8 @@ layout( push_constant ) uniform constants
 
 void main()
 {
-    vec3 colour = drawData.draw[pushConstants.handle].colour;
-    int textureHandle = drawData.draw[pushConstants.handle].textureIndex;
+    vec3 colour = drawData.draw[inDrawDataIndex].colour;
+    int textureHandle = drawData.draw[inDrawDataIndex].textureIndex;
     if (textureHandle > 0){
         vec4 texture = SampleBindlessTexture(2, textureHandle, inTexCoords);
         if (texture.a == 0){

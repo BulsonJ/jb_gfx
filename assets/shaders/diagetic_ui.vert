@@ -2,6 +2,7 @@
 #extension GL_EXT_nonuniform_qualifier: enable
 
 layout (location = 0) out vec2 outTexCoords;
+layout (location = 1) out int outDrawDataIndex;
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
@@ -50,14 +51,16 @@ void main()
 		vec2(1.f,0.f)
 	);
 
+	int drawIndex = gl_VertexIndex / 6;
+	outDrawDataIndex = drawIndex;
 	int vertexIndex = gl_VertexIndex % 6;
 	outTexCoords = texCoords[vertexIndex];
 
 	vec3 camera_right_world = vec3(cameraData.view[0][0], cameraData.view[1][0], cameraData.view[2][0]);
 	vec3 camera_up_world = vec3(cameraData.view[0][1], cameraData.view[1][1], cameraData.view[2][1]);
 
-	vec2 billboard_size = vec2(drawData.draw[pushConstants.handle].size);
-	vec3 position = drawData.draw[pushConstants.handle].position;
+	vec2 billboard_size = vec2(drawData.draw[drawIndex].size);
+	vec3 position = drawData.draw[drawIndex].position;
 
 	vec3 vertex_pos_world = position
 		+ (camera_right_world * positions[vertexIndex].x * billboard_size.x)

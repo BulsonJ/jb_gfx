@@ -621,15 +621,13 @@ impl Renderer {
                     device.bindless_descriptor_set_layout(),
                     world_debug_desc_layout,
                 ],
-                &[*vk::PushConstantRange::builder()
-                    .size(size_of::<i32>() as u32)
-                    .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)],
+                &[],
             )?;
 
             let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
                 .depth_test_enable(true)
                 .depth_write_enable(false)
-                .depth_compare_op(vk::CompareOp::ALWAYS)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
                 .depth_bounds_test_enable(false)
                 .stencil_test_enable(false)
                 .min_depth_bounds(0.0f32)
@@ -646,7 +644,7 @@ impl Renderer {
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                 }],
-                depth_attachment_format: None,
+                depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::NONE,
             };
@@ -855,30 +853,34 @@ impl Renderer {
         };
 
         // Copy debug UI
-
-        let mut debug_ui_draw_amount = {
-            let mut debug_ui_draw_data = Vec::new();
-            if let Some(texture) = self.light_texture {
-                for light in self.stored_lights.values() {
-                    let draw = WorldDebugUIDrawData {
-                        position: light.position.into(),
-                        texture_index: self.device.get_descriptor_index(&texture).unwrap() as i32,
-                        colour: light.colour.into(),
-                        size: self.debug_ui_size,
-                    };
-                    debug_ui_draw_data.push(draw);
+        let debug_ui_draw_amount = {
+            if self.draw_debug_ui {
+                let mut debug_ui_draw_data = Vec::new();
+                if let Some(texture) = self.light_texture {
+                    for light in self.stored_lights.values() {
+                        let draw = WorldDebugUIDrawData {
+                            position: light.position.into(),
+                            texture_index: self.device.get_descriptor_index(&texture).unwrap()
+                                as i32,
+                            colour: light.colour.into(),
+                            size: self.debug_ui_size,
+                        };
+                        debug_ui_draw_data.push(draw);
+                    }
                 }
+
+                self.device
+                    .resource_manager
+                    .get_buffer(self.world_debug_draw_data[resource_index])
+                    .unwrap()
+                    .view_custom(0, debug_ui_draw_data.len())?
+                    .mapped_slice()?
+                    .copy_from_slice(&debug_ui_draw_data);
+
+                debug_ui_draw_data.len()
+            } else {
+                0usize
             }
-
-            self.device
-                .resource_manager
-                .get_buffer(self.world_debug_draw_data[resource_index])
-                .unwrap()
-                .view_custom(0, debug_ui_draw_data.len())?
-                .mapped_slice()?
-                .copy_from_slice(&debug_ui_draw_data);
-
-            debug_ui_draw_data.len()
         };
 
         // Copy UI
@@ -1436,9 +1438,9 @@ impl Renderer {
             self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
-
-        // UI Pass
+        // World Debug
         {
+            // TODO : Find out if need pipeline barriers here?
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::SwapchainImage,
@@ -1450,12 +1452,22 @@ impl Renderer {
                     load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
                 })
+                .set_depth_attachment(AttachmentInfo {
+                    target: AttachmentHandle::Image(depth_image),
+                    clear_value: vk::ClearValue {
+                        depth_stencil: ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    },
+                    load_op: vk::AttachmentLoadOp::LOAD,
+                    ..Default::default()
+                })
                 .start(
                     &self.device,
                     &self.device.graphics_command_buffer(),
                     |render_pass| {
-                        profiling::scope!("UI Pass");
-
+                        profiling::scope!("Debug UI Pass");
                         // Diagetic UI
                         if self.draw_debug_ui {
                             let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
@@ -1479,26 +1491,43 @@ impl Renderer {
                                 );
                             };
 
-                            for draw_index in 0..debug_ui_draw_amount {
-                                unsafe {
-                                    self.device.vk_device.cmd_push_constants(
-                                        self.device.graphics_command_buffer(),
-                                        self.pso_layout,
-                                        vk::ShaderStageFlags::VERTEX
-                                            | vk::ShaderStageFlags::FRAGMENT,
-                                        0u32,
-                                        bytemuck::cast_slice(&[draw_index as i32]),
-                                    );
-                                    self.device.vk_device.cmd_draw(
-                                        self.device.graphics_command_buffer(),
-                                        6u32,
-                                        1u32,
-                                        0u32,
-                                        0u32,
-                                    );
-                                };
-                            }
+                            unsafe {
+                                self.device.vk_device.cmd_draw(
+                                    self.device.graphics_command_buffer(),
+                                    6u32 * debug_ui_draw_amount as u32,
+                                    1u32,
+                                    0u32,
+                                    0u32,
+                                );
+                            };
                         }
+                        Ok(())
+                    },
+                )?;
+        }
+        let world_debug_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
+
+        // UI Pass
+        {
+            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                .add_colour_attachment(AttachmentInfo {
+                    target: AttachmentHandle::SwapchainImage,
+                    clear_value: vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 0.0],
+                        },
+                    },
+                    load_op: vk::AttachmentLoadOp::LOAD,
+                    ..Default::default()
+                })
+                .start(
+                    &self.device,
+                    &self.device.graphics_command_buffer(),
+                    |render_pass| {
+                        profiling::scope!("UI Pass");
 
                         let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
 
@@ -1629,6 +1658,18 @@ impl Renderer {
             .get_timestamp_result(bloom_pass_end, combine_pass_end)
         {
             self.timestamps.combine_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(combine_pass_end, world_debug_pass_end)
+        {
+            self.timestamps.world_debug_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(world_debug_pass_end, ui_pass_end)
+        {
+            self.timestamps.egui_pass = time;
         }
         if let Some(time) = self
             .device
@@ -2179,6 +2220,8 @@ pub struct TimeStamp {
     pub forward_pass: f64,
     pub bloom_pass: f64,
     pub combine_pass: f64,
+    pub world_debug_pass: f64,
+    pub egui_pass: f64,
     pub ui_pass: f64,
     pub total: f64,
 }
