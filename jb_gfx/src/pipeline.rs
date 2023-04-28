@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{DescriptorSetLayout, Handle, ObjectType, PushConstantRange};
-use log::trace;
+use log::{error, info, trace};
 use slotmap::{new_key_type, SlotMap};
 
 use crate::device::GraphicsDevice;
@@ -124,16 +124,27 @@ impl PipelineManager {
         self.pipelines.get(handle).unwrap().pso
     }
 
-    pub fn reload_shaders(&mut self, device: &GraphicsDevice) -> Result<()> {
-        for (_, pipeline) in self.pipelines.iter_mut() {
-            self.old_pipelines.push(pipeline.pso);
-            pipeline.pso = PipelineManager::create_pipeline_internal(
+    pub fn reload_shaders(&mut self, device: &GraphicsDevice) {
+        let mut new_pipelines = Vec::new();
+        for (_, pipeline) in self.pipelines.iter() {
+            new_pipelines.push(PipelineManager::create_pipeline_internal(
                 &mut self.shader_compiler,
                 device,
                 &pipeline.create_info,
-            )?
+            ));
         }
-        Ok(())
+
+        // Set ones that reloaded successfully
+        for (i, (_,pipeline)) in self.pipelines.iter_mut().enumerate() {
+            if let Ok(new_pipeline) = new_pipelines.get(i).unwrap() {
+                pipeline.pso = *new_pipeline;
+            } else {
+                error!("Unable to reload shader: [VERT:{}][FRAG:{}]", pipeline.create_info.vertex_shader, pipeline.create_info.fragment_shader);
+            }
+        }
+
+        let successful_reloads = new_pipelines.into_iter().filter_map(|result| result.ok()).count();
+        info!("Reloaded {}/{} shaders!", successful_reloads, self.pipelines.len());
     }
 
     pub fn deinit(&mut self) {

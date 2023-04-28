@@ -735,8 +735,7 @@ impl Renderer {
 
     pub fn reload_shaders(&mut self) -> Result<()> {
         profiling::scope!("Reload shaders");
-        self.pipeline_manager.reload_shaders(&self.device)?;
-        info!("Shaders reloaded!");
+        self.pipeline_manager.reload_shaders(&self.device);
         Ok(())
     }
 
