@@ -1852,7 +1852,7 @@ impl Renderer {
     pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
         profiling::scope!("Load Mesh");
 
-        let vertex_buffer = {
+        let vertex_buffer_offset = {
             let staging_buffer_create_info = BufferCreateInfo {
                 size: (size_of::<Vertex>() * mesh.vertices.len()),
                 usage: vk::BufferUsageFlags::TRANSFER_SRC,
@@ -1894,7 +1894,7 @@ impl Renderer {
         match &mesh.indices {
             None => {
                 let render_mesh = RenderMesh {
-                    vertex_buffer_offset: vertex_buffer,
+                    vertex_buffer_offset,
                     index_buffer: None,
                     vertex_count: mesh.vertices.len() as u32,
                 };
@@ -1947,7 +1947,7 @@ impl Renderer {
                     buffer
                 };
                 let render_mesh = RenderMesh {
-                    vertex_buffer_offset: vertex_buffer,
+                    vertex_buffer_offset,
                     index_buffer: Some(index_buffer),
                     vertex_count: indices.len() as u32,
                 };
