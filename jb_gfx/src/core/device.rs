@@ -15,11 +15,11 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
-use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
-use crate::bindless::BindlessManager;
+use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
+use crate::util::bindless::BindlessManager;
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 pub const SHADOWMAP_SIZE: u32 = 4096u32;

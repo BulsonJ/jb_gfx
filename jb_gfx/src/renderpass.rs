@@ -1,5 +1,6 @@
 use ash::vk;
 
+pub mod barrier;
 pub mod builder;
 
 pub struct RenderPass<'a> {

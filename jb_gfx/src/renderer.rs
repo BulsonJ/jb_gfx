@@ -16,13 +16,8 @@ use log::{info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::camera::DefaultCamera;
 use crate::core::device::cmd_copy_buffer;
-use crate::descriptor::{
-    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
-    ImageDescriptorInfo, JBDescriptorBuilder,
-};
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
     UIVertexData, WorldDebugUIDrawData,
@@ -31,9 +26,14 @@ use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
 };
+use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::renderpass::builder::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
-use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
+use crate::util::descriptor::{
+    BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
+    ImageDescriptorInfo, JBDescriptorBuilder,
+};
+use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
     Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, Vertex,
     FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,

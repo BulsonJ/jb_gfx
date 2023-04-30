@@ -8,3 +8,4 @@ pub use crate::renderer::{LightHandle, MaterialInstance, MeshHandle, Renderer, U
 pub use crate::renderpass::builder::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 pub use crate::renderpass::RenderPass;
 pub use crate::resource::{BufferHandle, ImageHandle};
+pub use crate::util::bindless::BindlessManager;
