@@ -794,6 +794,34 @@ impl GraphicsDevice {
     pub fn end_frame(&self) -> Result<()> {
         profiling::scope!("End Frame");
 
+        unsafe {
+            self
+                .vk_device
+                .end_command_buffer(self.graphics_command_buffer())
+        }?;
+
+        let wait_semaphores = [self.present_complete_semaphore()];
+        let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+        let command_buffers = [self.graphics_command_buffer()];
+        let signal_semaphores = [self.rendering_complete_semaphore()];
+        let submit_info = vk::SubmitInfo::builder()
+            .wait_semaphores(&wait_semaphores)
+            .wait_dst_stage_mask(&wait_dst_stage_mask)
+            .command_buffers(&command_buffers)
+            .signal_semaphores(&signal_semaphores);
+
+        let submits = [*submit_info];
+        let result = unsafe {
+            self.vk_device.queue_submit(
+                self.graphics_queue(),
+                &submits,
+                self.draw_commands_reuse_fence(),
+            )
+        };
+        if let Some(error) = result.err() {
+            error!("{}", error);
+        }
+
         let timestamp_result = {
             let mut query_pool_results = [0u64; QUERY_COUNT as usize];
             let result = unsafe {

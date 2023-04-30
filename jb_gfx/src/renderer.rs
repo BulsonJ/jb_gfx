@@ -1592,36 +1592,6 @@ impl Renderer {
             })
             .build(&self.device, &self.device.graphics_command_buffer())?;
 
-        //Submit buffer
-
-        unsafe {
-            self.device
-                .vk_device
-                .end_command_buffer(self.device.graphics_command_buffer())
-        }?;
-
-        let wait_semaphores = [self.device.present_complete_semaphore()];
-        let wait_dst_stage_mask = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = [self.device.graphics_command_buffer()];
-        let signal_semaphores = [self.device.rendering_complete_semaphore()];
-        let submit_info = vk::SubmitInfo::builder()
-            .wait_semaphores(&wait_semaphores)
-            .wait_dst_stage_mask(&wait_dst_stage_mask)
-            .command_buffers(&command_buffers)
-            .signal_semaphores(&signal_semaphores);
-
-        let submits = [*submit_info];
-        let result = unsafe {
-            self.device.vk_device.queue_submit(
-                self.device.graphics_queue(),
-                &submits,
-                self.device.draw_commands_reuse_fence(),
-            )
-        };
-        if let Some(error) = result.err() {
-            error!("{}", error);
-        }
-
         self.device.end_frame()?;
 
         if let Some(time) = self
