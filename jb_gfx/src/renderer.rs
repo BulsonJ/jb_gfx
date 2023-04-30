@@ -566,7 +566,7 @@ impl Renderer {
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                 }],
-                depth_attachment_format: None,
+                depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
                 cull_mode: vk::CullModeFlags::NONE,
             };
@@ -1452,9 +1452,9 @@ impl Renderer {
             self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
-        // World Debug
+
+        // UI Pass
         {
-            // TODO : Find out if need pipeline barriers here?
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::SwapchainImage,
@@ -1481,8 +1481,8 @@ impl Renderer {
                     &self.device,
                     &self.device.graphics_command_buffer(),
                     |render_pass| {
-                        profiling::scope!("Debug UI Pass");
-                        // Diagetic UI
+                        profiling::scope!("UI Pass");
+
                         if self.draw_debug_ui {
                             let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
 
@@ -1515,33 +1515,6 @@ impl Renderer {
                                 );
                             };
                         }
-                        Ok(())
-                    },
-                )?;
-        }
-        let world_debug_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // UI Pass
-        {
-            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::SwapchainImage,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 0.0],
-                        },
-                    },
-                    load_op: vk::AttachmentLoadOp::LOAD,
-                    ..Default::default()
-                })
-                .start(
-                    &self.device,
-                    &self.device.graphics_command_buffer(),
-                    |render_pass| {
-                        profiling::scope!("UI Pass");
 
                         let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
 
@@ -1649,6 +1622,8 @@ impl Renderer {
             error!("{}", error);
         }
 
+        self.device.end_frame()?;
+
         if let Some(time) = self
             .device
             .get_timestamp_result(shadow_pass_start, shadow_pass_end)
@@ -1675,18 +1650,6 @@ impl Renderer {
         }
         if let Some(time) = self
             .device
-            .get_timestamp_result(combine_pass_end, world_debug_pass_end)
-        {
-            self.timestamps.world_debug_pass = time;
-        }
-        if let Some(time) = self
-            .device
-            .get_timestamp_result(world_debug_pass_end, ui_pass_end)
-        {
-            self.timestamps.egui_pass = time;
-        }
-        if let Some(time) = self
-            .device
             .get_timestamp_result(combine_pass_end, ui_pass_end)
         {
             self.timestamps.ui_pass = time;
@@ -1698,7 +1661,6 @@ impl Renderer {
             self.timestamps.total = time;
         }
 
-        self.device.end_frame()?;
         Ok(())
     }
 
@@ -2238,8 +2200,6 @@ pub struct TimeStamp {
     pub forward_pass: f64,
     pub bloom_pass: f64,
     pub combine_pass: f64,
-    pub world_debug_pass: f64,
-    pub egui_pass: f64,
     pub ui_pass: f64,
     pub total: f64,
 }

@@ -184,20 +184,9 @@ impl Editor {
             ui.label("Combine Pass:");
             ui.label(format!("{:.6}", timestamps.combine_pass.to_string()));
         });
-
         ui.horizontal(|ui| {
             ui.label("UI Pass:");
             ui.label(format!("{:.6}", timestamps.ui_pass.to_string()));
-        });
-        ui.collapsing("Show", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("World Debug:");
-                ui.label(format!("{:.6}", timestamps.world_debug_pass.to_string()));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Egui:");
-                ui.label(format!("{:.6}", timestamps.egui_pass.to_string()));
-            });
         });
 
         ui.separator();
