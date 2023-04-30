@@ -1,21 +1,22 @@
-use std::time::Instant;
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
 use egui_winit::EventResponse;
 use env_logger::{Builder, Target};
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
+use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
+use game::asset::AssetManager;
 use game::components::{CameraComponent, LightComponent};
 use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
-use game::{Camera, DirectionCamera, LookAtCamera};
-use game::asset::AssetManager;
 use game::input::Input;
+use game::{Camera, DirectionCamera, LookAtCamera};
+use game::util::FrameTimer;
 use jb_gfx::prelude::*;
 
 fn main() {
@@ -341,28 +342,20 @@ pub fn run() {
 
     let mut initial_resize = true;
 
-    let mut frame_start_time = Instant::now();
-    let mut t = 0.0;
-    let target_dt = 1.0 / 60.0;
+    let mut frame_timer = FrameTimer::new();
 
     profiling::scope!("Game Event Loop");
     {
         event_loop.run(move |event, _, control_flow| {
             match event {
                 Event::MainEventsCleared => {
-                    let mut frame_time = frame_start_time.elapsed().as_secs_f32();
-                    frame_start_time = Instant::now();
+                    frame_timer.update();
 
-                    while frame_time > 0.0f32 {
-                        let delta_time = frame_time.min(target_dt);
+                    while frame_timer.sub_frame_update() {
+                        app.delta_time = frame_timer.delta_time();
+                        app.time_passed = frame_timer.total_time_elapsed();
 
-                        // Update
-                        app.delta_time = delta_time;
-                        app.time_passed = t;
                         project.update(&mut app);
-
-                        frame_time -= delta_time;
-                        t += delta_time;
                     }
 
                     project.draw(&mut app);
@@ -381,11 +374,11 @@ pub fn run() {
                         WindowEvent::CloseRequested
                         | WindowEvent::KeyboardInput {
                             input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
                             ..
                         } => *control_flow = ControlFlow::Exit,
                         WindowEvent::Resized(physical_size) => {
