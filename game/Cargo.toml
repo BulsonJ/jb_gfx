@@ -3,6 +3,9 @@ name = "game"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+tracy = ["profiling/profile-with-tracy"]
+
 [dependencies]
 jb_gfx = { path = "../jb_gfx" }
 winit = "0.28.1"
@@ -21,4 +24,3 @@ features = ["utils"]
 
 [dependencies.profiling]
 version = "1.0.7"
-features = ["profile-with-tracy"]

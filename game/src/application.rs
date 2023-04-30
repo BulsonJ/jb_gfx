@@ -28,7 +28,7 @@ pub fn run_game<T: Project + 'static>() {
         let input = Input::default();
 
         // TODO: Fix this config flag not being set for some reason
-        //#[cfg(feature = "profile-with-tracy")]
+        #[cfg(feature = "tracy")]
         profiling::tracy_client::Client::start();
         profiling::register_thread!("Main Thread");
         profiling::scope!("Game");
@@ -66,63 +66,65 @@ pub fn run_game<T: Project + 'static>() {
     let mut t = 0.0;
     let target_dt = 1.0 / 60.0;
 
-    event_loop.run(move |event, _, control_flow| {
-        profiling::scope!("Game Event Loop");
-        match event {
-            Event::MainEventsCleared => {
-                let mut frame_time = frame_start_time.elapsed().as_secs_f32();
-                frame_start_time = Instant::now();
+    profiling::scope!("Game Event Loop");
+    {
+        event_loop.run(move |event, _, control_flow| {
+            match event {
+                Event::MainEventsCleared => {
+                    let mut frame_time = frame_start_time.elapsed().as_secs_f32();
+                    frame_start_time = Instant::now();
 
-                while frame_time > 0.0f32 {
-                    let delta_time = frame_time.min(target_dt);
+                    while frame_time > 0.0f32 {
+                        let delta_time = frame_time.min(target_dt);
 
-                    // Update
-                    app.delta_time = delta_time;
-                    app.time_passed = t;
-                    project.update(&mut app);
+                        // Update
+                        app.delta_time = delta_time;
+                        app.time_passed = t;
+                        project.update(&mut app);
 
-                    frame_time -= delta_time;
-                    t += delta_time;
+                        frame_time -= delta_time;
+                        t += delta_time;
+                    }
+
+                    project.draw(&mut app);
+
+                    app.renderer.render().unwrap();
                 }
-
-                project.draw(&mut app);
-
-                app.renderer.render().unwrap();
-            }
-            Event::NewEvents(_) => {
-                app.input.prev_keys.copy_from_slice(&app.input.now_keys);
-            }
-            Event::WindowEvent { ref event, .. } => {
-                let response = project.on_window_event(event);
-                if !response.consumed {
-                    app.input.update_input_from_event(event);
+                Event::NewEvents(_) => {
+                    app.input.prev_keys.copy_from_slice(&app.input.now_keys);
                 }
-                match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
+                Event::WindowEvent { ref event, .. } => {
+                    let response = project.on_window_event(event);
+                    if !response.consumed {
+                        app.input.update_input_from_event(event);
+                    }
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            input:
                             KeyboardInput {
                                 state: ElementState::Pressed,
                                 virtual_keycode: Some(VirtualKeyCode::Escape),
                                 ..
                             },
-                        ..
-                    } => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Resized(physical_size) => {
-                        if initial_resize {
-                            initial_resize = false;
-                        } else {
-                            app.renderer.resize(*physical_size).unwrap();
+                            ..
+                        } => *control_flow = ControlFlow::Exit,
+                        WindowEvent::Resized(physical_size) => {
+                            if initial_resize {
+                                initial_resize = false;
+                            } else {
+                                app.renderer.resize(*physical_size).unwrap();
+                            }
                         }
+                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                            app.renderer.resize(**new_inner_size).unwrap();
+                        }
+                        _ => {}
                     }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        app.renderer.resize(**new_inner_size).unwrap();
-                    }
-                    _ => {}
                 }
-            }
-            _ => {}
-        };
-        profiling::finish_frame!()
-    });
+                _ => {}
+            };
+            profiling::finish_frame!();
+        });
+    }
 }
