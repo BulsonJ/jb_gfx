@@ -25,10 +25,7 @@ pub fn run_game<T: Project + 'static>() {
     let (screen_width, screen_height) = (1920, 1080);
     let event_loop = EventLoop::new();
     let mut app = {
-        let input = Input {
-            now_keys: [false; 255],
-            prev_keys: [false; 255],
-        };
+        let input = Input::default();
 
         // TODO: Fix this config flag not being set for some reason
         //#[cfg(feature = "profile-with-tracy")]
@@ -97,6 +94,9 @@ pub fn run_game<T: Project + 'static>() {
             }
             Event::WindowEvent { ref event, .. } => {
                 let response = project.on_window_event(event);
+                if !response.consumed {
+                    app.input.update_input_from_event(event);
+                }
                 match event {
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
@@ -108,26 +108,6 @@ pub fn run_game<T: Project + 'static>() {
                             },
                         ..
                     } => *control_flow = ControlFlow::Exit,
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state,
-                                virtual_keycode: Some(keycode),
-                                ..
-                            },
-                        ..
-                    } => {
-                        if !response.consumed {
-                            match state {
-                                ElementState::Pressed => {
-                                    app.input.now_keys[*keycode as usize] = true;
-                                }
-                                ElementState::Released => {
-                                    app.input.now_keys[*keycode as usize] = false;
-                                }
-                            }
-                        }
-                    }
                     WindowEvent::Resized(physical_size) => {
                         if initial_resize {
                             initial_resize = false;
