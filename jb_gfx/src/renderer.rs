@@ -31,7 +31,7 @@ use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
 };
-use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
+use crate::renderpass::builder::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
