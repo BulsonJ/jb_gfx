@@ -15,8 +15,8 @@ use game::components::{CameraComponent, LightComponent};
 use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
 use game::input::Input;
-use game::{Camera, DirectionCamera, LookAtCamera};
 use game::util::FrameTimer;
+use game::{Camera, DirectionCamera, LookAtCamera};
 use jb_gfx::prelude::*;
 
 fn main() {

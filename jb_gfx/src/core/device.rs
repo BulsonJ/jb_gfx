@@ -125,6 +125,7 @@ impl GraphicsDevice {
         let pdevices =
             unsafe { instance.enumerate_physical_devices() }.expect("Physical device error");
         let mut timestamp_period = 0.0;
+        let mut max_sampler_anisotropy = 0.0;
         let (pdevice, queue_family_index) = pdevices
             .iter()
             .find_map(|pdevice| {
@@ -133,6 +134,7 @@ impl GraphicsDevice {
                     None
                 } else {
                     timestamp_period = limits.timestamp_period;
+                    max_sampler_anisotropy = limits.max_sampler_anisotropy;
                     unsafe { instance.get_physical_device_queue_family_properties(*pdevice) }
                         .iter()
                         .enumerate()
@@ -164,6 +166,7 @@ impl GraphicsDevice {
         ];
         let features = vk::PhysicalDeviceFeatures {
             shader_clip_distance: 1,
+            sampler_anisotropy: vk::TRUE,
             ..Default::default()
         };
         let mut descriptor_indexing_features =
@@ -346,7 +349,9 @@ impl GraphicsDevice {
                 .address_mode_w(vk::SamplerAddressMode::REPEAT)
                 .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
                 .min_lod(0.0f32)
-                .max_lod(vk::LOD_CLAMP_NONE);
+                .max_lod(vk::LOD_CLAMP_NONE)
+                .anisotropy_enable(true)
+                .max_anisotropy(max_sampler_anisotropy);
 
             unsafe { device.create_sampler(&sampler_info, None)? }
         };
