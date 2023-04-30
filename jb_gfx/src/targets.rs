@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use crate::GraphicsDevice;
 use anyhow::Result;
 use ash::vk;
 use log::{info, trace};
 use slotmap::{new_key_type, SlotMap};
 
-use crate::device::GraphicsDevice;
 use crate::resource::{ImageHandle, ResourceManager};
 
 pub struct RenderTargets {

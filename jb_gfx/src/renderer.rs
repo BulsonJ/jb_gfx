@@ -18,12 +18,10 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
 use crate::camera::DefaultCamera;
+use crate::core::device::cmd_copy_buffer;
 use crate::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
     ImageDescriptorInfo, JBDescriptorBuilder,
-};
-use crate::device::{
-    cmd_copy_buffer, GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
@@ -36,7 +34,10 @@ use crate::pipeline::{
 use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
-use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
+use crate::{
+    Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, Vertex,
+    FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
+};
 
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;

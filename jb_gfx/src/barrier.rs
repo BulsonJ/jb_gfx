@@ -2,8 +2,8 @@ use anyhow::Result;
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
 
-use crate::device::GraphicsDevice;
 use crate::resource::ImageHandle;
+use crate::GraphicsDevice;
 
 pub struct ImageBarrier {
     pub image: ImageHandleType,

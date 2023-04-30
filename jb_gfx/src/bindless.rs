@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::FRAMES_IN_FLIGHT;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::ImageLayout;
 
-use crate::device::FRAMES_IN_FLIGHT;
 use crate::resource::{ImageHandle, ResourceManager};
 
 pub struct BindlessManager {

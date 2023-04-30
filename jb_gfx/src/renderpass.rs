@@ -1,7 +1,7 @@
+use crate::GraphicsDevice;
 use anyhow::Result;
 use ash::vk;
 
-use crate::device::GraphicsDevice;
 use crate::resource::ImageHandle;
 
 /// A builder for a [RenderPass]
