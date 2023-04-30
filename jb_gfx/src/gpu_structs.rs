@@ -1,7 +1,7 @@
 use cgmath::{EuclideanSpace, InnerSpace, Matrix4, Point3, SquareMatrix, Vector3, Vector4, Zero};
 
 use crate::light::Light;
-use crate::{Camera, DefaultCamera, DirectionalLight};
+use crate::{Camera, DirectionalLight};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]

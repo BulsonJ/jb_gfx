@@ -12,9 +12,7 @@ use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
 use game::project::Project;
 use game::{Camera, DirectionCamera, LookAtCamera};
-use jb_gfx::device::ImageFormatType;
-use jb_gfx::renderer::Renderer;
-use jb_gfx::{Colour, DefaultCamera, Light};
+use jb_gfx::prelude::*;
 
 fn main() {
     run_game::<EditorProject>()

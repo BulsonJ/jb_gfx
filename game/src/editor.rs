@@ -9,11 +9,11 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle};
 use kira::tween::Tween;
 use winit::event::VirtualKeyCode;
 
-use crate::Camera;
-use jb_gfx::renderer::Renderer;
+use jb_gfx::prelude::*;
 
 use crate::components::{CameraComponent, LightComponent};
 use crate::input::Input;
+use crate::Camera;
 
 #[derive(Default)]
 pub struct Editor {

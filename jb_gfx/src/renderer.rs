@@ -4,20 +4,20 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use ash::vk;
 use ash::vk::{
-    AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageAspectFlags, ImageLayout,
-    IndexType, ObjectType, PipelineStageFlags2,
+    AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageLayout, IndexType, ObjectType,
+    PipelineStageFlags2,
 };
 use bytemuck::{offset_of, Zeroable};
 use cgmath::{
-    Array, Deg, EuclideanSpace, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3,
-    Vector4, Zero,
+    Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
 use image::EncodableLayout;
-use log::{error, info, trace, warn};
+use log::{info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::camera::DefaultCamera;
 use crate::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
     ImageDescriptorInfo, JBDescriptorBuilder,
@@ -36,7 +36,7 @@ use crate::pipeline::{
 use crate::renderpass::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
-use crate::{Camera, Colour, DefaultCamera, DirectionalLight, Light, MeshData, Vertex};
+use crate::{Camera, Colour, DirectionalLight, Light, MeshData, Vertex};
 
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;

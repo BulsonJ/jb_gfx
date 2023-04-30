@@ -6,7 +6,7 @@ use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEve
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-use jb_gfx::renderer::Renderer;
+use jb_gfx::prelude::*;
 
 use crate::asset::AssetManager;
 use crate::input::Input;

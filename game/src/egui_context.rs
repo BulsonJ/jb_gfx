@@ -6,9 +6,7 @@ use egui_winit::EventResponse;
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoopWindowTarget;
 
-use jb_gfx::device::ImageFormatType;
-use jb_gfx::renderer::{Renderer, UIMesh, UIVertex};
-use jb_gfx::resource::ImageHandle;
+use jb_gfx::prelude::*;
 
 pub struct EguiContext {
     pub egui_ctx: Context,

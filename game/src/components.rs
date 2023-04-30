@@ -1,7 +1,6 @@
-use crate::camera::DirectionCamera;
+use jb_gfx::prelude::*;
+
 use crate::Camera;
-use jb_gfx::renderer::LightHandle;
-use jb_gfx::Light;
 
 #[derive(Copy, Clone)]
 pub struct LightComponent {

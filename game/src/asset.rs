@@ -6,10 +6,7 @@ use gltf::image::Source;
 use image::EncodableLayout;
 use log::info;
 
-use jb_gfx::device::ImageFormatType;
-use jb_gfx::renderer::{MaterialInstance, MeshHandle, Renderer};
-use jb_gfx::resource::ImageHandle;
-use jb_gfx::{MeshData, Vertex};
+use jb_gfx::prelude::*;
 
 #[derive(Default)]
 pub struct AssetManager {

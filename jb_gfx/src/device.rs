@@ -795,8 +795,7 @@ impl GraphicsDevice {
         profiling::scope!("End Frame");
 
         unsafe {
-            self
-                .vk_device
+            self.vk_device
                 .end_command_buffer(self.graphics_command_buffer())
         }?;
 

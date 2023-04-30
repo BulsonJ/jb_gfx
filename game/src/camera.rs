@@ -1,5 +1,4 @@
-use cgmath::{Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
-use std::ops::Add;
+use cgmath::{Deg, Matrix4, Point3, Vector3};
 
 pub enum Camera {
     Directional(DirectionCamera),
