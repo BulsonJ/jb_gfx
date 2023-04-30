@@ -1196,13 +1196,14 @@ pub(crate) fn cmd_copy_buffer(
     cmd: &vk::CommandBuffer,
     src: BufferHandle,
     target: BufferHandle,
+    dst_offset: usize,
 ) -> Result<()> {
     let src_buffer = graphics_device.resource_manager.get_buffer(src).unwrap();
     let target_buffer = graphics_device.resource_manager.get_buffer(target).unwrap();
 
-    ensure!(src_buffer.size() == target_buffer.size());
-
-    let buffer_copy_info = vk::BufferCopy::builder().size(src_buffer.size());
+    let buffer_copy_info = vk::BufferCopy::builder()
+        .size(src_buffer.size())
+        .dst_offset(dst_offset as u64);
     unsafe {
         graphics_device.vk_device.cmd_copy_buffer(
             *cmd,

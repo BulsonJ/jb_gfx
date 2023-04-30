@@ -41,6 +41,7 @@ use crate::{Camera, Colour, DefaultCamera, DirectionalLight, Light, MeshData, Ve
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
+const MAX_VERTS: u64 = 1000000u64;
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -94,6 +95,8 @@ pub struct Renderer {
     world_debug_draw_data: [BufferHandle; FRAMES_IN_FLIGHT],
     pub draw_debug_ui: bool,
     pub debug_ui_size: f32,
+    vertex_buffer: BufferHandle,
+    vertex_buffer_offset: usize,
 }
 
 impl Renderer {
@@ -653,6 +656,16 @@ impl Renderer {
             (pso, pso_layout)
         };
 
+        let vertex_buffer = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<Vertex>() * MAX_VERTS as usize,
+                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+                storage_type: BufferStorageType::Device,
+            };
+
+            device.resource_manager.create_buffer(&buffer_create_info)
+        };
+
         info!("Renderer Created");
         Ok(Self {
             device,
@@ -704,6 +717,8 @@ impl Renderer {
             world_debug_desc_layout,
             world_debug_draw_data,
             debug_ui_size: 2.5f32,
+            vertex_buffer,
+            vertex_buffer_offset: 0usize,
         })
     }
 
@@ -840,7 +855,7 @@ impl Renderer {
                 let model = self.render_models.get(model).unwrap();
                 if let Some(mesh) = self.meshes.get(model.mesh_handle) {
                     draw_data.push(DrawData {
-                        vertex_buffer: mesh.vertex_buffer,
+                        vertex_buffer_offset: mesh.vertex_buffer_offset,
                         index_buffer: mesh.index_buffer,
                         index_count: mesh.vertex_count,
                         transform_index: i,
@@ -1688,6 +1703,21 @@ impl Renderer {
     }
 
     fn draw_objects(&self, draws: &[DrawData]) -> Result<()> {
+        let vertex_buffer = self
+            .device
+            .resource_manager
+            .get_buffer(self.vertex_buffer)
+            .unwrap()
+            .buffer();
+        unsafe {
+            self.device.vk_device.cmd_bind_vertex_buffers(
+                self.device.graphics_command_buffer(),
+                0u32,
+                &[vertex_buffer],
+                &[0u64],
+            )
+        };
+
         for draw in draws.iter() {
             let push_constants = PushConstants {
                 handles: [
@@ -1707,12 +1737,6 @@ impl Renderer {
                 )
             };
 
-            let vertex_buffer = self
-                .device
-                .resource_manager
-                .get_buffer(draw.vertex_buffer)
-                .unwrap()
-                .buffer();
             let index_buffer = self
                 .device
                 .resource_manager
@@ -1721,12 +1745,6 @@ impl Renderer {
                 .buffer();
 
             unsafe {
-                self.device.vk_device.cmd_bind_vertex_buffers(
-                    self.device.graphics_command_buffer(),
-                    0u32,
-                    &[vertex_buffer],
-                    &[0u64],
-                );
                 self.device.vk_device.cmd_bind_index_buffer(
                     self.device.graphics_command_buffer(),
                     index_buffer,
@@ -1738,7 +1756,7 @@ impl Renderer {
                     draw.index_count,
                     1u32,
                     0u32,
-                    0i32,
+                    draw.vertex_buffer_offset as i32,
                     0u32,
                 );
             }
@@ -1854,28 +1872,29 @@ impl Renderer {
                 .mapped_slice()?
                 .copy_from_slice(mesh.vertices.as_slice());
 
-            let vertex_buffer_create_info = BufferCreateInfo {
-                size: (size_of::<Vertex>() * mesh.vertices.len()),
-                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-                storage_type: BufferStorageType::Device,
-            };
+            let offset = self.vertex_buffer_offset;
+            let buffer_offset = size_of::<Vertex>() * offset;
 
-            let buffer = self
-                .device
-                .resource_manager
-                .create_buffer(&vertex_buffer_create_info);
+            assert!(offset + mesh.vertices.len() <= MAX_VERTS as usize);
 
             self.device.immediate_submit(|device, cmd| {
-                cmd_copy_buffer(device, cmd, staging_buffer, buffer)?;
+                cmd_copy_buffer(
+                    device,
+                    cmd,
+                    staging_buffer,
+                    self.vertex_buffer,
+                    buffer_offset,
+                )?;
                 Ok(())
             })?;
 
-            buffer
+            self.vertex_buffer_offset += mesh.vertices.len();
+            offset
         };
         match &mesh.indices {
             None => {
                 let render_mesh = RenderMesh {
-                    vertex_buffer,
+                    vertex_buffer_offset: vertex_buffer,
                     index_buffer: None,
                     vertex_count: mesh.vertices.len() as u32,
                 };
@@ -1921,14 +1940,14 @@ impl Renderer {
                         .create_buffer(&index_buffer_create_info);
 
                     self.device.immediate_submit(|device, cmd| {
-                        cmd_copy_buffer(device, cmd, staging_buffer, buffer)?;
+                        cmd_copy_buffer(device, cmd, staging_buffer, buffer, 0)?;
                         Ok(())
                     })?;
 
                     buffer
                 };
                 let render_mesh = RenderMesh {
-                    vertex_buffer,
+                    vertex_buffer_offset: vertex_buffer,
                     index_buffer: Some(index_buffer),
                     vertex_count: indices.len() as u32,
                 };
@@ -2132,7 +2151,7 @@ new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle; pub struct L
 
 // Mesh data stored on the GPU
 struct RenderMesh {
-    vertex_buffer: BufferHandle,
+    vertex_buffer_offset: usize,
     index_buffer: Option<BufferHandle>,
     vertex_count: u32,
 }
@@ -2186,7 +2205,7 @@ struct RenderModel {
 }
 
 struct DrawData {
-    vertex_buffer: BufferHandle,
+    vertex_buffer_offset: usize,
     index_buffer: Option<BufferHandle>,
     index_count: u32,
     transform_index: usize,

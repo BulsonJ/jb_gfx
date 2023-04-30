@@ -135,16 +135,26 @@ impl PipelineManager {
         }
 
         // Set ones that reloaded successfully
-        for (i, (_,pipeline)) in self.pipelines.iter_mut().enumerate() {
+        for (i, (_, pipeline)) in self.pipelines.iter_mut().enumerate() {
             if let Ok(new_pipeline) = new_pipelines.get(i).unwrap() {
                 pipeline.pso = *new_pipeline;
             } else {
-                error!("Unable to reload shader: [VERT:{}][FRAG:{}]", pipeline.create_info.vertex_shader, pipeline.create_info.fragment_shader);
+                error!(
+                    "Unable to reload shader: [VERT:{}][FRAG:{}]",
+                    pipeline.create_info.vertex_shader, pipeline.create_info.fragment_shader
+                );
             }
         }
 
-        let successful_reloads = new_pipelines.into_iter().filter_map(|result| result.ok()).count();
-        info!("Reloaded {}/{} shaders!", successful_reloads, self.pipelines.len());
+        let successful_reloads = new_pipelines
+            .into_iter()
+            .filter_map(|result| result.ok())
+            .count();
+        info!(
+            "Reloaded {}/{} shaders!",
+            successful_reloads,
+            self.pipelines.len()
+        );
     }
 
     pub fn deinit(&mut self) {
