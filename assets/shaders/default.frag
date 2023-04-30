@@ -1,6 +1,8 @@
 #version 460
 #include "assets/shaders/library/pbr.glsl"
 #include "assets/shaders/library/texture.glsl"
+#include "assets/shaders/library/shadow.glsl"
+#include "assets/shaders/library/lighting.glsl"
 
 //shader input
 layout (location = 0) in vec3 inColor;
@@ -12,12 +14,6 @@ layout (location = 7) in vec4 inShadowCoord;
 
 layout (location = 0) out vec4 outFragColor;
 layout (location = 1) out vec4 outBrightColor;
-
-struct Light{
-	vec4 position;
-	vec3 colour;
-	float intensity;
-};
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
@@ -46,39 +42,12 @@ layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
 	MaterialParameters materials[];
 } materialData;
 
-layout (set = 1, binding = 4) uniform sampler2D sceneShadowMap;
+layout (set = 1, binding = 4) uniform sampler2DShadow sceneShadowMap;
 
 layout( push_constant ) uniform constants
 {
 	ivec4 handles;
 } pushConstants;
-
-float ShadowCalculation(vec4 projCoords)
-{
-	float closestDepth = texture(sceneShadowMap, projCoords.xy).r;
-	float currentDepth = projCoords.z;
-	float bias = 0.001;
-	float ambient = 0.01;
-	float shadow = 0.0;
-	vec2 texelSize = 1.0 / textureSize(sceneShadowMap, 0);
-	int offset = 2;
-	for(int x = -offset; x <= offset; ++x)
-	{
-		for(int y = -offset; y <= offset; ++y)
-		{
-			float pcfDepth = texture(sceneShadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
-			shadow += currentDepth - bias > pcfDepth  ? 1.0 - ambient : 0.0;
-		}
-	}
-	int offsetDivide = ((offset * 2) + 1) * ((offset * 2) + 1);
-	shadow /= float(offsetDivide);
-
-	if (projCoords.z > 1.0) {
-		return 0.0;
-	}
-
-	return shadow;
-}
 
 void main()
 {
@@ -109,70 +78,23 @@ void main()
 	}
 
 	// calculate shadow
-	float shadow = ShadowCalculation(inShadowCoord / inShadowCoord.w);
+	float shadow = ShadowCalculation(sceneShadowMap, inShadowCoord / inShadowCoord.w);
 
-	vec3 diffuseResult = vec3(0);
-	vec3 specularResult = vec3(0);
-	// Scene directional light
-	{
-		vec3 diffuse = vec3(0);
-		vec3 specular = vec3(0);
-
-		vec3 lightDir = -cameraData.directionalLightDirection.xyz;
-		float diff = max(dot(normal, lightDir), 0.0);
-		diffuse += diff * (cameraData.directionalLightColour * cameraData.directionalLightStrength);
-
-		// Specular
-		float shininess = 32.0;
-		float specularStrength = 0.2;
-		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
-		vec3 halfwayDir = normalize(lightDir + viewDir);
-		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-		specular += specularStrength * spec * (cameraData.directionalLightColour * cameraData.directionalLightStrength);
-
-		diffuseResult += diffuse;
-		specularResult += specular;
-	}
-	vec3 lighting = (1.0 - shadow) * (diffuseResult + specularResult);
+	// ----------------- Lighting Calculations -----------------------
+	// Directional Light
+	vec3 dirLight = CalculateDirectionalLight(normal, inWorldPos,cameraData.cameraPos.xyz, -cameraData.directionalLightDirection.xyz,cameraData.directionalLightColour,cameraData.directionalLightStrength);
+	vec3 lighting = (1.0 - shadow) * (dirLight);
 
 	// Point lights
-	diffuseResult = vec3(0);
-	specularResult = vec3(0);
+	vec3 pointLightsResult = vec3(0);
 	for (int i = 0; i < 4; i++){
 		// Diffuse
 		Light currentLight = lightData.lights[i];
-		vec3 diffuse = vec3(0);
-		vec3 specular = vec3(0);
-
-		vec3 lightDir = normalize(currentLight.position.xyz - inWorldPos);
-		float diff = max(dot(normal, lightDir), 0.0);
-		diffuse += diff * (currentLight.colour * currentLight.intensity);
-
-		// Specular
-		float shininess = 32.0;
-		float specularStrength = 0.2;
-		vec3 viewDir = normalize(cameraData.cameraPos.xyz - inWorldPos);
-		vec3 halfwayDir = normalize(lightDir + viewDir);
-		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-		specular += specularStrength * spec * (currentLight.colour * currentLight.intensity);
-
-		// attenuation
-		float distance    = length(currentLight.position.xyz - inWorldPos);
-		float lightConstant = 1.0;
-		float lightLinear = 0.09;
-		float lightQuadratic = 0.032;
-		float attenuation = 1.0 / (lightConstant + lightLinear * distance + lightQuadratic * (distance * distance));
-
-		diffuse *= attenuation;
-		specular *= attenuation;
-
-		diffuseResult += diffuse;
-		specularResult += specular;
+		pointLightsResult += CalculatePointLight(normal, inWorldPos,cameraData.cameraPos.xyz, currentLight);
 	}
-	vec3 pointLightsResult = (diffuseResult + specularResult);
 	lighting += pointLightsResult;
-
-	vec3 result = (ambient + lighting) * objectColour;
+	vec3 result = objectColour * (ambient + lighting);
+	// ----------------- Lighting Calculations -----------------------
 
 	// Emissive
 	if (emissiveTexIndex > 0){
@@ -181,8 +103,10 @@ void main()
 		result += material.emissive.rgb;
 	}
 
+	// Normal Fragment Colour
 	outFragColor = vec4(result,1.0f);
 
+	// Bright Colours
 	float brightness = dot(outFragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
 	if(brightness > 1.0) {
 		outBrightColor = vec4(outFragColor.rgb, 1.0);
