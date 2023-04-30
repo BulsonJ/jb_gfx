@@ -300,11 +300,6 @@ impl Application {
     pub fn new(screen_width: i32, screen_height: i32, event_loop: &EventLoop<()>) -> Self {
         let input = Input::default();
 
-        // Enable logging
-        let mut builder = Builder::from_default_env();
-        builder.target(Target::Stdout);
-        builder.init();
-
         let window = WindowBuilder::new()
             .with_inner_size(LogicalSize::new(screen_width, screen_height))
             .with_title("Rust Renderer")
@@ -334,6 +329,11 @@ pub fn run() {
     profiling::tracy_client::Client::start();
     profiling::register_thread!("Main Thread");
     profiling::scope!("Game");
+
+    // Enable logging
+    let mut builder = Builder::from_default_env();
+    builder.target(Target::Stdout);
+    builder.init();
 
     let mut app = Application::new(screen_width, screen_height, &event_loop);
 
