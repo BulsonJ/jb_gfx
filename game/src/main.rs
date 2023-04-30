@@ -1,21 +1,25 @@
+use std::time::Instant;
 use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
 use egui_winit::EventResponse;
+use env_logger::{Builder, Target};
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
-use winit::event::WindowEvent;
-use winit::event_loop::EventLoop;
+use winit::dpi::LogicalSize;
+use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::{Window, WindowBuilder};
 
-use game::application::{run_game, Application};
 use game::components::{CameraComponent, LightComponent};
 use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
-use game::project::Project;
 use game::{Camera, DirectionCamera, LookAtCamera};
+use game::asset::AssetManager;
+use game::input::Input;
 use jb_gfx::prelude::*;
 
 fn main() {
-    run_game::<EditorProject>()
+    run()
 }
 
 struct EditorProject {
@@ -27,7 +31,7 @@ struct EditorProject {
     background_music: StaticSoundData,
 }
 
-impl Project for EditorProject {
+impl EditorProject {
     fn new(app: &mut Application, event_loop: &EventLoop<()>) -> Self {
         // Load cube
         let texture = app
@@ -281,4 +285,125 @@ pub fn from_transforms(
     let scale = Matrix4::from_nonuniform_scale(size.x, size.y, size.z);
 
     translation * rotation * scale
+}
+
+pub struct Application {
+    pub window: Window,
+    pub input: Input,
+    pub renderer: Renderer,
+    pub asset_manager: AssetManager,
+    pub delta_time: f32,
+    pub time_passed: f32,
+}
+
+impl Application {
+    pub fn new(screen_width: i32, screen_height: i32, event_loop: &EventLoop<()>) -> Self {
+        let input = Input::default();
+
+        // Enable logging
+        let mut builder = Builder::from_default_env();
+        builder.target(Target::Stdout);
+        builder.init();
+
+        let window = WindowBuilder::new()
+            .with_inner_size(LogicalSize::new(screen_width, screen_height))
+            .with_title("Rust Renderer")
+            .build(&event_loop)
+            .unwrap();
+
+        let mut renderer = Renderer::new(&window).unwrap();
+        renderer.render().unwrap();
+        let asset_manager = AssetManager::default();
+
+        Self {
+            window,
+            input,
+            renderer,
+            asset_manager,
+            delta_time: 0.0,
+            time_passed: 0.0,
+        }
+    }
+}
+
+pub fn run() {
+    let (screen_width, screen_height) = (1920, 1080);
+    let event_loop = EventLoop::new();
+
+    #[cfg(feature = "tracy")]
+    profiling::tracy_client::Client::start();
+    profiling::register_thread!("Main Thread");
+    profiling::scope!("Game");
+
+    let mut app = Application::new(screen_width, screen_height, &event_loop);
+
+    let mut project = EditorProject::new(&mut app, &event_loop);
+
+    let mut initial_resize = true;
+
+    let mut frame_start_time = Instant::now();
+    let mut t = 0.0;
+    let target_dt = 1.0 / 60.0;
+
+    profiling::scope!("Game Event Loop");
+    {
+        event_loop.run(move |event, _, control_flow| {
+            match event {
+                Event::MainEventsCleared => {
+                    let mut frame_time = frame_start_time.elapsed().as_secs_f32();
+                    frame_start_time = Instant::now();
+
+                    while frame_time > 0.0f32 {
+                        let delta_time = frame_time.min(target_dt);
+
+                        // Update
+                        app.delta_time = delta_time;
+                        app.time_passed = t;
+                        project.update(&mut app);
+
+                        frame_time -= delta_time;
+                        t += delta_time;
+                    }
+
+                    project.draw(&mut app);
+
+                    app.renderer.render().unwrap();
+                }
+                Event::NewEvents(_) => {
+                    app.input.prev_keys.copy_from_slice(&app.input.now_keys);
+                }
+                Event::WindowEvent { ref event, .. } => {
+                    let response = project.on_window_event(event);
+                    if !response.consumed {
+                        app.input.update_input_from_event(event);
+                    }
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
+                            ..
+                        } => *control_flow = ControlFlow::Exit,
+                        WindowEvent::Resized(physical_size) => {
+                            if initial_resize {
+                                initial_resize = false;
+                            } else {
+                                app.renderer.resize(*physical_size).unwrap();
+                            }
+                        }
+                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                            app.renderer.resize(**new_inner_size).unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            };
+            profiling::finish_frame!();
+        });
+    }
 }

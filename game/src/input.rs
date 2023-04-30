@@ -1,8 +1,8 @@
 use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub struct Input {
-    pub(crate) now_keys: [bool; 255],
-    pub(crate) prev_keys: [bool; 255],
+    pub now_keys: [bool; 255],
+    pub prev_keys: [bool; 255],
     pub(crate) mouse_pos: (f32, f32),
 }
 
@@ -36,7 +36,7 @@ impl Default for Input {
 
 // Winit integration
 impl Input {
-    pub(crate) fn update_input_from_event(&mut self, event: &WindowEvent) {
+    pub fn update_input_from_event(&mut self, event: &WindowEvent) {
         match event {
             WindowEvent::CursorMoved {
                 device_id: _device_id,
