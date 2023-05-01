@@ -68,7 +68,7 @@ pub struct Renderer {
     ui_pso: PipelineHandle,
     ui_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     quad_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    ui_index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_uniform_data: [BufferHandle; FRAMES_IN_FLIGHT],
     ui_to_draw: Vec<UIMesh>,
     render_targets: RenderTargets,
@@ -98,6 +98,8 @@ pub struct Renderer {
     pub debug_ui_size: f32,
     vertex_buffer: BufferHandle,
     vertex_buffer_offset: usize,
+    index_buffer: BufferHandle,
+    index_buffer_offset: usize,
 }
 
 impl Renderer {
@@ -482,7 +484,7 @@ impl Renderer {
             ]
         };
 
-        let index_buffer = {
+        let ui_index_buffer = {
             let buffer_create_info = BufferCreateInfo {
                 size: size_of::<u32>() * MAX_QUADS as usize * 3,
                 usage: vk::BufferUsageFlags::INDEX_BUFFER,
@@ -667,6 +669,16 @@ impl Renderer {
             device.resource_manager.create_buffer(&buffer_create_info)
         };
 
+        let index_buffer = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<Vertex>() * MAX_VERTS as usize,
+                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+                storage_type: BufferStorageType::Device,
+            };
+
+            device.resource_manager.create_buffer(&buffer_create_info)
+        };
+
         info!("Renderer Created");
         Ok(Self {
             device,
@@ -690,7 +702,7 @@ impl Renderer {
             ui_pso_layout,
             ui_descriptor_set,
             quad_buffer,
-            index_buffer,
+            ui_index_buffer,
             ui_to_draw: Vec::new(),
             ui_uniform_data,
             depth_image,
@@ -720,6 +732,8 @@ impl Renderer {
             debug_ui_size: 2.5f32,
             vertex_buffer,
             vertex_buffer_offset: 0usize,
+            index_buffer,
+            index_buffer_offset: 0usize,
         })
     }
 
@@ -856,9 +870,10 @@ impl Renderer {
                 let model = self.render_models.get(model).unwrap();
                 if let Some(mesh) = self.meshes.get(model.mesh_handle) {
                     draw_data.push(DrawData {
-                        vertex_buffer_offset: mesh.vertex_buffer_offset,
-                        index_buffer: mesh.index_buffer,
-                        index_count: mesh.vertex_count,
+                        vertex_offset: mesh.vertex_offset,
+                        vertex_count: mesh.vertex_count,
+                        index_offset: mesh.index_offset,
+                        index_count: mesh.index_count,
                         transform_index: i,
                         material_index: i,
                     });
@@ -950,7 +965,7 @@ impl Renderer {
 
                 self.device
                     .resource_manager
-                    .get_buffer(self.index_buffer[resource_index])
+                    .get_buffer(self.ui_index_buffer[resource_index])
                     .unwrap()
                     .view_custom(index_offset, element.indices.len())?
                     .mapped_slice()?
@@ -1541,7 +1556,7 @@ impl Renderer {
                         let index_buffer = self
                             .device
                             .resource_manager
-                            .get_buffer(self.index_buffer[resource_index])
+                            .get_buffer(self.ui_index_buffer[resource_index])
                             .unwrap();
 
                         unsafe {
@@ -1651,6 +1666,21 @@ impl Renderer {
             )
         };
 
+        let index_buffer = self
+            .device
+            .resource_manager
+            .get_buffer(self.index_buffer)
+            .unwrap()
+            .buffer();
+        unsafe {
+            self.device.vk_device.cmd_bind_index_buffer(
+                self.device.graphics_command_buffer(),
+                index_buffer,
+                DeviceSize::zero(),
+                IndexType::UINT32,
+            );
+        }
+
         for draw in draws.iter() {
             let push_constants = PushConstants {
                 handles: [
@@ -1670,26 +1700,21 @@ impl Renderer {
                 )
             };
 
-            let index_buffer = self
-                .device
-                .resource_manager
-                .get_buffer(draw.index_buffer.unwrap())
-                .unwrap()
-                .buffer();
+            let index_count = {
+                if draw.index_count == 0 {
+                    draw.vertex_count
+                } else {
+                    draw.index_count
+                }
+            };
 
             unsafe {
-                self.device.vk_device.cmd_bind_index_buffer(
-                    self.device.graphics_command_buffer(),
-                    index_buffer,
-                    DeviceSize::zero(),
-                    IndexType::UINT32,
-                );
                 self.device.vk_device.cmd_draw_indexed(
                     self.device.graphics_command_buffer(),
-                    draw.index_count,
+                    index_count as u32,
                     1u32,
-                    0u32,
-                    draw.vertex_buffer_offset as i32,
+                    draw.index_offset as u32,
+                    draw.vertex_offset as i32,
                     0u32,
                 );
             }
@@ -1827,9 +1852,10 @@ impl Renderer {
         match &mesh.indices {
             None => {
                 let render_mesh = RenderMesh {
-                    vertex_buffer_offset,
-                    index_buffer: None,
-                    vertex_count: mesh.vertices.len() as u32,
+                    vertex_offset: vertex_buffer_offset,
+                    vertex_count: mesh.vertices.len(),
+                    index_offset: 0,
+                    index_count: 0,
                 };
                 trace!(
                     "Mesh Loaded. Vertex Count:{}|Faces:{}",
@@ -1839,7 +1865,7 @@ impl Renderer {
                 Ok(self.meshes.insert(render_mesh))
             }
             Some(indices) => {
-                let index_buffer = {
+                let index_buffer_offset = {
                     let buffer_size = size_of::<u32>() * indices.len();
                     let staging_buffer_create_info = BufferCreateInfo {
                         size: buffer_size,
@@ -1860,29 +1886,31 @@ impl Renderer {
                         .mapped_slice()?
                         .copy_from_slice(indices.as_slice());
 
-                    let index_buffer_create_info = BufferCreateInfo {
-                        size: buffer_size,
-                        usage: vk::BufferUsageFlags::TRANSFER_DST
-                            | vk::BufferUsageFlags::INDEX_BUFFER,
-                        storage_type: BufferStorageType::Device,
-                    };
+                    let offset = self.index_buffer_offset;
+                    let buffer_offset = size_of::<u32>() * offset;
 
-                    let buffer = self
-                        .device
-                        .resource_manager
-                        .create_buffer(&index_buffer_create_info);
+                    assert!(offset + indices.len() <= MAX_VERTS as usize);
 
                     self.device.immediate_submit(|device, cmd| {
-                        cmd_copy_buffer(device, cmd, staging_buffer, buffer, 0)?;
+                        cmd_copy_buffer(
+                            device,
+                            cmd,
+                            staging_buffer,
+                            self.index_buffer,
+                            buffer_offset,
+                        )?;
                         Ok(())
                     })?;
 
-                    buffer
+                    self.index_buffer_offset += indices.len();
+
+                    offset
                 };
                 let render_mesh = RenderMesh {
-                    vertex_buffer_offset,
-                    index_buffer: Some(index_buffer),
-                    vertex_count: indices.len() as u32,
+                    vertex_offset: vertex_buffer_offset,
+                    vertex_count: mesh.vertices.len(),
+                    index_offset: index_buffer_offset,
+                    index_count: indices.len(),
                 };
                 trace!(
                     "Mesh Loaded. Vertex Count:{}|Index Count:{}|Faces:{}",
@@ -2084,9 +2112,10 @@ new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle; pub struct L
 
 // Mesh data stored on the GPU
 struct RenderMesh {
-    vertex_buffer_offset: usize,
-    index_buffer: Option<BufferHandle>,
-    vertex_count: u32,
+    vertex_offset: usize,
+    vertex_count: usize,
+    index_offset: usize,
+    index_count: usize,
 }
 
 fn from_transforms(
@@ -2138,9 +2167,10 @@ struct RenderModel {
 }
 
 struct DrawData {
-    vertex_buffer_offset: usize,
-    index_buffer: Option<BufferHandle>,
-    index_count: u32,
+    vertex_offset: usize,
+    vertex_count: usize,
+    index_offset: usize,
+    index_count: usize,
     transform_index: usize,
     material_index: usize,
 }
