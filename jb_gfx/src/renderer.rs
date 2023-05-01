@@ -83,15 +83,16 @@ pub struct Renderer {
     world_debug_desc_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     world_debug_draw_data: [BufferHandle; FRAMES_IN_FLIGHT],
 
-    camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    camera_uniform: CameraUniform,
-    descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     meshes: SlotMap<MeshHandle, RenderMesh>,
     render_models: SlotMap<RenderModelHandle, RenderModel>,
+    descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    camera_uniform: CameraUniform,
     light_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    stored_lights: SlotMap<LightHandle, Light>,
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    stored_lights: SlotMap<LightHandle, Light>,
+
     ui_pass: UiPass,
     ui_to_draw: Vec<UIMesh>,
 
