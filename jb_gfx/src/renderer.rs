@@ -78,9 +78,7 @@ pub struct Renderer {
     timestamps: TimeStamp,
     pipeline_layout_cache: PipelineLayoutCache,
     bright_extracted_image: RenderTargetHandle,
-    bloom_image: [RenderTargetHandle; 2],
-    bloom_pso: PipelineHandle,
-    bloom_pso_layout: vk::PipelineLayout,
+    bloom_pass: BloomPass,
     combine_pso: PipelineHandle,
     combine_pso_layout: vk::PipelineLayout,
     pub enable_bloom_pass: bool,
@@ -138,62 +136,71 @@ impl Renderer {
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
-        let bloom_image = [
-            render_targets.create_render_target(
-                render_image_format,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?,
-            render_targets.create_render_target(
-                render_image_format,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?,
-        ];
 
-        let bloom_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
-            .bind_image(
-                0,
-                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            )
-            .build()
-            .unwrap();
+        let bloom_pass = {
+            let bloom_image = [
+                render_targets.create_render_target(
+                    render_image_format,
+                    RenderTargetSize::Fullscreen,
+                    RenderImageType::Colour,
+                )?,
+                render_targets.create_render_target(
+                    render_image_format,
+                    RenderTargetSize::Fullscreen,
+                    RenderImageType::Colour,
+                )?,
+            ];
 
-        let (bloom_pso, bloom_pso_layout) = {
-            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
-                &[bloom_set_layout],
-                &[*vk::PushConstantRange::builder()
-                    .size(size_of::<i32>() as u32)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT)],
-            )?;
+            let bloom_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
+                .bind_image(
+                    0,
+                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                )
+                .build()
+                .unwrap();
 
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(false)
-                .depth_write_enable(false)
-                .depth_compare_op(vk::CompareOp::ALWAYS)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
+            let (bloom_pso, bloom_pso_layout) = {
+                let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                    &[bloom_set_layout],
+                    &[*vk::PushConstantRange::builder()
+                        .size(size_of::<i32>() as u32)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT)],
+                )?;
 
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/blur.vert".to_string(),
-                fragment_shader: "assets/shaders/blur.frag".to_string(),
-                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
-                color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
-                    blend: false,
-                    ..Default::default()
-                }],
-                depth_attachment_format: None,
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::NONE,
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(false)
+                    .depth_write_enable(false)
+                    .depth_compare_op(vk::CompareOp::ALWAYS)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
+
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/blur.vert".to_string(),
+                    fragment_shader: "assets/shaders/blur.frag".to_string(),
+                    vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                    color_attachment_formats: vec![PipelineColorAttachment {
+                        format: render_image_format,
+                        blend: false,
+                        ..Default::default()
+                    }],
+                    depth_attachment_format: None,
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::NONE,
+                };
+
+                let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
+                (pso, pso_layout)
             };
 
-            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
-            (pso, pso_layout)
+            BloomPass {
+                bloom_image,
+                bloom_pso,
+                bloom_pso_layout,
+            }
         };
 
         let combine_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
@@ -865,10 +872,8 @@ impl Renderer {
             timestamps: TimeStamp::default(),
             pipeline_layout_cache,
             bright_extracted_image,
-            bloom_image,
+            bloom_pass,
             frame_descriptor_allocator,
-            bloom_pso,
-            bloom_pso_layout,
             combine_pso,
             combine_pso_layout,
             enable_bloom_pass: true,
@@ -882,7 +887,7 @@ impl Renderer {
             vertex_buffer_offset: 0usize,
             index_buffer,
             index_buffer_offset: 0usize,
-            forward : forward_pass,
+            forward: forward_pass,
             deferred_fill,
             deferred_lighting_combine,
         });
@@ -944,8 +949,12 @@ impl Renderer {
             .get(self.directional_light_shadow_image)
             .unwrap();
         let bloom_image = [
-            self.render_targets.get(self.bloom_image[0]).unwrap(),
-            self.render_targets.get(self.bloom_image[1]).unwrap(),
+            self.render_targets
+                .get(self.bloom_pass.bloom_image[0])
+                .unwrap(),
+            self.render_targets
+                .get(self.bloom_pass.bloom_image[1])
+                .unwrap(),
         ];
 
         let deferred_positions = self
@@ -1558,7 +1567,7 @@ impl Renderer {
         // Bloom pass
         {
             if self.enable_bloom_pass {
-                let (first_bloom_set, bloom_set_layout) = JBDescriptorBuilder::new(
+                let (first_bloom_set, _) = JBDescriptorBuilder::new(
                     &self.device.resource_manager,
                     &mut self.descriptor_layout_cache,
                     &mut self.frame_descriptor_allocator[resource_index],
@@ -1672,7 +1681,9 @@ impl Renderer {
                             |_render_pass| {
                                 profiling::scope!("Bloom Pass");
 
-                                let pipeline = self.pipeline_manager.get_pipeline(self.bloom_pso);
+                                let pipeline = self
+                                    .pipeline_manager
+                                    .get_pipeline(self.bloom_pass.bloom_pso);
 
                                 let set = {
                                     if i == 0 {
@@ -1690,7 +1701,7 @@ impl Renderer {
                                     self.device.vk_device.cmd_bind_descriptor_sets(
                                         self.device.graphics_command_buffer(),
                                         vk::PipelineBindPoint::GRAPHICS,
-                                        self.bloom_pso_layout,
+                                        self.bloom_pass.bloom_pso_layout,
                                         0u32,
                                         &[set],
                                         &[],
@@ -1702,7 +1713,7 @@ impl Renderer {
                                 unsafe {
                                     self.device.vk_device.cmd_push_constants(
                                         self.device.graphics_command_buffer(),
-                                        self.bloom_pso_layout,
+                                        self.bloom_pass.bloom_pso_layout,
                                         vk::ShaderStageFlags::FRAGMENT,
                                         0u32,
                                         bytemuck::cast_slice(&[horizontal as i32]),
@@ -2631,4 +2642,10 @@ struct UiPass {
     vertex_data_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     uniform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+}
+
+struct BloomPass {
+    bloom_image: [RenderTargetHandle; 2],
+    bloom_pso: PipelineHandle,
+    bloom_pso_layout: vk::PipelineLayout,
 }
