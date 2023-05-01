@@ -53,8 +53,6 @@ const DEFERRED_COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 /// Used to draw objects using the GPU.
 pub struct Renderer {
     device: Arc<GraphicsDevice>,
-    pso_layout: vk::PipelineLayout,
-    pso: PipelineHandle,
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     camera_uniform: CameraUniform,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
@@ -79,7 +77,6 @@ pub struct Renderer {
     frame_descriptor_allocator: [DescriptorAllocator; FRAMES_IN_FLIGHT],
     timestamps: TimeStamp,
     pipeline_layout_cache: PipelineLayoutCache,
-    forward_image: RenderTargetHandle,
     bright_extracted_image: RenderTargetHandle,
     bloom_image: [RenderTargetHandle; 2],
     bloom_pso: PipelineHandle,
@@ -97,6 +94,7 @@ pub struct Renderer {
     vertex_buffer_offset: usize,
     index_buffer: BufferHandle,
     index_buffer_offset: usize,
+    forward: ForwardPass,
     deferred_fill: DeferredPass,
     deferred_lighting_combine: DeferredLightingCombinePass,
 }
@@ -398,76 +396,87 @@ impl Renderer {
                 .copy_from_slice(&uniforms);
         }
 
-        let push_constant_range = *vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-            .size(size_of::<PushConstants>() as u32)
-            .offset(0u32);
+        let (forward_pass, shadow_pso) = {
+            let push_constant_range = *vk::PushConstantRange::builder()
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+                .size(size_of::<PushConstants>() as u32)
+                .offset(0u32);
 
-        let pso_layout = pipeline_layout_cache.create_pipeline_layout(
-            &[
-                device.bindless_descriptor_set_layout(),
-                descriptor_set_layout,
-            ],
-            &[push_constant_range],
-        )?;
-
-        let pso = {
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
-
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/default.vert".to_string(),
-                fragment_shader: "assets/shaders/default.frag".to_string(),
-                vertex_input_state: Vertex::get_vertex_input_desc(),
-                color_attachment_formats: vec![
-                    PipelineColorAttachment {
-                        format: render_image_format,
-                        blend: false,
-                        ..Default::default()
-                    },
-                    PipelineColorAttachment {
-                        format: render_image_format,
-                        blend: false,
-                        ..Default::default()
-                    },
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                &[
+                    device.bindless_descriptor_set_layout(),
+                    descriptor_set_layout,
                 ],
-                depth_attachment_format: Some(depth_image_format),
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::FRONT,
+                &[push_constant_range],
+            )?;
+
+            let pso = {
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(true)
+                    .depth_write_enable(true)
+                    .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
+
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/default.vert".to_string(),
+                    fragment_shader: "assets/shaders/default.frag".to_string(),
+                    vertex_input_state: Vertex::get_vertex_input_desc(),
+                    color_attachment_formats: vec![
+                        PipelineColorAttachment {
+                            format: render_image_format,
+                            blend: false,
+                            ..Default::default()
+                        },
+                        PipelineColorAttachment {
+                            format: render_image_format,
+                            blend: false,
+                            ..Default::default()
+                        },
+                    ],
+                    depth_attachment_format: Some(depth_image_format),
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::FRONT,
+                };
+
+                pipeline_manager.create_pipeline(&pso_build_info)?
             };
 
-            pipeline_manager.create_pipeline(&pso_build_info)?
-        };
+            let shadow_pso = {
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(true)
+                    .depth_write_enable(true)
+                    .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
 
-        let shadow_pso = {
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/shadow.vert".to_string(),
+                    fragment_shader: "assets/shaders/shadow.frag".to_string(),
+                    vertex_input_state: Vertex::get_vertex_input_desc(),
+                    color_attachment_formats: vec![],
+                    depth_attachment_format: Some(depth_image_format),
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::FRONT,
+                };
 
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/shadow.vert".to_string(),
-                fragment_shader: "assets/shaders/shadow.frag".to_string(),
-                vertex_input_state: Vertex::get_vertex_input_desc(),
-                color_attachment_formats: vec![],
-                depth_attachment_format: Some(depth_image_format),
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::FRONT,
+                pipeline_manager.create_pipeline(&pso_build_info)?
             };
 
-            pipeline_manager.create_pipeline(&pso_build_info)?
+            (
+                ForwardPass {
+                    pso_layout,
+                    pso,
+                    forward_image,
+                },
+                shadow_pso,
+            )
         };
 
         let ui_pass = {
@@ -832,8 +841,6 @@ impl Renderer {
         info!("Renderer Created");
         let result = Ok(Self {
             device,
-            pso_layout,
-            pso,
             camera_buffer,
             camera_uniform,
             descriptor_set,
@@ -857,7 +864,6 @@ impl Renderer {
             descriptor_allocator,
             timestamps: TimeStamp::default(),
             pipeline_layout_cache,
-            forward_image,
             bright_extracted_image,
             bloom_image,
             frame_descriptor_allocator,
@@ -876,6 +882,7 @@ impl Renderer {
             vertex_buffer_offset: 0usize,
             index_buffer,
             index_buffer_offset: 0usize,
+            forward : forward_pass,
             deferred_fill,
             deferred_lighting_combine,
         });
@@ -926,7 +933,7 @@ impl Renderer {
 
         // Get images
 
-        let forward_image = self.render_targets.get(self.forward_image).unwrap();
+        let forward_image = self.render_targets.get(self.forward.forward_image).unwrap();
         let bright_extracted_image = self
             .render_targets
             .get(self.bright_extracted_image)
@@ -1185,7 +1192,7 @@ impl Renderer {
                             self.device.vk_device.cmd_bind_descriptor_sets(
                                 self.device.graphics_command_buffer(),
                                 vk::PipelineBindPoint::GRAPHICS,
-                                self.pso_layout,
+                                self.forward.pso_layout,
                                 0u32,
                                 &[
                                     self.device.bindless_descriptor_set(),
@@ -2082,7 +2089,7 @@ impl Renderer {
             unsafe {
                 self.device.vk_device.cmd_push_constants(
                     self.device.graphics_command_buffer(),
-                    self.pso_layout,
+                    self.forward.pso_layout,
                     vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     0u32,
                     bytemuck::cast_slice(&[push_constants]),
@@ -2596,6 +2603,12 @@ pub struct TimeStamp {
     pub combine_pass: f64,
     pub ui_pass: f64,
     pub total: f64,
+}
+
+struct ForwardPass {
+    pso_layout: vk::PipelineLayout,
+    pso: PipelineHandle,
+    forward_image: RenderTargetHandle,
 }
 
 struct DeferredPass {
