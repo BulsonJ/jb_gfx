@@ -45,6 +45,10 @@ const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
 const LARGE_BUFFER_SIZE: u32 = 16000000; // 128mb
 
+const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
+const DEFERRED_NORMAL_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
+const DEFERRED_COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
+
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
 pub struct Renderer {
@@ -688,17 +692,17 @@ impl Renderer {
         };
 
         let deferred_positions = render_targets.create_render_target(
-            vk::Format::R16G16B16A16_SFLOAT,
+            DEFERRED_POSITION_FORMAT,
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
         let deferred_normals = render_targets.create_render_target(
-            vk::Format::R16G16B16A16_SFLOAT,
+            DEFERRED_NORMAL_FORMAT,
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
         let deferred_color_specs = render_targets.create_render_target(
-            vk::Format::R16G16B16A16_SFLOAT,
+            DEFERRED_COLOR_FORMAT,
             RenderTargetSize::Fullscreen,
             RenderImageType::Colour,
         )?;
@@ -720,17 +724,17 @@ impl Renderer {
                 vertex_input_state: Vertex::get_vertex_input_desc(),
                 color_attachment_formats: vec![
                     PipelineColorAttachment {
-                        format: vk::Format::R16G16B16A16_SFLOAT,
+                        format: DEFERRED_POSITION_FORMAT,
                         blend: false,
                         ..Default::default()
                     },
                     PipelineColorAttachment {
-                        format: vk::Format::R16G16B16A16_SFLOAT,
+                        format: DEFERRED_NORMAL_FORMAT,
                         blend: false,
                         ..Default::default()
                     },
                     PipelineColorAttachment {
-                        format: vk::Format::R16G16B16A16_SFLOAT,
+                        format: DEFERRED_COLOR_FORMAT,
                         blend: false,
                         ..Default::default()
                     },
