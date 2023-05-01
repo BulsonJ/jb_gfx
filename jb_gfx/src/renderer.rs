@@ -89,14 +89,11 @@ pub struct Renderer {
     bloom_image: [RenderTargetHandle; 2],
     bloom_pso: PipelineHandle,
     bloom_pso_layout: vk::PipelineLayout,
-    bloom_descriptor_layout: vk::DescriptorSetLayout,
     combine_pso: PipelineHandle,
     combine_pso_layout: vk::PipelineLayout,
-    combine_set_layout: vk::DescriptorSetLayout,
     pub enable_bloom_pass: bool,
     world_debug_pso: PipelineHandle,
     world_debug_pso_layout: vk::PipelineLayout,
-    world_debug_desc_layout: vk::DescriptorSetLayout,
     world_debug_desc_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     world_debug_draw_data: [BufferHandle; FRAMES_IN_FLIGHT],
     pub draw_debug_ui: bool,
@@ -111,7 +108,6 @@ pub struct Renderer {
     deferred_pso: PipelineHandle,
     deferred_lighting_pso: PipelineHandle,
     deferred_lighting_pso_layout: vk::PipelineLayout,
-    deferred_lighting_desc_layout: vk::DescriptorSetLayout,
 }
 
 impl Renderer {
@@ -851,16 +847,13 @@ impl Renderer {
             frame_descriptor_allocator,
             bloom_pso,
             bloom_pso_layout,
-            bloom_descriptor_layout: bloom_set_layout,
             combine_pso,
             combine_pso_layout,
-            combine_set_layout,
             enable_bloom_pass: true,
             world_debug_pso,
             world_debug_pso_layout,
             draw_debug_ui: true,
             world_debug_desc_set,
-            world_debug_desc_layout,
             world_debug_draw_data,
             debug_ui_size: 2.5f32,
             vertex_buffer,
@@ -872,7 +865,6 @@ impl Renderer {
             deferred_color_specs,
             deferred_pso,
             deferred_lighting_pso,
-            deferred_lighting_desc_layout,
             deferred_lighting_pso_layout,
         });
         result
