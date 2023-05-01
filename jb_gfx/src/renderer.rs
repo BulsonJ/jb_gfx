@@ -69,12 +69,7 @@ pub struct Renderer {
     stored_lights: SlotMap<LightHandle, Light>,
     shadow_pso: PipelineHandle,
     pub sun: DirectionalLight,
-    ui_pso_layout: vk::PipelineLayout,
-    ui_pso: PipelineHandle,
-    ui_descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
-    quad_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    ui_index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
-    ui_uniform_data: [BufferHandle; FRAMES_IN_FLIGHT],
+    ui_pass: UiPass,
     ui_to_draw: Vec<UIMesh>,
     render_targets: RenderTargets,
     depth_image: RenderTargetHandle,
@@ -475,111 +470,122 @@ impl Renderer {
             pipeline_manager.create_pipeline(&pso_build_info)?
         };
 
-        let quad_buffer = {
-            let buffer_create_info = BufferCreateInfo {
-                size: size_of::<UIVertexData>() * MAX_QUADS as usize,
-                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
-                storage_type: BufferStorageType::HostLocal,
+        let ui_pass = {
+            let vertex_data_buffer = {
+                let buffer_create_info = BufferCreateInfo {
+                    size: size_of::<UIVertexData>() * MAX_QUADS as usize,
+                    usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                    storage_type: BufferStorageType::HostLocal,
+                };
+
+                [
+                    device.resource_manager.create_buffer(&buffer_create_info),
+                    device.resource_manager.create_buffer(&buffer_create_info),
+                ]
             };
 
-            [
-                device.resource_manager.create_buffer(&buffer_create_info),
-                device.resource_manager.create_buffer(&buffer_create_info),
-            ]
-        };
+            let index_buffer = {
+                let buffer_create_info = BufferCreateInfo {
+                    size: size_of::<Index>() * MAX_QUADS as usize * 3,
+                    usage: vk::BufferUsageFlags::INDEX_BUFFER,
+                    storage_type: BufferStorageType::HostLocal,
+                };
 
-        let ui_index_buffer = {
-            let buffer_create_info = BufferCreateInfo {
-                size: size_of::<Index>() * MAX_QUADS as usize * 3,
-                usage: vk::BufferUsageFlags::INDEX_BUFFER,
-                storage_type: BufferStorageType::HostLocal,
+                [
+                    device.resource_manager.create_buffer(&buffer_create_info),
+                    device.resource_manager.create_buffer(&buffer_create_info),
+                ]
             };
 
-            [
-                device.resource_manager.create_buffer(&buffer_create_info),
-                device.resource_manager.create_buffer(&buffer_create_info),
-            ]
-        };
+            let uniform_buffer = {
+                let buffer_create_info = BufferCreateInfo {
+                    size: size_of::<UIUniformData>(),
+                    usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    storage_type: BufferStorageType::HostLocal,
+                };
 
-        let ui_uniform_data = {
-            let buffer_create_info = BufferCreateInfo {
-                size: size_of::<UIUniformData>(),
-                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-                storage_type: BufferStorageType::HostLocal,
+                [
+                    device.resource_manager.create_buffer(&buffer_create_info),
+                    device.resource_manager.create_buffer(&buffer_create_info),
+                ]
             };
 
-            [
-                device.resource_manager.create_buffer(&buffer_create_info),
-                device.resource_manager.create_buffer(&buffer_create_info),
-            ]
-        };
+            let (desc_set, ui_descriptor_set_layout) = {
+                let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
+                let mut layout = None;
+                for i in 0..FRAMES_IN_FLIGHT {
+                    let (set, set_layout) = JBDescriptorBuilder::new(
+                        &device.resource_manager,
+                        &mut descriptor_layout_cache,
+                        &mut descriptor_allocator,
+                    )
+                    .bind_buffer(BufferDescriptorInfo {
+                        binding: 0,
+                        buffer: uniform_buffer[i],
+                        desc_type: vk::DescriptorType::UNIFORM_BUFFER,
+                        stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    })
+                    .bind_buffer(BufferDescriptorInfo {
+                        binding: 1,
+                        buffer: vertex_data_buffer[i],
+                        desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                        stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    })
+                    .build()
+                    .unwrap();
 
-        let (ui_descriptor_set, ui_descriptor_set_layout) = {
-            let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
-            let mut layout = None;
-            for i in 0..FRAMES_IN_FLIGHT {
-                let (set, set_layout) = JBDescriptorBuilder::new(
-                    &device.resource_manager,
-                    &mut descriptor_layout_cache,
-                    &mut descriptor_allocator,
-                )
-                .bind_buffer(BufferDescriptorInfo {
-                    binding: 0,
-                    buffer: ui_uniform_data[i],
-                    desc_type: vk::DescriptorType::UNIFORM_BUFFER,
-                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                })
-                .bind_buffer(BufferDescriptorInfo {
-                    binding: 1,
-                    buffer: quad_buffer[i],
-                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
-                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                })
-                .build()
-                .unwrap();
+                    sets[i] = set;
+                    layout = Some(set_layout);
+                }
+                (sets, layout.unwrap())
+            };
 
-                sets[i] = set;
-                layout = Some(set_layout);
+            let (ui_pso, ui_pso_layout) = {
+                let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                    &[
+                        device.bindless_descriptor_set_layout(),
+                        ui_descriptor_set_layout,
+                    ],
+                    &[],
+                )?;
+
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(false)
+                    .depth_write_enable(false)
+                    .depth_compare_op(vk::CompareOp::ALWAYS)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
+
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/ui.vert".to_string(),
+                    fragment_shader: "assets/shaders/ui.frag".to_string(),
+                    vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                    color_attachment_formats: vec![PipelineColorAttachment {
+                        format: swapchain_image_format,
+                        blend: true,
+                        src_blend_factor_color: vk::BlendFactor::ONE,
+                        dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                    }],
+                    depth_attachment_format: Some(depth_image_format),
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::NONE,
+                };
+
+                let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
+                (pso, pso_layout)
+            };
+
+            UiPass {
+                pso_layout: ui_pso_layout,
+                pso: ui_pso,
+                desc_set,
+                vertex_data_buffer,
+                index_buffer,
+                uniform_buffer,
             }
-            (sets, layout.unwrap())
-        };
-
-        let (ui_pso, ui_pso_layout) = {
-            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
-                &[
-                    device.bindless_descriptor_set_layout(),
-                    ui_descriptor_set_layout,
-                ],
-                &[],
-            )?;
-
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(false)
-                .depth_write_enable(false)
-                .depth_compare_op(vk::CompareOp::ALWAYS)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
-
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/ui.vert".to_string(),
-                fragment_shader: "assets/shaders/ui.frag".to_string(),
-                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
-                color_attachment_formats: vec![PipelineColorAttachment {
-                    format: swapchain_image_format,
-                    blend: true,
-                    src_blend_factor_color: vk::BlendFactor::ONE,
-                    dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                }],
-                depth_attachment_format: Some(depth_image_format),
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::NONE,
-            };
-
-            let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
-            (pso, pso_layout)
         };
 
         let world_debug_draw_data = {
@@ -842,13 +848,8 @@ impl Renderer {
             stored_lights: SlotMap::default(),
             shadow_pso,
             sun,
-            ui_pso,
-            ui_pso_layout,
-            ui_descriptor_set,
-            quad_buffer,
-            ui_index_buffer,
+            ui_pass,
             ui_to_draw: Vec::new(),
-            ui_uniform_data,
             depth_image,
             directional_light_shadow_image,
             render_targets,
@@ -1077,7 +1078,7 @@ impl Renderer {
             };
             self.device
                 .resource_manager
-                .get_buffer(self.ui_uniform_data[resource_index])
+                .get_buffer(self.ui_pass.uniform_buffer[resource_index])
                 .unwrap()
                 .view()
                 .mapped_slice()?
@@ -1111,7 +1112,7 @@ impl Renderer {
 
                 self.device
                     .resource_manager
-                    .get_buffer(self.quad_buffer[resource_index])
+                    .get_buffer(self.ui_pass.vertex_data_buffer[resource_index])
                     .unwrap()
                     .view_custom(vertex_offset, verts.len())?
                     .mapped_slice()?
@@ -1119,7 +1120,7 @@ impl Renderer {
 
                 self.device
                     .resource_manager
-                    .get_buffer(self.ui_index_buffer[resource_index])
+                    .get_buffer(self.ui_pass.index_buffer[resource_index])
                     .unwrap()
                     .view_custom(index_offset, element.indices.len())?
                     .mapped_slice()?
@@ -1920,7 +1921,7 @@ impl Renderer {
                             };
                         }
 
-                        let pipeline = self.pipeline_manager.get_pipeline(self.ui_pso);
+                        let pipeline = self.pipeline_manager.get_pipeline(self.ui_pass.pso);
 
                         unsafe {
                             self.device.vk_device.cmd_bind_pipeline(
@@ -1931,11 +1932,11 @@ impl Renderer {
                             self.device.vk_device.cmd_bind_descriptor_sets(
                                 self.device.graphics_command_buffer(),
                                 vk::PipelineBindPoint::GRAPHICS,
-                                self.ui_pso_layout,
+                                self.ui_pass.pso_layout,
                                 0u32,
                                 &[
                                     self.device.bindless_descriptor_set(),
-                                    self.ui_descriptor_set[resource_index],
+                                    self.ui_pass.desc_set[resource_index],
                                 ],
                                 &[],
                             );
@@ -1944,7 +1945,7 @@ impl Renderer {
                         let index_buffer = self
                             .device
                             .resource_manager
-                            .get_buffer(self.ui_index_buffer[resource_index])
+                            .get_buffer(self.ui_pass.index_buffer[resource_index])
                             .unwrap();
 
                         unsafe {
@@ -2608,4 +2609,13 @@ struct DeferredPass {
 struct DeferredLightingCombinePass {
     pso: PipelineHandle,
     pso_layout: vk::PipelineLayout,
+}
+
+struct UiPass {
+    pso_layout: vk::PipelineLayout,
+    pso: PipelineHandle,
+    desc_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    vertex_data_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    index_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    uniform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
 }
