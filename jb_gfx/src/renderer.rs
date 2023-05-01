@@ -102,12 +102,8 @@ pub struct Renderer {
     vertex_buffer_offset: usize,
     index_buffer: BufferHandle,
     index_buffer_offset: usize,
-    deferred_positions: RenderTargetHandle,
-    deferred_normals: RenderTargetHandle,
-    deferred_color_specs: RenderTargetHandle,
-    deferred_pso: PipelineHandle,
-    deferred_lighting_pso: PipelineHandle,
-    deferred_lighting_pso_layout: vk::PipelineLayout,
+    deferred_fill: DeferredPass,
+    deferred_lighting_combine: DeferredLightingCombinePass,
 }
 
 impl Renderer {
@@ -687,83 +683,101 @@ impl Renderer {
             device.resource_manager.create_buffer(&buffer_create_info)
         };
 
-        let deferred_positions = render_targets.create_render_target(
-            DEFERRED_POSITION_FORMAT,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
-        let deferred_normals = render_targets.create_render_target(
-            DEFERRED_NORMAL_FORMAT,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
-        let deferred_color_specs = render_targets.create_render_target(
-            DEFERRED_COLOR_FORMAT,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
+        let deferred_fill = {
+            let positions = render_targets.create_render_target(
+                DEFERRED_POSITION_FORMAT,
+                RenderTargetSize::Fullscreen,
+                RenderImageType::Colour,
+            )?;
+            let normals = render_targets.create_render_target(
+                DEFERRED_NORMAL_FORMAT,
+                RenderTargetSize::Fullscreen,
+                RenderImageType::Colour,
+            )?;
+            let color_specs = render_targets.create_render_target(
+                DEFERRED_COLOR_FORMAT,
+                RenderTargetSize::Fullscreen,
+                RenderImageType::Colour,
+            )?;
 
-        let deferred_pso = {
-            let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
-                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
-                .depth_bounds_test_enable(false)
-                .stencil_test_enable(false)
-                .min_depth_bounds(0.0f32)
-                .max_depth_bounds(1.0f32);
-
-            let pso_build_info = PipelineCreateInfo {
-                pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/default.vert".to_string(),
-                fragment_shader: "assets/shaders/deferred.frag".to_string(),
-                vertex_input_state: Vertex::get_vertex_input_desc(),
-                color_attachment_formats: vec![
-                    PipelineColorAttachment {
-                        format: DEFERRED_POSITION_FORMAT,
-                        blend: false,
-                        ..Default::default()
-                    },
-                    PipelineColorAttachment {
-                        format: DEFERRED_NORMAL_FORMAT,
-                        blend: false,
-                        ..Default::default()
-                    },
-                    PipelineColorAttachment {
-                        format: DEFERRED_COLOR_FORMAT,
-                        blend: false,
-                        ..Default::default()
-                    },
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                &[
+                    device.bindless_descriptor_set_layout(),
+                    descriptor_set_layout,
                 ],
-                depth_attachment_format: Some(depth_image_format),
-                depth_stencil_state: *depth_stencil_state,
-                cull_mode: vk::CullModeFlags::FRONT,
+                &[],
+            )?;
+
+            let pso = {
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(true)
+                    .depth_write_enable(true)
+                    .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
+
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/default.vert".to_string(),
+                    fragment_shader: "assets/shaders/deferred.frag".to_string(),
+                    vertex_input_state: Vertex::get_vertex_input_desc(),
+                    color_attachment_formats: vec![
+                        PipelineColorAttachment {
+                            format: DEFERRED_POSITION_FORMAT,
+                            blend: false,
+                            ..Default::default()
+                        },
+                        PipelineColorAttachment {
+                            format: DEFERRED_NORMAL_FORMAT,
+                            blend: false,
+                            ..Default::default()
+                        },
+                        PipelineColorAttachment {
+                            format: DEFERRED_COLOR_FORMAT,
+                            blend: false,
+                            ..Default::default()
+                        },
+                    ],
+                    depth_attachment_format: Some(depth_image_format),
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::FRONT,
+                };
+
+                pipeline_manager.create_pipeline(&pso_build_info)?
             };
 
-            pipeline_manager.create_pipeline(&pso_build_info)?
+            DeferredPass {
+                positions,
+                normals,
+                color_specs,
+                pso,
+                pso_layout,
+            }
         };
 
-        let deferred_lighting_desc_layout =
-            DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
-                .bind_image(
-                    0,
-                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                    vk::ShaderStageFlags::FRAGMENT,
-                )
-                .bind_image(
-                    1,
-                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                    vk::ShaderStageFlags::FRAGMENT,
-                )
-                .bind_image(
-                    2,
-                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                    vk::ShaderStageFlags::FRAGMENT,
-                )
-                .build()
-                .unwrap();
+        let deferred_lighting_combine = {
+            let deferred_lighting_desc_layout =
+                DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
+                    .bind_image(
+                        0,
+                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_image(
+                        1,
+                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .bind_image(
+                        2,
+                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        vk::ShaderStageFlags::FRAGMENT,
+                    )
+                    .build()
+                    .unwrap();
 
-        let (deferred_lighting_pso, deferred_lighting_pso_layout) = {
             let pso_layout = pipeline_layout_cache.create_pipeline_layout(
                 &[
                     device.bindless_descriptor_set_layout(),
@@ -805,7 +819,8 @@ impl Renderer {
             };
 
             let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
-            (pso, pso_layout)
+
+            DeferredLightingCombinePass { pso, pso_layout }
         };
 
         info!("Renderer Created");
@@ -860,12 +875,8 @@ impl Renderer {
             vertex_buffer_offset: 0usize,
             index_buffer,
             index_buffer_offset: 0usize,
-            deferred_positions,
-            deferred_normals,
-            deferred_color_specs,
-            deferred_pso,
-            deferred_lighting_pso,
-            deferred_lighting_pso_layout,
+            deferred_fill,
+            deferred_lighting_combine,
         });
         result
     }
@@ -929,9 +940,15 @@ impl Renderer {
             self.render_targets.get(self.bloom_image[1]).unwrap(),
         ];
 
-        let deferred_positions = self.render_targets.get(self.deferred_positions).unwrap();
-        let deferred_normals = self.render_targets.get(self.deferred_normals).unwrap();
-        let deferred_color_specs = self.render_targets.get(self.deferred_color_specs).unwrap();
+        let deferred_positions = self
+            .render_targets
+            .get(self.deferred_fill.positions)
+            .unwrap();
+        let deferred_normals = self.render_targets.get(self.deferred_fill.normals).unwrap();
+        let deferred_color_specs = self
+            .render_targets
+            .get(self.deferred_fill.color_specs)
+            .unwrap();
 
         // Copy gpu data
         {
@@ -1264,7 +1281,7 @@ impl Renderer {
                     &self.device.graphics_command_buffer(),
                     |_render_pass| {
                         profiling::scope!("Deferred Pass");
-                        let pipeline = self.pipeline_manager.get_pipeline(self.deferred_pso);
+                        let pipeline = self.pipeline_manager.get_pipeline(self.deferred_fill.pso);
 
                         unsafe {
                             self.device.vk_device.cmd_bind_pipeline(
@@ -1275,7 +1292,7 @@ impl Renderer {
                             self.device.vk_device.cmd_bind_descriptor_sets(
                                 self.device.graphics_command_buffer(),
                                 vk::PipelineBindPoint::GRAPHICS,
-                                self.pso_layout,
+                                self.deferred_fill.pso_layout,
                                 0u32,
                                 &[
                                     self.device.bindless_descriptor_set(),
@@ -1397,7 +1414,7 @@ impl Renderer {
 
                         let pipeline = self
                             .pipeline_manager
-                            .get_pipeline(self.deferred_lighting_pso);
+                            .get_pipeline(self.deferred_lighting_combine.pso);
 
                         unsafe {
                             self.device.vk_device.cmd_bind_pipeline(
@@ -1408,7 +1425,7 @@ impl Renderer {
                             self.device.vk_device.cmd_bind_descriptor_sets(
                                 self.device.graphics_command_buffer(),
                                 vk::PipelineBindPoint::GRAPHICS,
-                                self.deferred_lighting_pso_layout,
+                                self.deferred_lighting_combine.pso_layout,
                                 0u32,
                                 &[
                                     self.device.bindless_descriptor_set(),
@@ -2578,4 +2595,17 @@ pub struct TimeStamp {
     pub combine_pass: f64,
     pub ui_pass: f64,
     pub total: f64,
+}
+
+struct DeferredPass {
+    positions: RenderTargetHandle,
+    normals: RenderTargetHandle,
+    color_specs: RenderTargetHandle,
+    pso: PipelineHandle,
+    pso_layout: vk::PipelineLayout,
+}
+
+struct DeferredLightingCombinePass {
+    pso: PipelineHandle,
+    pso_layout: vk::PipelineLayout,
 }
