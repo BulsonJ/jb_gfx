@@ -12,8 +12,8 @@ layout (location = 3) in vec3 inWorldPos;
 layout (location = 4) in mat3 inTBN;
 layout (location = 7) in vec4 inShadowCoord;
 
-layout (location = 0) out vec3 gPosition;
-layout (location = 1) out vec3 gNormal;
+layout (location = 0) out vec4 gPosition;
+layout (location = 1) out vec4 gNormal;
 layout (location = 2) out vec4 gAlbedoSpec;
 
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
@@ -77,8 +77,8 @@ void main()
         normal = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
     }
 
-    gPosition = inWorldPos;
-    gNormal = normalize(normal);
+    gPosition = vec4(inWorldPos, 1.0f);
+    gNormal = vec4(normal, 1.0f);
     gAlbedoSpec.rgb = objectColour;
     gAlbedoSpec.a = 1.0;
 }
