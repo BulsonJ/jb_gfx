@@ -436,8 +436,8 @@ impl Renderer {
 
                 let pso_build_info = PipelineCreateInfo {
                     pipeline_layout: pso_layout,
-                    vertex_shader: "assets/shaders/default.vert".to_string(),
-                    fragment_shader: "assets/shaders/default.frag".to_string(),
+                    vertex_shader: "assets/shaders/forward.vert".to_string(),
+                    fragment_shader: "assets/shaders/forward.frag".to_string(),
                     vertex_input_state: Vertex::get_vertex_input_desc(),
                     color_attachment_formats: vec![
                         PipelineColorAttachment {
@@ -583,8 +583,8 @@ impl Renderer {
 
                 let pso_build_info = PipelineCreateInfo {
                     pipeline_layout: pso_layout,
-                    vertex_shader: "assets/shaders/ui.vert".to_string(),
-                    fragment_shader: "assets/shaders/ui.frag".to_string(),
+                    vertex_shader: "assets/shaders/ui/ui.vert".to_string(),
+                    fragment_shader: "assets/shaders/ui/ui.frag".to_string(),
                     vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                     color_attachment_formats: vec![PipelineColorAttachment {
                         format: swapchain_image_format,
@@ -674,8 +674,8 @@ impl Renderer {
 
             let pso_build_info = PipelineCreateInfo {
                 pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/diagetic_ui.vert".to_string(),
-                fragment_shader: "assets/shaders/diagetic_ui.frag".to_string(),
+                vertex_shader: "assets/shaders/ui/diagetic_ui.vert".to_string(),
+                fragment_shader: "assets/shaders/ui/diagetic_ui.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
                     format: swapchain_image_format,
@@ -749,7 +749,7 @@ impl Renderer {
 
                 let pso_build_info = PipelineCreateInfo {
                     pipeline_layout: pso_layout,
-                    vertex_shader: "assets/shaders/default.vert".to_string(),
+                    vertex_shader: "assets/shaders/forward.vert".to_string(),
                     fragment_shader: "assets/shaders/deferred.frag".to_string(),
                     vertex_input_state: Vertex::get_vertex_input_desc(),
                     color_attachment_formats: vec![
