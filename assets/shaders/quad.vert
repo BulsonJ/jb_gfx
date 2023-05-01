@@ -4,8 +4,6 @@
 
 layout (location = 0) out vec2 outTexCoords;
 
-layout (set = 0, binding = 0) uniform sampler2D bloomImage;
-
 void main()
 {
 	const vec2 positions[] = vec2[](
@@ -27,7 +25,6 @@ void main()
 	);
 
 	int vertexIndex = gl_VertexIndex % 6;
-
 	outTexCoords = texCoords[vertexIndex];
 	gl_Position = vec4(positions[vertexIndex], 0.0f, 1.0f);
 }

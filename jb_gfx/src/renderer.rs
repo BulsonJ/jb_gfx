@@ -186,7 +186,7 @@ impl Renderer {
 
                 let pso_build_info = PipelineCreateInfo {
                     pipeline_layout: pso_layout,
-                    vertex_shader: "assets/shaders/blur.vert".to_string(),
+                    vertex_shader: "assets/shaders/quad.vert".to_string(),
                     fragment_shader: "assets/shaders/blur.frag".to_string(),
                     vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                     color_attachment_formats: vec![PipelineColorAttachment {
@@ -239,7 +239,7 @@ impl Renderer {
 
             let pso_build_info = PipelineCreateInfo {
                 pipeline_layout: pso_layout,
-                vertex_shader: "assets/shaders/blur.vert".to_string(),
+                vertex_shader: "assets/shaders/quad.vert".to_string(),
                 fragment_shader: "assets/shaders/combine.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
