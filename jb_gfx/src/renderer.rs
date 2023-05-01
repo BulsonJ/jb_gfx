@@ -22,6 +22,7 @@ use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
     UIVertexData, WorldDebugUIDrawData,
 };
+use crate::mesh::Index;
 use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
@@ -42,7 +43,7 @@ use crate::{
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
-const MAX_VERTS: u64 = 1000000u64;
+const LARGE_BUFFER_SIZE: u32 = 16000000; // 128mb
 
 /// The renderer for the GameEngine.
 /// Used to draw objects using the GPU.
@@ -486,7 +487,7 @@ impl Renderer {
 
         let ui_index_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<u32>() * MAX_QUADS as usize * 3,
+                size: size_of::<Index>() * MAX_QUADS as usize * 3,
                 usage: vk::BufferUsageFlags::INDEX_BUFFER,
                 storage_type: BufferStorageType::HostLocal,
             };
@@ -661,7 +662,7 @@ impl Renderer {
 
         let vertex_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<Vertex>() * MAX_VERTS as usize,
+                size: LARGE_BUFFER_SIZE as usize,
                 usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
                 storage_type: BufferStorageType::Device,
             };
@@ -671,7 +672,7 @@ impl Renderer {
 
         let index_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<Vertex>() * MAX_VERTS as usize,
+                size: LARGE_BUFFER_SIZE as usize,
                 usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
                 storage_type: BufferStorageType::Device,
             };
@@ -1833,7 +1834,9 @@ impl Renderer {
             let offset = self.vertex_buffer_offset;
             let buffer_offset = size_of::<Vertex>() * offset;
 
-            assert!(offset + mesh.vertices.len() <= MAX_VERTS as usize);
+            assert!(
+                size_of::<Vertex>() * (offset + mesh.vertices.len()) <= LARGE_BUFFER_SIZE as usize
+            );
 
             self.device.immediate_submit(|device, cmd| {
                 cmd_copy_buffer(
@@ -1866,7 +1869,7 @@ impl Renderer {
             }
             Some(indices) => {
                 let index_buffer_offset = {
-                    let buffer_size = size_of::<u32>() * indices.len();
+                    let buffer_size = size_of::<Index>() * indices.len();
                     let staging_buffer_create_info = BufferCreateInfo {
                         size: buffer_size,
                         usage: vk::BufferUsageFlags::TRANSFER_SRC,
@@ -1887,9 +1890,11 @@ impl Renderer {
                         .copy_from_slice(indices.as_slice());
 
                     let offset = self.index_buffer_offset;
-                    let buffer_offset = size_of::<u32>() * offset;
+                    let buffer_offset = size_of::<Index>() * offset;
 
-                    assert!(offset + indices.len() <= MAX_VERTS as usize);
+                    assert!(
+                        size_of::<Index>() * (offset + indices.len()) <= LARGE_BUFFER_SIZE as usize
+                    );
 
                     self.device.immediate_submit(|device, cmd| {
                         cmd_copy_buffer(

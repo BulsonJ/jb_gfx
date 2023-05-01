@@ -10,7 +10,7 @@ pub struct Vertex {
 
 pub struct MeshData {
     pub vertices: Vec<Vertex>,
-    pub indices: Option<Vec<u32>>,
+    pub indices: Option<Vec<Index>>,
     pub faces: Vec<Face>,
 }
 
@@ -21,6 +21,7 @@ impl MeshData {
 }
 
 pub type Face = [u32; 3];
+pub type Index = u32;
 
 fn vertex(mesh: &MeshData, face: usize, vert: usize) -> &Vertex {
     let vs: &[u32; 3] = &mesh.faces[face];
