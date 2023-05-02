@@ -704,12 +704,17 @@ impl Renderer {
                 RenderImageType::Colour,
             )?;
 
+            let push_constant_range = *vk::PushConstantRange::builder()
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+                .size(size_of::<PushConstants>() as u32)
+                .offset(0u32);
+
             let pso_layout = pipeline_layout_cache.create_pipeline_layout(
                 &[
                     device.bindless_descriptor_set_layout(),
                     descriptor_set_layout,
                 ],
-                &[],
+                &[push_constant_range],
             )?;
 
             let pso = {
@@ -2112,7 +2117,7 @@ impl Renderer {
             unsafe {
                 self.device.vk_device.cmd_push_constants(
                     self.device.graphics_command_buffer(),
-                    self.forward.pso_layout,
+                    self.deferred_fill.pso_layout,
                     vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     0u32,
                     bytemuck::cast_slice(&[push_constants]),
