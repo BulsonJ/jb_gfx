@@ -1,4 +1,4 @@
-pub use crate::camera::Camera;
+pub use crate::camera::CameraTrait;
 pub use crate::colour::Colour;
 pub use crate::core::device::{GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE};
 pub use crate::light::DirectionalLight;

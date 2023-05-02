@@ -36,7 +36,7 @@ use crate::util::descriptor::{
 use crate::util::meshpool::MeshPool;
 use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
-    Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, MeshHandle,
+    CameraTrait, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, MeshHandle,
     Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 
@@ -2316,7 +2316,7 @@ impl Renderer {
         Err(anyhow!("No light exists"))
     }
 
-    pub fn set_camera<T: Camera>(&mut self, camera: &T) {
+    pub fn set_camera<T: CameraTrait>(&mut self, camera: &T) {
         self.camera_uniform.update_proj(camera);
     }
 

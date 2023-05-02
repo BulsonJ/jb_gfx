@@ -2,5 +2,6 @@
 
 members = [
     "jb_gfx",
+    "engine",
     "game"
 ]

@@ -1,7 +1,7 @@
 use cgmath::{EuclideanSpace, InnerSpace, Matrix4, Point3, SquareMatrix, Vector3, Vector4, Zero};
 
 use crate::light::Light;
-use crate::{Camera, DirectionalLight};
+use crate::{CameraTrait, DirectionalLight};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -52,7 +52,7 @@ impl CameraUniform {
         }
     }
 
-    pub fn update_proj<T: Camera>(&mut self, camera: &T) {
+    pub fn update_proj<T: CameraTrait>(&mut self, camera: &T) {
         self.proj = camera.build_projection_matrix().into();
         self.view = camera.build_view_matrix().into();
         self.position = camera.position().to_vec().extend(0f32).into();
