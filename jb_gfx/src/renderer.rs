@@ -1333,6 +1333,11 @@ impl Renderer {
                     },
                 )?;
         }
+        let deferred_fill_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
+
         // Deferred Lighting Pass
         {
             let (render_target_set, _) = JBDescriptorBuilder::new(
@@ -1501,6 +1506,10 @@ impl Renderer {
             })
             .build(&self.device, &self.device.graphics_command_buffer())?;
 
+        let deferred_lighting_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
         // Normal Pass
         //{
         //    let clear_colour: Vector3<f32> = self.clear_colour.into();
@@ -2032,7 +2041,19 @@ impl Renderer {
         }
         if let Some(time) = self
             .device
-            .get_timestamp_result(shadow_pass_end, forward_pass_end)
+            .get_timestamp_result(shadow_pass_end, deferred_fill_end)
+        {
+            self.timestamps.deferred_fill_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(deferred_fill_end, deferred_lighting_end)
+        {
+            self.timestamps.deferred_lighting_pass = time;
+        }
+        if let Some(time) = self
+            .device
+            .get_timestamp_result(deferred_lighting_end, forward_pass_end)
         {
             self.timestamps.forward_pass = time;
         }
@@ -2616,6 +2637,8 @@ struct UIDrawCall {
 #[derive(Default, Copy, Clone)]
 pub struct TimeStamp {
     pub shadow_pass: f64,
+    pub deferred_fill_pass: f64,
+    pub deferred_lighting_pass: f64,
     pub forward_pass: f64,
     pub bloom_pass: f64,
     pub combine_pass: f64,

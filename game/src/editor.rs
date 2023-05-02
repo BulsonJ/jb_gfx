@@ -173,6 +173,14 @@ impl Editor {
             ui.label(format!("{:.6}", timestamps.shadow_pass.to_string()));
         });
         ui.horizontal(|ui| {
+            ui.label("Deferred GBuffer:");
+            ui.label(format!("{:.6}", timestamps.deferred_fill_pass.to_string()));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Deferred Lighting:");
+            ui.label(format!("{:.6}", timestamps.deferred_lighting_pass.to_string()));
+        });
+        ui.horizontal(|ui| {
             ui.label("Forward Pass:");
             ui.label(format!("{:.6}", timestamps.forward_pass.to_string()));
         });
