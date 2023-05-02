@@ -5,12 +5,13 @@ use std::hash::{Hash, Hasher};
 use std::ops::BitOr;
 use std::sync::Arc;
 
-use crate::GraphicsDevice;
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{DescriptorSetLayout, Handle, ObjectType, PushConstantRange};
 use log::{error, info, trace};
 use slotmap::{new_key_type, SlotMap};
+
+use crate::GraphicsDevice;
 
 pub(crate) struct PipelineManager {
     device: Arc<GraphicsDevice>,

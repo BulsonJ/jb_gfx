@@ -17,7 +17,6 @@ use slotmap::{new_key_type, SlotMap};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::camera::DefaultCamera;
-use crate::core::device::cmd_copy_buffer;
 use crate::gpu_structs::{
     CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
     UIVertexData, WorldDebugUIDrawData,
@@ -34,9 +33,12 @@ use crate::util::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
     ImageDescriptorInfo, JBDescriptorBuilder,
 };
-use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
-use crate::{Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE, MeshHandle};
 use crate::util::meshpool::MeshPool;
+use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
+use crate::{
+    Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, MeshHandle,
+    Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
+};
 
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
@@ -684,8 +686,6 @@ impl Renderer {
             let pso = pipeline_manager.create_pipeline(&pso_build_info)?;
             (pso, pso_layout)
         };
-
-
 
         let deferred_fill = {
             let positions = render_targets.create_render_target(

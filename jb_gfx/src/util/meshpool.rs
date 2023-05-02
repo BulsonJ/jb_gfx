@@ -1,13 +1,15 @@
-use crate::core::device::cmd_copy_buffer;
-use crate::mesh::Index;
-use crate::resource::{BufferCreateInfo, BufferStorageType};
-use crate::{BufferHandle, GraphicsDevice, MeshData, Vertex};
+use std::mem::size_of;
+use std::sync::Arc;
+
 use anyhow::Result;
 use ash::vk;
 use log::trace;
 use slotmap::{new_key_type, SlotMap};
-use std::mem::size_of;
-use std::sync::Arc;
+
+use crate::core::device::cmd_copy_buffer;
+use crate::mesh::Index;
+use crate::resource::{BufferCreateInfo, BufferStorageType};
+use crate::{BufferHandle, GraphicsDevice, MeshData, Vertex};
 
 const LARGE_BUFFER_SIZE: u32 = 16000000; // 128mb
 
