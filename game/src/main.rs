@@ -11,9 +11,8 @@ use winit::window::{Window, WindowBuilder};
 
 use jb_gfx::prelude::*;
 use engine::prelude::*;
-use game::{Camera, DirectionCamera, LookAtCamera};
+use game::{Camera, debug_ui};
 use game::components::{CameraComponent, LightComponent};
-use game::editor::{Editor, EditorDependencies};
 use game::egui_context::EguiContext;
 use game::input::Input;
 
@@ -26,9 +25,9 @@ struct EditorProject {
     lights: Vec<LightComponent>,
     cameras: Vec<CameraComponent>,
     egui: EguiContext,
-    editor: Editor,
     audio_manager: AudioManager,
     background_music: StaticSoundData,
+    draw_debug_ui: bool,
 }
 
 impl EditorProject {
@@ -118,51 +117,48 @@ impl EditorProject {
                 .unwrap();
 
         let egui = EguiContext::new(event_loop);
-        let editor = Editor::new();
+        let draw_ui = true;
 
         Self {
             egui,
-            editor,
             lights,
             cameras,
             audio_manager,
             background_music,
+            draw_debug_ui: draw_ui,
         }
     }
 
     fn update(&mut self, ctx: &mut Application) {
+        if ctx.input.is_just_pressed(VirtualKeyCode::F1) {
+            self.draw_debug_ui = !self.draw_debug_ui
+        }
+
         for (i, component) in self.lights.iter_mut().enumerate() {
             let position = 10f32 + ((i as f32 + 3f32 * ctx.time_passed).sin() * 5f32);
             component.light.position.x = position;
         }
+
         // Update render objects & then render
         update_renderer_object_states(&mut ctx.renderer, &self.lights);
-        let camera = &self.cameras[self.editor.camera_panel().selected_camera_index()];
-        match &camera.camera {
-            Camera::Directional(camera) => {
-                ctx.renderer.set_camera(camera);
-            }
-            Camera::LookAt(camera) => {
-                ctx.renderer.set_camera(camera);
-            }
-        }
+        let camera = &self.cameras[0];
+        ctx.renderer.set_camera(&camera.camera);
     }
 
-    fn draw(&mut self, app: &mut Application) {
-        self.egui.run(&app.window, |ctx| {
-            self.editor.run(
-                ctx,
-                &mut EditorDependencies {
-                    input: &app.input,
-                    renderer: &mut app.renderer,
-                    audio_manager: &mut self.audio_manager,
-                    background_music: &mut self.background_music,
-                    cameras: &mut self.cameras,
-                    lights: &mut self.lights,
-                },
-            )
-        });
-        self.egui.paint(&mut app.renderer);
+    fn draw_ui(&mut self, app: &mut Application) {
+        if self.draw_debug_ui {
+            self.egui.run(&app.window, |ctx| {
+                egui::Window::new("Timings")
+                    .vscroll(false)
+                    .resizable(false)
+                    .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 30.0))
+                    .show(ctx, |ui| {
+                        let timestamps = app.renderer.timestamps();
+                        debug_ui::draw_timestamps(ui, timestamps);
+                    });
+            });
+            self.egui.paint(&mut app.renderer);
+        }
     }
 
     fn on_window_event(&mut self, event: &WindowEvent) -> EventResponse {
@@ -227,38 +223,15 @@ fn setup_scene(
 
     let cameras = vec![
         {
-            let camera = Camera::LookAt(LookAtCamera {
-                position: (-8.0, 0.0, 0.0).into(),
-                target: (1.0, 0.0, 0.0).into(),
-                aspect: screen_size.0 as f32 / screen_size.1 as f32,
-                fovy: 90.0,
-                znear: 0.1,
-                zfar: 4000.0,
-            });
-            CameraComponent { camera }
-        },
-        {
-            let camera = Camera::Directional(DirectionCamera {
+            let camera = Camera {
                 position: (-50.0, 0.0, 20.0).into(),
                 direction: (1.0, 0.25, -0.5).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
                 znear: 0.1,
                 zfar: 4000.0,
-            });
+            };
             CameraComponent { camera }
-        },
-        {
-            CameraComponent {
-                camera: Camera::Directional(DirectionCamera {
-                    position: (-75.0, 100.0, 20.0).into(),
-                    direction: (1.0, -0.75, -0.5).into(),
-                    aspect: screen_size.0 as f32 / screen_size.1 as f32,
-                    fovy: 90.0,
-                    znear: 0.1,
-                    zfar: 4000.0,
-                }),
-            }
         },
     ];
 
@@ -336,6 +309,7 @@ pub fn run() {
     builder.init();
 
     let mut app = Application::new(screen_width, screen_height, &event_loop);
+    app.renderer.draw_debug_ui = false;
 
     let mut project = EditorProject::new(&mut app, &event_loop);
 
@@ -357,7 +331,7 @@ pub fn run() {
                         project.update(&mut app);
                     }
 
-                    project.draw(&mut app);
+                    project.draw_ui(&mut app);
 
                     app.renderer.render().unwrap();
                 }
