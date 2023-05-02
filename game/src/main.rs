@@ -158,7 +158,7 @@ impl EditorProject {
                 egui::Window::new("Timings")
                     .vscroll(false)
                     .resizable(false)
-                    .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 30.0))
+                    .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 10.0))
                     .show(ctx, |ui| {
                         let timestamps = app.renderer.timestamps();
                         debug_ui::draw_timestamps(ui, timestamps);
@@ -231,8 +231,8 @@ fn setup_scene(
     let cameras = vec![
         {
             let camera = Camera {
-                position: (-50.0, 0.0, 20.0).into(),
-                direction: (1.0, 0.25, -0.5).into(),
+                position: (-8.0, 0.0, 0.0).into(),
+                direction: (1.0, 0.0, 0.0).into(),
                 aspect: screen_size.0 as f32 / screen_size.1 as f32,
                 fovy: 90.0,
                 znear: 0.1,
