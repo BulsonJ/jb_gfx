@@ -178,7 +178,10 @@ impl Editor {
         });
         ui.horizontal(|ui| {
             ui.label("Deferred Lighting:");
-            ui.label(format!("{:.6}", timestamps.deferred_lighting_pass.to_string()));
+            ui.label(format!(
+                "{:.6}",
+                timestamps.deferred_lighting_pass.to_string()
+            ));
         });
         ui.horizontal(|ui| {
             ui.label("Forward Pass:");

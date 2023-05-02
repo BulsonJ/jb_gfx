@@ -4,8 +4,9 @@ pub use crate::core::device::{GraphicsDevice, ImageFormatType, FRAMES_IN_FLIGHT,
 pub use crate::light::DirectionalLight;
 pub use crate::light::Light;
 pub use crate::mesh::{Face, MeshData, Vertex};
-pub use crate::renderer::{LightHandle, MaterialInstance, MeshHandle, Renderer, UIMesh, UIVertex};
+pub use crate::renderer::{LightHandle, MaterialInstance, Renderer, UIMesh, UIVertex};
 pub use crate::renderpass::builder::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 pub use crate::renderpass::RenderPass;
 pub use crate::resource::{BufferHandle, ImageHandle};
 pub use crate::util::bindless::BindlessManager;
+pub use crate::util::meshpool::MeshHandle;

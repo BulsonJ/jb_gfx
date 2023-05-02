@@ -35,15 +35,12 @@ use crate::util::descriptor::{
     ImageDescriptorInfo, JBDescriptorBuilder,
 };
 use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
-use crate::{
-    Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, Vertex,
-    FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
-};
+use crate::{Camera, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE, MeshHandle};
+use crate::util::meshpool::MeshPool;
 
 const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
-const LARGE_BUFFER_SIZE: u32 = 16000000; // 128mb
 
 const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const DEFERRED_NORMAL_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
@@ -59,12 +56,8 @@ pub struct Renderer {
     frame_descriptor_allocator: [DescriptorAllocator; FRAMES_IN_FLIGHT],
     pipeline_layout_cache: PipelineLayoutCache,
     pipeline_manager: PipelineManager,
+    mesh_pool: MeshPool,
     timestamps: TimeStamp,
-
-    vertex_buffer: BufferHandle,
-    vertex_buffer_offset: usize,
-    index_buffer: BufferHandle,
-    index_buffer_offset: usize,
 
     shadow_pso: PipelineHandle,
     directional_light_shadow_image: RenderTargetHandle,
@@ -83,7 +76,6 @@ pub struct Renderer {
     world_debug_desc_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     world_debug_draw_data: [BufferHandle; FRAMES_IN_FLIGHT],
 
-    meshes: SlotMap<MeshHandle, RenderMesh>,
     render_models: SlotMap<RenderModelHandle, RenderModel>,
     descriptor_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
     camera_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
@@ -119,6 +111,7 @@ impl Renderer {
             DescriptorAllocator::new(device.vk_device.clone()),
         ];
         let mut pipeline_layout_cache = PipelineLayoutCache::new(device.vk_device.clone());
+        let mesh_pool = MeshPool::new(device.clone());
 
         let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
@@ -692,25 +685,7 @@ impl Renderer {
             (pso, pso_layout)
         };
 
-        let vertex_buffer = {
-            let buffer_create_info = BufferCreateInfo {
-                size: LARGE_BUFFER_SIZE as usize,
-                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-                storage_type: BufferStorageType::Device,
-            };
 
-            device.resource_manager.create_buffer(&buffer_create_info)
-        };
-
-        let index_buffer = {
-            let buffer_create_info = BufferCreateInfo {
-                size: LARGE_BUFFER_SIZE as usize,
-                usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-                storage_type: BufferStorageType::Device,
-            };
-
-            device.resource_manager.create_buffer(&buffer_create_info)
-        };
 
         let deferred_fill = {
             let positions = render_targets.create_render_target(
@@ -860,7 +835,6 @@ impl Renderer {
             descriptor_set,
             clear_colour: Colour::black(),
             pipeline_manager,
-            meshes: SlotMap::default(),
             render_models: SlotMap::default(),
             light_buffer,
             transform_buffer,
@@ -890,10 +864,7 @@ impl Renderer {
             world_debug_desc_set,
             world_debug_draw_data,
             debug_ui_size: 2.5f32,
-            vertex_buffer,
-            vertex_buffer_offset: 0usize,
-            index_buffer,
-            index_buffer_offset: 0usize,
+            mesh_pool,
             forward: forward_pass,
             deferred_fill,
             deferred_lighting_combine,
@@ -1046,7 +1017,7 @@ impl Renderer {
             let mut draw_data = Vec::new();
             for (i, model) in self.render_models.keys().enumerate() {
                 let model = self.render_models.get(model).unwrap();
-                if let Some(mesh) = self.meshes.get(model.mesh_handle) {
+                if let Some(mesh) = self.mesh_pool.get(model.mesh_handle) {
                     draw_data.push(DrawData {
                         vertex_offset: mesh.vertex_offset,
                         vertex_count: mesh.vertex_count,
@@ -2086,12 +2057,9 @@ impl Renderer {
     }
 
     fn draw_objects(&self, draws: &[DrawData]) -> Result<()> {
-        let vertex_buffer = self
-            .device
-            .resource_manager
-            .get_buffer(self.vertex_buffer)
-            .unwrap()
-            .buffer();
+        let vertex_buffer = self.mesh_pool.vertex_buffer();
+        let index_buffer = self.mesh_pool.index_buffer();
+
         unsafe {
             self.device.vk_device.cmd_bind_vertex_buffers(
                 self.device.graphics_command_buffer(),
@@ -2101,12 +2069,6 @@ impl Renderer {
             )
         };
 
-        let index_buffer = self
-            .device
-            .resource_manager
-            .get_buffer(self.index_buffer)
-            .unwrap()
-            .buffer();
         unsafe {
             self.device.vk_device.cmd_bind_index_buffer(
                 self.device.graphics_command_buffer(),
@@ -2243,123 +2205,7 @@ impl Renderer {
     }
 
     pub fn load_mesh(&mut self, mesh: &MeshData) -> Result<MeshHandle> {
-        profiling::scope!("Load Mesh");
-
-        let vertex_buffer_offset = {
-            let staging_buffer_create_info = BufferCreateInfo {
-                size: (size_of::<Vertex>() * mesh.vertices.len()),
-                usage: vk::BufferUsageFlags::TRANSFER_SRC,
-                storage_type: BufferStorageType::HostLocal,
-            };
-
-            let staging_buffer = self
-                .device
-                .resource_manager
-                .create_buffer(&staging_buffer_create_info);
-
-            self.device
-                .resource_manager
-                .get_buffer(staging_buffer)
-                .unwrap()
-                .view()
-                .mapped_slice()?
-                .copy_from_slice(mesh.vertices.as_slice());
-
-            let offset = self.vertex_buffer_offset;
-            let buffer_offset = size_of::<Vertex>() * offset;
-
-            assert!(
-                size_of::<Vertex>() * (offset + mesh.vertices.len()) <= LARGE_BUFFER_SIZE as usize
-            );
-
-            self.device.immediate_submit(|device, cmd| {
-                cmd_copy_buffer(
-                    device,
-                    cmd,
-                    staging_buffer,
-                    self.vertex_buffer,
-                    buffer_offset,
-                )?;
-                Ok(())
-            })?;
-
-            self.vertex_buffer_offset += mesh.vertices.len();
-            offset
-        };
-        match &mesh.indices {
-            None => {
-                let render_mesh = RenderMesh {
-                    vertex_offset: vertex_buffer_offset,
-                    vertex_count: mesh.vertices.len(),
-                    index_offset: 0,
-                    index_count: 0,
-                };
-                trace!(
-                    "Mesh Loaded. Vertex Count:{}|Faces:{}",
-                    mesh.vertices.len(),
-                    mesh.faces.len()
-                );
-                Ok(self.meshes.insert(render_mesh))
-            }
-            Some(indices) => {
-                let index_buffer_offset = {
-                    let buffer_size = size_of::<Index>() * indices.len();
-                    let staging_buffer_create_info = BufferCreateInfo {
-                        size: buffer_size,
-                        usage: vk::BufferUsageFlags::TRANSFER_SRC,
-                        storage_type: BufferStorageType::HostLocal,
-                    };
-
-                    let staging_buffer = self
-                        .device
-                        .resource_manager
-                        .create_buffer(&staging_buffer_create_info);
-
-                    self.device
-                        .resource_manager
-                        .get_buffer(staging_buffer)
-                        .unwrap()
-                        .view()
-                        .mapped_slice()?
-                        .copy_from_slice(indices.as_slice());
-
-                    let offset = self.index_buffer_offset;
-                    let buffer_offset = size_of::<Index>() * offset;
-
-                    assert!(
-                        size_of::<Index>() * (offset + indices.len()) <= LARGE_BUFFER_SIZE as usize
-                    );
-
-                    self.device.immediate_submit(|device, cmd| {
-                        cmd_copy_buffer(
-                            device,
-                            cmd,
-                            staging_buffer,
-                            self.index_buffer,
-                            buffer_offset,
-                        )?;
-                        Ok(())
-                    })?;
-
-                    self.index_buffer_offset += indices.len();
-
-                    offset
-                };
-                let render_mesh = RenderMesh {
-                    vertex_offset: vertex_buffer_offset,
-                    vertex_count: mesh.vertices.len(),
-                    index_offset: index_buffer_offset,
-                    index_count: indices.len(),
-                };
-                trace!(
-                    "Mesh Loaded. Vertex Count:{}|Index Count:{}|Faces:{}",
-                    mesh.vertices.len(),
-                    mesh.indices.as_ref().unwrap().len(),
-                    mesh.faces.len()
-                );
-                Ok(self.meshes.insert(render_mesh))
-            }
-        }
+        self.mesh_pool.add_mesh(mesh)
     }
 
     pub fn timestamps(&self) -> TimeStamp {
@@ -2547,15 +2393,7 @@ impl Vertex {
     }
 }
 
-new_key_type! {pub struct MeshHandle; pub struct RenderModelHandle; pub struct LightHandle; pub struct CameraHandle;}
-
-// Mesh data stored on the GPU
-struct RenderMesh {
-    vertex_offset: usize,
-    vertex_count: usize,
-    index_offset: usize,
-    index_count: usize,
-}
+new_key_type! {pub struct RenderModelHandle; pub struct LightHandle; pub struct CameraHandle;}
 
 fn from_transforms(
     position: Vector3<f32>,
