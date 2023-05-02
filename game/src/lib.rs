@@ -4,8 +4,8 @@ pub mod components;
 pub mod egui_context;
 pub mod input;
 
+pub mod app;
 pub mod camera;
 pub mod debug_ui;
-pub mod app;
 
 pub use camera::*;

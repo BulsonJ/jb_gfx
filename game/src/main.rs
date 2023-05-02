@@ -7,12 +7,12 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
-use jb_gfx::prelude::*;
 use engine::prelude::*;
-use game::{Camera, debug_ui};
 use game::app::Application;
 use game::components::{CameraComponent, LightComponent};
 use game::egui_context::EguiContext;
+use game::{debug_ui, Camera};
+use jb_gfx::prelude::*;
 
 fn main() {
     #[cfg(feature = "tracy")]
@@ -228,19 +228,17 @@ fn setup_scene(
         },
     ];
 
-    let cameras = vec![
-        {
-            let camera = Camera {
-                position: (-8.0, 0.0, 0.0).into(),
-                direction: (1.0, 0.0, 0.0).into(),
-                aspect: screen_size.0 as f32 / screen_size.1 as f32,
-                fovy: 90.0,
-                znear: 0.1,
-                zfar: 4000.0,
-            };
-            CameraComponent { camera }
-        },
-    ];
+    let cameras = vec![{
+        let camera = Camera {
+            position: (-8.0, 0.0, 0.0).into(),
+            direction: (1.0, 0.0, 0.0).into(),
+            aspect: screen_size.0 as f32 / screen_size.1 as f32,
+            fovy: 90.0,
+            znear: 0.1,
+            zfar: 4000.0,
+        };
+        CameraComponent { camera }
+    }];
 
     (light_components, cameras)
 }

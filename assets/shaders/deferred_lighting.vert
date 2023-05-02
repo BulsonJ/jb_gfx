@@ -25,7 +25,6 @@ void main()
     );
 
     int vertexIndex = gl_VertexIndex % 6;
-
     outTexCoords = texCoords[vertexIndex];
     gl_Position = vec4(positions[vertexIndex], 0.0f, 1.0f);
 }

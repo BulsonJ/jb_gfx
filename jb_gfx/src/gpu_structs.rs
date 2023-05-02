@@ -30,6 +30,7 @@ pub(crate) struct MaterialParamSSBO {
 pub(crate) struct CameraUniform {
     pub proj: [[f32; 4]; 4],
     pub view: [[f32; 4]; 4],
+    pub inv_proj_view: [[f32; 4]; 4],
     pub position: [f32; 4],
     pub ambient_light: [f32; 4],
     pub directional_light_colour: [f32; 4],
@@ -43,6 +44,7 @@ impl CameraUniform {
         Self {
             proj: Matrix4::identity().into(),
             view: Matrix4::identity().into(),
+            inv_proj_view: Matrix4::identity().into(),
             position: Vector4::zero().into(),
             ambient_light: Vector4::zero().into(),
             directional_light_colour: Vector4::zero().into(),
@@ -53,8 +55,12 @@ impl CameraUniform {
     }
 
     pub fn update_proj<T: CameraTrait>(&mut self, camera: &T) {
-        self.proj = camera.build_projection_matrix().into();
-        self.view = camera.build_view_matrix().into();
+        let proj = camera.build_projection_matrix();
+        let view = camera.build_view_matrix();
+
+        self.proj = proj.into();
+        self.view = view.into();
+        self.inv_proj_view = (proj * view).invert().unwrap().into();
         self.position = camera.position().to_vec().extend(0f32).into();
     }
 

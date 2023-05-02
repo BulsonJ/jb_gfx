@@ -12,6 +12,7 @@ layout (location = 1) out vec4 outBrightColor;
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
     mat4 proj;
     mat4 view;
+    mat4 invProjView;
     vec4 cameraPos;
     vec4 ambientLight;
     vec3 directionalLightColour;
@@ -30,6 +31,7 @@ layout (set = 1, binding = 4) uniform sampler2DShadow sceneShadowMap;
 layout (set = 2, binding = 0) uniform sampler2D positionImage;
 layout (set = 2, binding = 1) uniform sampler2D normalImage;
 layout (set = 2, binding = 2) uniform sampler2D albedoSpecImage;
+layout (set = 2, binding = 3) uniform sampler2D depthImage;
 
 const mat4 biasMat = mat4(
 0.5, 0.0, 0.0, 0.0,
@@ -39,7 +41,11 @@ const mat4 biasMat = mat4(
 
 void main()
 {
-    vec3 fragPos = texture(positionImage, inTexCoords).rgb;
+    float depth = texture(depthImage, inTexCoords).r;
+    vec4 ndc = vec4(vec2(inTexCoords.x,inTexCoords.y) * 2.0 -1.0,depth, 1.0f);
+    vec4 clip = cameraData.invProjView * ndc;
+    vec3 fragPos = clip.xyz / clip.www;
+
     vec3 normal = texture(normalImage, inTexCoords).rgb;
     vec3 albedo = texture(albedoSpecImage, inTexCoords).rgb;
     float specular = texture(albedoSpecImage, inTexCoords).a;

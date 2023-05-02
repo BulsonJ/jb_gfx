@@ -1,4 +1,4 @@
-pub fn draw_timestamps(ui : &mut egui::Ui, timestamps: jb_gfx::renderer::TimeStamp) {
+pub fn draw_timestamps(ui: &mut egui::Ui, timestamps: jb_gfx::renderer::TimeStamp) {
     ui.horizontal(|ui| {
         ui.label("Shadow Pass:");
         ui.label(format!("{:.6}", timestamps.shadow_pass.to_string()));

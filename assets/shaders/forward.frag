@@ -18,6 +18,7 @@ layout (location = 1) out vec4 outBrightColor;
 layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	mat4 proj;
 	mat4 view;
+	mat4 invProjView;
 	vec4 cameraPos;
 	vec4 ambientLight;
 	vec3 directionalLightColour;

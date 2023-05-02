@@ -36,8 +36,8 @@ use crate::util::descriptor::{
 use crate::util::meshpool::MeshPool;
 use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
-    CameraTrait, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData, MeshHandle,
-    Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
+    CameraTrait, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData,
+    MeshHandle, Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 
 const MAX_OBJECTS: u64 = 1000u64;
@@ -779,6 +779,11 @@ impl Renderer {
                         vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                         vk::ShaderStageFlags::FRAGMENT,
                     )
+                    .bind_image(
+                        3,
+                        vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        vk::ShaderStageFlags::FRAGMENT,
+                    )
                     .build()
                     .unwrap();
 
@@ -1337,6 +1342,13 @@ impl Renderer {
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::FRAGMENT,
             })
+            .bind_image(ImageDescriptorInfo {
+                binding: 3,
+                image: depth_image,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            })
             .build()
             .unwrap();
 
@@ -1365,6 +1377,16 @@ impl Renderer {
                     image: ImageHandleType::Image(deferred_color_specs),
                     src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                     src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                    dst_access_mask: AccessFlags2::SHADER_READ,
+                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ..Default::default()
+                })
+                .add_image_barrier(ImageBarrier {
+                    image: ImageHandleType::Image(depth_image),
+                    src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
                     dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
                     dst_access_mask: AccessFlags2::SHADER_READ,
                     old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
@@ -1468,13 +1490,13 @@ impl Renderer {
                 new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
                 ..Default::default()
             })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(depth_image),
-                dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
+            //.add_image_barrier(ImageBarrier {
+            //    image: ImageHandleType::Image(depth_image),
+            //    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+            //    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            //    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+            //    ..Default::default()
+            //})
             .build(&self.device, &self.device.graphics_command_buffer())?;
 
         let deferred_lighting_end = self.device.write_timestamp(

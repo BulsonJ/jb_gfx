@@ -1,9 +1,9 @@
+use crate::input::Input;
+use engine::prelude::*;
+use jb_gfx::Renderer;
 use winit::dpi::LogicalSize;
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowBuilder};
-use engine::prelude::*;
-use jb_gfx::Renderer;
-use crate::input::Input;
 
 pub struct Application {
     pub window: Window,
