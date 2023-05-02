@@ -6,5 +6,6 @@ pub mod input;
 
 pub mod camera;
 pub mod debug_ui;
+pub mod app;
 
 pub use camera::*;

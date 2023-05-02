@@ -4,21 +4,28 @@ use env_logger::{Builder, Target};
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
-use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::{Window, WindowBuilder};
 
 use jb_gfx::prelude::*;
 use engine::prelude::*;
 use game::{Camera, debug_ui};
+use game::app::Application;
 use game::components::{CameraComponent, LightComponent};
 use game::egui_context::EguiContext;
-use game::input::Input;
-
 
 fn main() {
-    run()
+    #[cfg(feature = "tracy")]
+    profiling::tracy_client::Client::start();
+    profiling::register_thread!("Main Thread");
+    profiling::scope!("Game");
+
+    // Enable logging
+    let mut builder = Builder::from_default_env();
+    builder.target(Target::Stdout);
+    builder.init();
+
+    run_game()
 }
 
 struct EditorProject {
@@ -260,53 +267,9 @@ pub fn from_transforms(
     translation * rotation * scale
 }
 
-pub struct Application {
-    pub window: Window,
-    pub input: Input,
-    pub renderer: Renderer,
-    pub asset_manager: AssetManager,
-    pub delta_time: f32,
-    pub time_passed: f32,
-}
-
-impl Application {
-    pub fn new(screen_width: i32, screen_height: i32, event_loop: &EventLoop<()>) -> Self {
-        let input = Input::default();
-
-        let window = WindowBuilder::new()
-            .with_inner_size(LogicalSize::new(screen_width, screen_height))
-            .with_title("Rust Renderer")
-            .build(&event_loop)
-            .unwrap();
-
-        let mut renderer = Renderer::new(&window).unwrap();
-        renderer.render().unwrap();
-        let asset_manager = AssetManager::default();
-
-        Self {
-            window,
-            input,
-            renderer,
-            asset_manager,
-            delta_time: 0.0,
-            time_passed: 0.0,
-        }
-    }
-}
-
-pub fn run() {
+pub fn run_game() {
     let (screen_width, screen_height) = (1920, 1080);
     let event_loop = EventLoop::new();
-
-    #[cfg(feature = "tracy")]
-    profiling::tracy_client::Client::start();
-    profiling::register_thread!("Main Thread");
-    profiling::scope!("Game");
-
-    // Enable logging
-    let mut builder = Builder::from_default_env();
-    builder.target(Target::Stdout);
-    builder.init();
 
     let mut app = Application::new(screen_width, screen_height, &event_loop);
     app.renderer.draw_debug_ui = false;
