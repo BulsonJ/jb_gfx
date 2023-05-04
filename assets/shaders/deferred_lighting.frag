@@ -48,6 +48,7 @@ void main()
     vec4 clip = cameraData.invProjView * ndc;
     vec3 fragPos = clip.xyz / clip.www;
 
+    vec3 emissive = texture(positionImage, inTexCoords).rgb;
     vec3 normal = texture(normalImage, inTexCoords).rgb;
     vec3 albedo = texture(albedoSpecImage, inTexCoords).rgb;
     float specular = texture(albedoSpecImage, inTexCoords).a;
@@ -73,6 +74,8 @@ void main()
     lighting += pointLightsResult;
     vec3 result = albedo * (ambient + lighting);
     // ----------------- Lighting Calculations -----------------------
+
+    result += emissive;
 
     outFragColor = vec4(result,1.0f);
 

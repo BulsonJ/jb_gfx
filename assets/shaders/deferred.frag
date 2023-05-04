@@ -80,7 +80,12 @@ void main()
         normal = normalize(inTBN * normalize(normalTexture * 2.0 - 1.0));
     }
 
-    gPosition = vec4(inWorldPos, 1.0f);
+    vec3 emissive = material.emissive.rgb;
+    if (emissiveTexIndex > 0) {
+        emissive *= emissiveTexture.rgb * emissive;
+    }
+
+    gPosition = vec4(emissive, 1.0f);
     gNormal = vec4(normal, 1.0f);
     gAlbedoSpec.rgb = objectColour;
     gAlbedoSpec.a = 1.0;
