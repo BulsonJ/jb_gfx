@@ -40,7 +40,7 @@ use crate::{
     MeshHandle, Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 
-const MAX_OBJECTS: u64 = 1000u64;
+const MAX_OBJECTS: u64 = 10000u64;
 const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
 
@@ -2301,6 +2301,10 @@ impl Renderer {
                 Vector3::from_value(1f32),
             ),
         })
+    }
+
+    pub fn remove_render_model(&mut self, handle: RenderModelHandle) {
+        self.render_models.remove(handle);
     }
 
     pub fn set_render_model_transform(

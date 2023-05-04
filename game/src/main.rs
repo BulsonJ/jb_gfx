@@ -1,9 +1,13 @@
-use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Vector4};
+use cgmath::{
+    Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rotation, Rotation3,
+    Vector3, Vector4, Zero,
+};
 use egui_winit::EventResponse;
 use env_logger::{Builder, Target};
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
+use log::info;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -13,6 +17,7 @@ use game::components::{CameraComponent, LightComponent};
 use game::egui_context::EguiContext;
 use game::{debug_ui, Camera};
 use jb_gfx::prelude::*;
+use jb_gfx::renderer::RenderModelHandle;
 
 fn main() {
     #[cfg(feature = "tracy")]
@@ -35,75 +40,31 @@ struct EditorProject {
     audio_manager: AudioManager,
     background_music: StaticSoundData,
     draw_debug_ui: bool,
+    bullet_model: Model,
+    bullets: Vec<Bullet>,
 }
 
 struct Player {
     camera: Camera,
 }
 
+struct Bullet {
+    renderer_handle: Vec<RenderModelHandle>,
+    position: Vector3<f32>,
+    velocity: Vector3<f32>,
+    lifetime: f32,
+}
+
 impl EditorProject {
     fn new(app: &mut Application, event_loop: &EventLoop<()>) -> Self {
-        // Load cube
-        let texture = app
-            .asset_manager
-            .load_texture(
-                &mut app.renderer,
-                "assets/textures/light.png",
-                &ImageFormatType::Default,
-            )
-            .unwrap();
-        app.renderer.light_texture = Some(texture);
-        // Load sponza
-        {
+        // Load bullet model
+        let bullet_model = {
             let models = app
                 .asset_manager
                 .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
                 .unwrap();
-            for model in models.iter() {
-                for submesh in model.mesh.submeshes.iter() {
-                    app.renderer
-                        .set_render_model_material(
-                            submesh.renderer_handle,
-                            MaterialInstance {
-                                diffuse: Vector4::new(0.0f32, 0.6f32, 0.0f32, 1.0f32),
-                                emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
-                                ..Default::default()
-                            },
-                        )
-                        .unwrap();
-                }
-            }
-        }
-        // Load helmet
-        {
-            let models = app
-                .asset_manager
-                .load_gltf(
-                    &mut app.renderer,
-                    "assets/models/DamagedHelmet/glTF/DamagedHelmet.gltf",
-                )
-                .unwrap();
-            for model in models.iter() {
-                let transform = from_transforms(
-                    Vector3::new(10f32, 0f32, 0.0f32),
-                    Quaternion::from_axis_angle(
-                        Vector3::new(1f32, 0f32, 0.0f32).normalize(),
-                        Deg(100f32),
-                    ) * Quaternion::from_axis_angle(
-                        Vector3::new(0f32, 0f32, 1.0f32).normalize(),
-                        Deg(60f32),
-                    ),
-                    Vector3::from_value(6f32),
-                );
-                Vector3::from_value(0.1f32);
-                for submesh in model.mesh.submeshes.iter() {
-                    app.renderer
-                        .set_render_model_transform(submesh.renderer_handle, transform)
-                        .unwrap();
-                }
-            }
-        }
-        app.renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
+            models[0].clone()
+        };
 
         let lights = vec![create_light(
             &mut app.renderer,
@@ -142,6 +103,8 @@ impl EditorProject {
             audio_manager,
             background_music,
             draw_debug_ui: draw_ui,
+            bullet_model,
+            bullets: Vec::new(),
         }
     }
 
@@ -157,10 +120,60 @@ impl EditorProject {
         if ctx.input.is_held(VirtualKeyCode::D) {
             self.player.camera.position += Vector3::new(0.0, 0.0, movement);
         }
+        if ctx.input.is_held(VirtualKeyCode::Space) {
+            self.bullets.push(spawn_bullet(
+                ctx,
+                &self.bullet_model,
+                self.player.camera.position.to_vec() + Vector3::new(0f32, -6f32, 8f32),
+                Vector3::new(1f32, 0.2f32, 0f32),
+                100f32,
+            ));
+        }
+
+        for bullet in self.bullets.iter_mut() {
+            bullet.position += bullet.velocity * ctx.delta_time;
+            bullet.lifetime -= ctx.delta_time;
+        }
+
+        // Remove any bullets that need deleting and remove render handles;
+        let old_handles : Vec<RenderModelHandle> = self.bullets.iter().flat_map(|bullet|bullet.renderer_handle.clone()).collect();
+        self.bullets.retain(|bullet| bullet.lifetime >= 0.0f32);
+        let new_handles : Vec<RenderModelHandle> = self.bullets.iter().flat_map(|bullet|bullet.renderer_handle.clone()).collect();
+        for handle in old_handles.into_iter() {
+            if !new_handles.contains(&handle) {
+                ctx.renderer.remove_render_model(handle);
+            }
+        }
 
         // Update render objects & then render
-        update_renderer_object_states(&mut ctx.renderer, &self.lights);
+        self.update_renderer_object_states(&mut ctx.renderer);
         ctx.renderer.set_camera(&self.player.camera);
+    }
+
+    fn update_renderer_object_states(&self, renderer: &mut Renderer) {
+        for component in self.lights.iter() {
+            renderer
+                .set_light(component.handle, &component.light)
+                .unwrap();
+        }
+        for bullet in self.bullets.iter() {
+            for &handle in bullet.renderer_handle.iter() {
+                renderer
+                    .set_render_model_transform(
+                        handle,
+                        from_transforms(
+                            bullet.position,
+                            Quaternion::from_angle_y(Deg(-90f32))
+                                * Quaternion::look_at(
+                                    bullet.velocity.normalize(),
+                                    Vector3::unit_y(),
+                                ),
+                            Vector3::new(1f32, 0.2f32, 0.2f32),
+                        ),
+                    )
+                    .unwrap();
+            }
+        }
     }
 
     fn draw_ui(&mut self, app: &mut Application) {
@@ -188,15 +201,6 @@ fn create_light(renderer: &mut Renderer, light: Light) -> LightComponent {
     LightComponent {
         handle: renderer.create_light(&light).unwrap(),
         light,
-    }
-}
-
-#[profiling::function]
-fn update_renderer_object_states(renderer: &mut Renderer, light_components: &[LightComponent]) {
-    for component in light_components.iter() {
-        renderer
-            .set_light(component.handle, &component.light)
-            .unwrap();
     }
 }
 
@@ -281,4 +285,43 @@ pub fn run_game() {
             profiling::finish_frame!();
         });
     }
+}
+
+fn spawn_bullet(
+    app: &mut Application,
+    bullet_model: &Model,
+    position: Vector3<f32>,
+    direction: Vector3<f32>,
+    speed: f32,
+) -> Bullet {
+    let handles = spawn_model(app, bullet_model);
+    for &handle in handles.iter() {
+        app.renderer
+            .set_render_model_material(
+                handle,
+                MaterialInstance {
+                    diffuse: Vector4::new(0.0f32, 0.6f32, 0.0f32, 1.0f32),
+                    emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+    }
+    Bullet {
+        renderer_handle: handles,
+        position,
+        velocity: direction.normalize() * speed,
+        lifetime: 10.0,
+    }
+}
+
+fn spawn_model(ctx: &mut Application, model: &Model) -> Vec<RenderModelHandle> {
+    let mut model_handles = Vec::new();
+    for mesh in model.mesh.submeshes.iter() {
+        let renderer_handle = ctx
+            .renderer
+            .add_render_model(mesh.mesh, mesh.material_instance);
+        model_handles.push(renderer_handle);
+    }
+    model_handles
 }
