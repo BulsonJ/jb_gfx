@@ -1254,7 +1254,10 @@ impl Renderer {
                     target: AttachmentHandle::Image(deferred_color_specs),
                     clear_value: vk::ClearValue {
                         color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
+                            float32: {
+                                let colour: Vector3<f32> = self.clear_colour.into();
+                                colour.extend(1f32).into()
+                            },
                         },
                     },
                     ..Default::default()
@@ -2307,6 +2310,19 @@ impl Renderer {
     ) -> Result<()> {
         if let Some(model) = self.render_models.get_mut(handle) {
             model.transform = transform;
+            Ok(())
+        } else {
+            Err(anyhow!("Unable to find Render Model!"))
+        }
+    }
+
+    pub fn set_render_model_material(
+        &mut self,
+        handle: RenderModelHandle,
+        material_instance: MaterialInstance,
+    ) -> Result<()> {
+        if let Some(model) = self.render_models.get_mut(handle) {
+            model.material_instance = material_instance;
             Ok(())
         } else {
             Err(anyhow!("Unable to find Render Model!"))

@@ -61,16 +61,15 @@ impl EditorProject {
                 .unwrap();
             for model in models.iter() {
                 for submesh in model.mesh.submeshes.iter() {
-                    let handle = app.renderer.add_render_model(
-                        submesh.mesh,
-                        MaterialInstance {
-                            diffuse: Vector4::new(0.0f32, 0.6f32, 0.0f32, 1.0f32),
-                            emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
-                            ..Default::default()
-                        },
-                    );
                     app.renderer
-                        .set_render_model_transform(handle, model.transform)
+                        .set_render_model_material(
+                            submesh.renderer_handle,
+                            MaterialInstance {
+                                diffuse: Vector4::new(0.0f32, 0.6f32, 0.0f32, 1.0f32),
+                                emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                                ..Default::default()
+                            },
+                        )
                         .unwrap();
                 }
             }
@@ -98,11 +97,8 @@ impl EditorProject {
                 );
                 Vector3::from_value(0.1f32);
                 for submesh in model.mesh.submeshes.iter() {
-                    let handle = app
-                        .renderer
-                        .add_render_model(submesh.mesh, submesh.material_instance);
                     app.renderer
-                        .set_render_model_transform(handle, transform)
+                        .set_render_model_transform(submesh.renderer_handle, transform)
                         .unwrap();
                 }
             }

@@ -7,6 +7,7 @@ use image::EncodableLayout;
 use log::info;
 
 use jb_gfx::prelude::*;
+use jb_gfx::renderer::RenderModelHandle;
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -323,17 +324,20 @@ impl AssetManager {
                 }
 
                 let mesh_handle = renderer.load_mesh(&mesh_data)?;
+                let material_instance = MaterialInstance {
+                    diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
+                    diffuse_texture: diffuse_tex,
+                    emissive: material.emissive_factor().into(),
+                    emissive_texture: emissive_tex,
+                    normal_texture: normal_tex,
+                    metallic_roughness_texture: metallic_roughness_tex,
+                    occlusion_texture: occlusion_tex,
+                };
+                let renderer_handle = renderer.add_render_model(mesh_handle, material_instance);
                 let model = SubMesh {
+                    renderer_handle,
                     mesh: mesh_handle,
-                    material_instance: MaterialInstance {
-                        diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
-                        diffuse_texture: diffuse_tex,
-                        emissive: material.emissive_factor().into(),
-                        emissive_texture: emissive_tex,
-                        normal_texture: normal_tex,
-                        metallic_roughness_texture: metallic_roughness_tex,
-                        occlusion_texture: occlusion_tex,
-                    },
+                    material_instance,
                 };
 
                 submeshes.push(model);
@@ -376,6 +380,15 @@ impl AssetManager {
             models.len(),
             meshes_amount,
         );
+
+        for model in models.iter() {
+            for submesh in model.mesh.submeshes.iter() {
+                renderer
+                    .set_render_model_transform(submesh.renderer_handle, model.transform)
+                    .unwrap();
+            }
+        }
+
         Ok(models)
     }
 }
@@ -393,6 +406,7 @@ pub struct Mesh {
 
 #[derive(Copy, Clone)]
 pub struct SubMesh {
+    pub renderer_handle: RenderModelHandle,
     pub mesh: MeshHandle,
     pub material_instance: MaterialInstance,
 }
