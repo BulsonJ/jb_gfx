@@ -35,8 +35,10 @@ pub(crate) struct CameraUniform {
     pub ambient_light: [f32; 4],
     pub directional_light_colour: [f32; 4],
     pub directional_light_direction: [f32; 4],
-    directional_light_proj: [[f32; 4]; 4],
-    directional_light_view: [[f32; 4]; 4],
+    pub directional_light_proj: [[f32; 4]; 4],
+    pub directional_light_view: [[f32; 4]; 4],
+    pub point_light_count: i32,
+    pub padding: [i32; 3],
 }
 
 impl CameraUniform {
@@ -51,6 +53,8 @@ impl CameraUniform {
             directional_light_direction: Vector4::zero().into(),
             directional_light_proj: Matrix4::identity().into(),
             directional_light_view: Matrix4::identity().into(),
+            point_light_count: 0,
+            padding: [0, 0, 0],
         }
     }
 

@@ -1,4 +1,4 @@
-use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3};
+use cgmath::{Array, Deg, InnerSpace, Matrix4, Point3, Quaternion, Rotation3, Vector3, Vector4};
 use egui_winit::EventResponse;
 use env_logger::{Builder, Target};
 use kira::manager::backend::cpal::CpalBackend;
@@ -30,11 +30,15 @@ fn main() {
 
 struct EditorProject {
     lights: Vec<LightComponent>,
-    cameras: Vec<CameraComponent>,
+    player: Player,
     egui: EguiContext,
     audio_manager: AudioManager,
     background_music: StaticSoundData,
     draw_debug_ui: bool,
+}
+
+struct Player {
+    camera: Camera,
 }
 
 impl EditorProject {
@@ -53,24 +57,20 @@ impl EditorProject {
         {
             let models = app
                 .asset_manager
-                .load_gltf(&mut app.renderer, "assets/models/Sponza/glTF/Sponza.gltf")
+                .load_gltf(&mut app.renderer, "assets/models/Cube/glTF/Cube.gltf")
                 .unwrap();
             for model in models.iter() {
-                let transform = from_transforms(
-                    Vector3::new(0f32, -20f32, 0.0f32),
-                    Quaternion::from_axis_angle(
-                        Vector3::new(0f32, 1f32, 0.0f32).normalize(),
-                        Deg(180f32),
-                    ),
-                    Vector3::from_value(0.1f32),
-                );
-                Vector3::from_value(0.1f32);
                 for submesh in model.mesh.submeshes.iter() {
-                    let handle = app
-                        .renderer
-                        .add_render_model(submesh.mesh, submesh.material_instance);
+                    let handle = app.renderer.add_render_model(
+                        submesh.mesh,
+                        MaterialInstance {
+                            diffuse: Vector4::new(0.0f32, 0.6f32, 0.0f32, 1.0f32),
+                            emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                            ..Default::default()
+                        },
+                    );
                     app.renderer
-                        .set_render_model_transform(handle, transform)
+                        .set_render_model_transform(handle, model.transform)
                         .unwrap();
                 }
             }
@@ -109,13 +109,14 @@ impl EditorProject {
         }
         app.renderer.clear_colour = Colour::new(0.0, 0.1, 0.3);
 
-        let (lights, cameras) = setup_scene(
+        let lights = vec![create_light(
             &mut app.renderer,
-            (
-                app.window.inner_size().width,
-                app.window.inner_size().height,
-            ),
-        );
+            Light {
+                position: Point3::new(-10.0f32, -5.0f32, 16.0f32),
+                intensity: 5.0,
+                ..Default::default()
+            },
+        )];
 
         let audio_manager =
             AudioManager::<CpalBackend>::new(AudioManagerSettings::default()).unwrap();
@@ -126,10 +127,22 @@ impl EditorProject {
         let egui = EguiContext::new(event_loop);
         let draw_ui = true;
 
+        let player = Player {
+            camera: Camera {
+                position: (-8.0, 0.0, 0.0).into(),
+                direction: (1.0, 0.0, 0.0).into(),
+                aspect: app.window.inner_size().width as f32
+                    / app.window.inner_size().height as f32,
+                fovy: 90.0,
+                znear: 0.1,
+                zfar: 4000.0,
+            },
+        };
+
         Self {
             egui,
             lights,
-            cameras,
+            player,
             audio_manager,
             background_music,
             draw_debug_ui: draw_ui,
@@ -140,16 +153,18 @@ impl EditorProject {
         if ctx.input.is_just_pressed(VirtualKeyCode::F1) {
             self.draw_debug_ui = !self.draw_debug_ui
         }
-
-        for (i, component) in self.lights.iter_mut().enumerate() {
-            let position = 10f32 + ((i as f32 + 3f32 * ctx.time_passed).sin() * 5f32);
-            component.light.position.x = position;
+        let speed = 25.0f32;
+        let movement = speed * ctx.delta_time;
+        if ctx.input.is_held(VirtualKeyCode::A) {
+            self.player.camera.position -= Vector3::new(0.0, 0.0, movement);
+        }
+        if ctx.input.is_held(VirtualKeyCode::D) {
+            self.player.camera.position += Vector3::new(0.0, 0.0, movement);
         }
 
         // Update render objects & then render
         update_renderer_object_states(&mut ctx.renderer, &self.lights);
-        let camera = &self.cameras[0];
-        ctx.renderer.set_camera(&camera.camera);
+        ctx.renderer.set_camera(&self.player.camera);
     }
 
     fn draw_ui(&mut self, app: &mut Application) {
@@ -173,74 +188,11 @@ impl EditorProject {
     }
 }
 
-#[profiling::function]
-fn setup_scene(
-    renderer: &mut Renderer,
-    screen_size: (u32, u32),
-) -> (Vec<LightComponent>, Vec<CameraComponent>) {
-    let initial_lights = vec![
-        Light {
-            position: Point3::new(10.0f32, -5.0f32, -16.0f32),
-            colour: Vector3::new(1.0f32, 0.0f32, 0.0f32),
-            intensity: 5.0,
-        },
-        Light {
-            position: Point3::new(-10.0f32, 5.0f32, 16.0f32),
-            colour: Vector3::new(0.0f32, 1.0f32, 0.0f32),
-            intensity: 5.0,
-        },
-        Light {
-            position: Point3::new(10.0f32, 5.0f32, -16.0f32),
-            intensity: 5.0,
-            ..Default::default()
-        },
-        Light {
-            position: Point3::new(-10.0f32, -5.0f32, 16.0f32),
-            intensity: 5.0,
-            ..Default::default()
-        },
-    ];
-
-    let light_components = vec![
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(0).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(0).unwrap(),
-        },
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(1).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(1).unwrap(),
-        },
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(2).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(2).unwrap(),
-        },
-        LightComponent {
-            handle: renderer
-                .create_light(initial_lights.get(3).unwrap())
-                .unwrap(),
-            light: *initial_lights.get(3).unwrap(),
-        },
-    ];
-
-    let cameras = vec![{
-        let camera = Camera {
-            position: (-8.0, 0.0, 0.0).into(),
-            direction: (1.0, 0.0, 0.0).into(),
-            aspect: screen_size.0 as f32 / screen_size.1 as f32,
-            fovy: 90.0,
-            znear: 0.1,
-            zfar: 4000.0,
-        };
-        CameraComponent { camera }
-    }];
-
-    (light_components, cameras)
+fn create_light(renderer: &mut Renderer, light: Light) -> LightComponent {
+    LightComponent {
+        handle: renderer.create_light(&light).unwrap(),
+        light,
+    }
 }
 
 #[profiling::function]

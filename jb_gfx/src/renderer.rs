@@ -44,6 +44,8 @@ const MAX_OBJECTS: u64 = 1000u64;
 const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
 
+const MAX_LIGHTS: usize = 64;
+
 const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const DEFERRED_NORMAL_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 const DEFERRED_COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
@@ -311,7 +313,7 @@ impl Renderer {
 
         let light_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<LightUniform>() * 4usize,
+                size: size_of::<LightUniform>() * MAX_LIGHTS,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
                 storage_type: BufferStorageType::HostLocal,
             };
@@ -388,21 +390,6 @@ impl Renderer {
                 .view()
                 .mapped_slice()?
                 .copy_from_slice(&[camera_uniform]);
-
-            let uniforms: Vec<LightUniform> = vec![
-                LightUniform::zeroed(),
-                LightUniform::zeroed(),
-                LightUniform::zeroed(),
-                LightUniform::zeroed(),
-            ];
-
-            device
-                .resource_manager
-                .get_buffer(*light_buffer)
-                .unwrap()
-                .view()
-                .mapped_slice()?
-                .copy_from_slice(&uniforms);
         }
 
         let (forward_pass, shadow_pso) = {
@@ -958,6 +945,7 @@ impl Renderer {
         // Copy gpu data
         {
             self.camera_uniform.update_light(&self.sun);
+            self.camera_uniform.point_light_count = self.stored_lights.len() as i32;
 
             self.device
                 .resource_manager
@@ -2326,8 +2314,11 @@ impl Renderer {
     }
 
     pub fn create_light(&mut self, light: &Light) -> Option<LightHandle> {
-        if self.stored_lights.len() >= 4 {
-            warn!("Tried to create light, but reached max limit of 4.");
+        if self.stored_lights.len() >= MAX_LIGHTS {
+            warn!(
+                "Tried to create light, but reached max limit of [{}].",
+                MAX_LIGHTS
+            );
             return None;
         }
 

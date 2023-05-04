@@ -26,6 +26,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
 	vec4 directionalLightDirection;
 	mat4 sunProj;
 	mat4 sunView;
+	int pointLightCount;
+	int padding[3];
 } cameraData;
 
 struct ModelMatrix{

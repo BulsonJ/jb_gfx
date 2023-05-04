@@ -20,6 +20,8 @@ layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
     vec4 directionalLightDirection;
     mat4 sunProj;
     mat4 sunView;
+    int pointLightCount;
+    int padding[3];
 } cameraData;
 
 layout(std140,set = 1, binding = 1) uniform LightBuffer{
@@ -63,7 +65,7 @@ void main()
 
     // Point lights
     vec3 pointLightsResult = vec3(0);
-    for (int i = 0; i < 4; i++){
+    for (int i = 0; i < cameraData.pointLightCount; i++){
         // Diffuse
         Light currentLight = lightData.lights[i];
         pointLightsResult += CalculatePointLight(normal, fragPos,cameraData.cameraPos.xyz, currentLight);
