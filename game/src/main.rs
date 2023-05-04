@@ -33,7 +33,7 @@ fn main() {
     run_game()
 }
 
-struct EditorProject {
+struct TurretGame {
     lights: Vec<LightComponent>,
     player: Player,
     egui: EguiContext,
@@ -46,6 +46,8 @@ struct EditorProject {
 
 struct Player {
     camera: Camera,
+    rate_of_fire: f32,
+    time_since_fired: f32,
 }
 
 struct Bullet {
@@ -55,7 +57,7 @@ struct Bullet {
     lifetime: f32,
 }
 
-impl EditorProject {
+impl TurretGame {
     fn new(app: &mut Application, event_loop: &EventLoop<()>) -> Self {
         // Load bullet model
         let bullet_model = {
@@ -94,6 +96,8 @@ impl EditorProject {
                 znear: 0.1,
                 zfar: 4000.0,
             },
+            rate_of_fire: 2f32,
+            time_since_fired: 100f32,
         };
 
         Self {
@@ -112,23 +116,7 @@ impl EditorProject {
         if ctx.input.is_just_pressed(VirtualKeyCode::F1) {
             self.draw_debug_ui = !self.draw_debug_ui
         }
-        let speed = 25.0f32;
-        let movement = speed * ctx.delta_time;
-        if ctx.input.is_held(VirtualKeyCode::A) {
-            self.player.camera.position -= Vector3::new(0.0, 0.0, movement);
-        }
-        if ctx.input.is_held(VirtualKeyCode::D) {
-            self.player.camera.position += Vector3::new(0.0, 0.0, movement);
-        }
-        if ctx.input.is_held(VirtualKeyCode::Space) {
-            self.bullets.push(spawn_bullet(
-                ctx,
-                &self.bullet_model,
-                self.player.camera.position.to_vec() + Vector3::new(0f32, -6f32, 8f32),
-                Vector3::new(1f32, 0.2f32, 0f32),
-                100f32,
-            ));
-        }
+        self.handle_player_input(ctx);
 
         for bullet in self.bullets.iter_mut() {
             bullet.position += bullet.velocity * ctx.delta_time;
@@ -136,9 +124,17 @@ impl EditorProject {
         }
 
         // Remove any bullets that need deleting and remove render handles;
-        let old_handles : Vec<RenderModelHandle> = self.bullets.iter().flat_map(|bullet|bullet.renderer_handle.clone()).collect();
+        let old_handles: Vec<RenderModelHandle> = self
+            .bullets
+            .iter()
+            .flat_map(|bullet| bullet.renderer_handle.clone())
+            .collect();
         self.bullets.retain(|bullet| bullet.lifetime >= 0.0f32);
-        let new_handles : Vec<RenderModelHandle> = self.bullets.iter().flat_map(|bullet|bullet.renderer_handle.clone()).collect();
+        let new_handles: Vec<RenderModelHandle> = self
+            .bullets
+            .iter()
+            .flat_map(|bullet| bullet.renderer_handle.clone())
+            .collect();
         for handle in old_handles.into_iter() {
             if !new_handles.contains(&handle) {
                 ctx.renderer.remove_render_model(handle);
@@ -148,6 +144,31 @@ impl EditorProject {
         // Update render objects & then render
         self.update_renderer_object_states(&mut ctx.renderer);
         ctx.renderer.set_camera(&self.player.camera);
+    }
+
+    fn handle_player_input(&mut self, ctx: &mut Application) {
+        let speed = 25.0f32;
+        let movement = speed * ctx.delta_time;
+        if ctx.input.is_held(VirtualKeyCode::A) {
+            self.player.camera.position -= Vector3::new(0.0, 0.0, movement);
+        }
+        if ctx.input.is_held(VirtualKeyCode::D) {
+            self.player.camera.position += Vector3::new(0.0, 0.0, movement);
+        }
+
+        self.player.time_since_fired += ctx.delta_time;
+        if ctx.input.is_held(VirtualKeyCode::Space)
+            && self.player.time_since_fired >= 1.0f32 / self.player.rate_of_fire
+        {
+            self.player.time_since_fired = 0.0f32;
+            self.bullets.push(spawn_bullet(
+                ctx,
+                &self.bullet_model,
+                self.player.camera.position.to_vec() + Vector3::new(0f32, -6f32, 8f32),
+                Vector3::new(1f32, 0.2f32, 0f32),
+                100f32,
+            ));
+        }
     }
 
     fn update_renderer_object_states(&self, renderer: &mut Renderer) {
@@ -179,6 +200,18 @@ impl EditorProject {
     fn draw_ui(&mut self, app: &mut Application) {
         if self.draw_debug_ui {
             self.egui.run(&app.window, |ctx| {
+                egui::Window::new("Game Debug")
+                    .vscroll(false)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Rate of Fire(per s)");
+                            ui.add(
+                                egui::Slider::new(&mut self.player.rate_of_fire, 1.0..=10.0)
+                                    .step_by(0.1),
+                            );
+                        });
+                    });
                 egui::Window::new("Timings")
                     .vscroll(false)
                     .resizable(false)
@@ -224,7 +257,7 @@ pub fn run_game() {
     let mut app = Application::new(screen_width, screen_height, &event_loop);
     app.renderer.draw_debug_ui = false;
 
-    let mut project = EditorProject::new(&mut app, &event_loop);
+    let mut project = TurretGame::new(&mut app, &event_loop);
 
     let mut initial_resize = true;
 
