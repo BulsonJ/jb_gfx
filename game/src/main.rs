@@ -82,6 +82,13 @@ impl TurretGame {
         renderer.render().unwrap();
         let mut asset_manager = AssetManager::default();
 
+        let grass_texture = asset_manager
+            .load_texture(
+                &mut renderer,
+                "assets/textures/grass.jpg",
+                &ImageFormatType::Default,
+            )
+            .unwrap();
         // Load bullet model
         let bullet_model = {
             let models = asset_manager
@@ -89,6 +96,40 @@ impl TurretGame {
                 .unwrap();
             models[0].clone()
         };
+        let tile_height = 9;
+        let tile_width = 12;
+        let size = 100.0f32;
+        for y in 0..tile_height {
+            for x in 0..tile_width {
+                let handles = spawn_model(&mut renderer, &bullet_model);
+                for &handle in handles.iter() {
+                    renderer
+                        .set_render_model_material(
+                            handle,
+                            MaterialInstance {
+                                diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
+                                diffuse_texture: Some(grass_texture),
+                                ..Default::default()
+                            },
+                        )
+                        .unwrap();
+                    renderer
+                        .set_render_model_transform(
+                            handle,
+                            from_transforms(
+                                Vector3::new(
+                                    -(((tile_height - 1) / 2) as f32 * size) + (y as f32 * size),
+                                    -100.0f32,
+                                    -(((tile_width - 1) / 2) as f32 * size) + (x as f32 * size),
+                                ),
+                                Quaternion::from_angle_y(Deg(0.0)),
+                                Vector3::new(size, 1.0, size),
+                            ),
+                        )
+                        .unwrap();
+                }
+            }
+        }
 
         let lights = vec![create_light(
             &mut renderer,
@@ -127,7 +168,7 @@ impl TurretGame {
 
         let player = Player {
             camera: Camera {
-                position: (-8.0, 0.0, 0.0).into(),
+                position: (0.0, 0.0, 0.0).into(),
                 direction: (1.0, 0.0, 0.0).into(),
                 aspect: window.inner_size().width as f32 / window.inner_size().height as f32,
                 fovy: 90.0,
@@ -214,7 +255,7 @@ impl TurretGame {
             self.player.time_since_fired = 0.0f32;
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -6f32, 8f32),
-                Vector3::new(1f32, 0.2f32, 0f32),
+                Vector3::new(1f32, 0.0f32, 0f32),
                 100f32,
             );
             self.bullets.push(bullet);
@@ -300,24 +341,13 @@ impl TurretGame {
         self.egui.on_event(event)
     }
 
-    fn spawn_model(&mut self, model: &Model) -> Vec<RenderModelHandle> {
-        let mut model_handles = Vec::new();
-        for mesh in model.mesh.submeshes.iter() {
-            let renderer_handle = self
-                .renderer
-                .add_render_model(mesh.mesh, mesh.material_instance);
-            model_handles.push(renderer_handle);
-        }
-        model_handles
-    }
-
     fn spawn_bullet(
         &mut self,
         position: Vector3<f32>,
         direction: Vector3<f32>,
         speed: f32,
     ) -> Bullet {
-        let handles = self.spawn_model(&self.bullet_model.clone());
+        let handles = spawn_model(&mut self.renderer, &self.bullet_model);
         for &handle in handles.iter() {
             self.renderer
                 .set_render_model_material(
@@ -433,4 +463,13 @@ pub fn run_game() {
             profiling::finish_frame!();
         });
     }
+}
+
+fn spawn_model(renderer: &mut Renderer, model: &Model) -> Vec<RenderModelHandle> {
+    let mut model_handles = Vec::new();
+    for mesh in model.mesh.submeshes.iter() {
+        let renderer_handle = renderer.add_render_model(mesh.mesh, mesh.material_instance);
+        model_handles.push(renderer_handle);
+    }
+    model_handles
 }

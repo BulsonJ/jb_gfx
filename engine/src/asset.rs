@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::error::Error;
 
 use anyhow::{anyhow, Result};
 use cgmath::Matrix4;
@@ -18,14 +19,16 @@ impl AssetManager {
     pub fn load_texture(
         &mut self,
         renderer: &mut Renderer,
-        file: &str,
+        file: impl AsRef<std::path::Path>,
         format: &ImageFormatType,
     ) -> Result<ImageHandle> {
-        if let Some(texture) = self.loaded_textures.get(file) {
+        if let Some(texture) = self.loaded_textures.get(file.as_ref().to_str().unwrap()) {
             Ok(*texture)
-        } else if let Ok(loaded_texture) = renderer.load_texture(file, format) {
+        } else if let Ok(loaded_texture) =
+            renderer.load_texture(file.as_ref().to_str().unwrap(), format)
+        {
             self.loaded_textures
-                .insert(file.to_string(), loaded_texture);
+                .insert(file.as_ref().to_str().unwrap().to_string(), loaded_texture);
             Ok(loaded_texture)
         } else {
             Err(anyhow!("Cant load texture or find it!"))
