@@ -6,8 +6,13 @@ use egui_winit::EventResponse;
 use env_logger::{Builder, Target};
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
-use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
+use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundSettings};
+use kira::tween::{Easing, Tween};
+use kira::Volume::Amplitude;
+use kira::{LoopBehavior, Volume};
 use log::info;
+use rand::{thread_rng, Rng};
+use std::time::Duration;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -47,10 +52,13 @@ struct TurretGame {
     player: Player,
     egui: EguiContext,
     audio_manager: AudioManager,
-    background_music: StaticSoundData,
+    fire_sound: StaticSoundData,
+    firing_sound_handle: Option<StaticSoundHandle>,
     draw_debug_ui: bool,
     bullet_model: Model,
     bullets: Vec<Bullet>,
+    engine_sound: StaticSoundData,
+    engine_looping_sound: Option<StaticSoundHandle>,
 }
 
 struct Player {
@@ -91,11 +99,28 @@ impl TurretGame {
             },
         )];
 
-        let audio_manager =
+        let mut audio_manager =
             AudioManager::<CpalBackend>::new(AudioManagerSettings::default()).unwrap();
-        let background_music =
-            StaticSoundData::from_file("assets/sounds/prelude.ogg", StaticSoundSettings::default())
-                .unwrap();
+        let fire_sound = StaticSoundData::from_file(
+            "assets/sounds/firing_loop.mp3",
+            StaticSoundSettings::default()
+                .loop_behavior(LoopBehavior {
+                    start_position: 0.0,
+                })
+                .volume(Amplitude(0.1)),
+        )
+        .unwrap();
+        let engine_sound_amplitude = 0.01;
+        let engine_sound = StaticSoundData::from_file(
+            "assets/sounds/prop-plane-flying.wav",
+            StaticSoundSettings::default()
+                .volume(Amplitude(engine_sound_amplitude))
+                .loop_behavior(LoopBehavior {
+                    start_position: 0.0,
+                }),
+        )
+        .unwrap();
+        let engine_looping_sound = audio_manager.play(engine_sound.clone()).unwrap();
 
         let egui = EguiContext::new(event_loop);
         let draw_ui = true;
@@ -109,7 +134,7 @@ impl TurretGame {
                 znear: 0.1,
                 zfar: 4000.0,
             },
-            rate_of_fire: 2f32,
+            rate_of_fire: 8f32,
             time_since_fired: 100f32,
         };
 
@@ -124,7 +149,10 @@ impl TurretGame {
             lights,
             player,
             audio_manager,
-            background_music,
+            fire_sound,
+            firing_sound_handle: None,
+            engine_sound,
+            engine_looping_sound: Some(engine_looping_sound),
             draw_debug_ui: draw_ui,
             bullet_model,
             bullets: Vec::new(),
@@ -176,6 +204,10 @@ impl TurretGame {
         }
 
         self.player.time_since_fired += self.delta_time;
+        if self.input.is_just_pressed(VirtualKeyCode::Space) {
+            self.firing_sound_handle =
+                Some(self.audio_manager.play(self.fire_sound.clone()).unwrap());
+        }
         if self.input.is_held(VirtualKeyCode::Space)
             && self.player.time_since_fired >= 1.0f32 / self.player.rate_of_fire
         {
@@ -186,6 +218,17 @@ impl TurretGame {
                 100f32,
             );
             self.bullets.push(bullet);
+        }
+        if self.input.was_released(VirtualKeyCode::Space) {
+            if let Some(sound) = self.firing_sound_handle.as_mut() {
+                sound
+                    .stop(Tween {
+                        start_time: Default::default(),
+                        duration: Duration::from_secs_f32(0.2f32),
+                        easing: Easing::InPowi(1),
+                    })
+                    .unwrap();
+            }
         }
     }
 
@@ -222,6 +265,16 @@ impl TurretGame {
                     .vscroll(false)
                     .resizable(false)
                     .show(ctx, |ui| {
+                        if self.engine_looping_sound.is_none() {
+                            if ui.button("Play Engine Sound").clicked() {
+                                self.engine_looping_sound = Some(
+                                    self.audio_manager.play(self.engine_sound.clone()).unwrap(),
+                                );
+                            }
+                        } else if ui.button("Stop Engine Sound").clicked() {
+                            let sound = self.engine_looping_sound.take();
+                            sound.unwrap().stop(Tween::default()).unwrap();
+                        }
                         ui.horizontal(|ui| {
                             ui.label("Rate of Fire(per s)");
                             ui.add(
