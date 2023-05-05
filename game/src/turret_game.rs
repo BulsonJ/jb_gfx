@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cgmath::{
     Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rotation, Rotation3,
-    Vector3, Vector4,
+    Vector3, Vector4, Zero,
 };
 use egui::Ui;
 use egui_winit::EventResponse;
@@ -67,6 +67,27 @@ impl TurretGame {
         let mut renderer = Renderer::new(&window).unwrap();
         renderer.render().unwrap();
         let mut asset_manager = AssetManager::default();
+
+        // Spawn plane
+        {
+            let plane_model = {
+                let models = asset_manager
+                    .load_gltf(&mut renderer, "assets/models/plane/plane.gltf")
+                    .unwrap();
+                models[0].clone()
+            };
+            let plane = spawn_model(&mut renderer, &plane_model)[0];
+            renderer
+                .set_render_model_transform(
+                    &[plane],
+                    from_transforms(
+                        Vector3::new(0.0f32,-2.0f32,0.0f32),
+                        Quaternion::from_angle_y(Deg(0.0)),
+                        Vector3::from_value(1f32),
+                    ),
+                )
+                .unwrap();
+        }
 
         let grass_texture = asset_manager
             .load_texture(
@@ -358,9 +379,9 @@ impl TurretGame {
 
         let scale = {
             if tracer {
-                Vector3::new(0.4f32, 0.4f32, 0.4f32)
-            } else {
                 Vector3::new(0.2f32, 0.2f32, 0.2f32)
+            } else {
+                Vector3::new(0.1f32, 0.1f32, 0.1f32)
             }
         };
 
