@@ -4,6 +4,7 @@
 #include "assets/shaders/library/shadow.glsl"
 #include "assets/shaders/library/lighting.glsl"
 #include "assets/shaders/library/camera.glsl"
+#include "assets/shaders/library/object.glsl"
 
 //shader input
 layout (location = 0) in vec3 inColor;
@@ -16,17 +17,6 @@ layout (location = 7) in vec4 inShadowCoord;
 layout (location = 0) out vec4 gPosition;
 layout (location = 1) out vec4 gNormal;
 layout (location = 2) out vec4 gAlbedoSpec;
-
-struct MaterialParameters {
-    vec4 diffuse;
-    vec4 emissive;
-    ivec4 textures;
-    ivec4 textures_two;
-};
-
-layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
-    MaterialParameters materials[];
-} materialData;
 
 layout (set = 1, binding = 4) uniform sampler2DShadow sceneShadowMap;
 

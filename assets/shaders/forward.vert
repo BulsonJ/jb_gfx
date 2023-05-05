@@ -2,6 +2,7 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier: enable
 #include "assets/shaders/library/camera.glsl"
+#include "assets/shaders/library/object.glsl"
 
 layout (location = 0) in vec3 vPosition;
 layout (location = 1) in vec2 vTexCoords;
@@ -15,26 +16,6 @@ layout (location = 2) out vec3 outNormal;
 layout (location = 3) out vec3 outWorldPos;
 layout (location = 4) out mat3 outTBN;
 layout (location = 7) out vec4 outShadowCoord;
-
-struct ModelMatrix{
-	mat4 model;
-	mat4 normal;
-};
-
-struct MaterialParameters {
-	vec4 diffuse;
-	vec4 emissive;
-	ivec4 textures;
-	ivec4 textures_two;
-};
-
-layout(std140,set = 1, binding = 2) readonly buffer ModelBuffer{
-	ModelMatrix models[];
-} modelData;
-
-layout(std140,set = 1, binding = 3) readonly buffer MaterialBuffer{
-	MaterialParameters materials[];
-} materialData;
 
 layout( push_constant ) uniform constants
 {
