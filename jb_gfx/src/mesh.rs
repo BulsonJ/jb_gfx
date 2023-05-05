@@ -68,7 +68,7 @@ impl MeshData {
         };
         MeshData {
             vertices,
-            indices : Some(indices),
+            indices: Some(indices),
             faces: vec![],
         }
     }

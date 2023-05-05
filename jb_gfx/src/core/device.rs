@@ -6,7 +6,10 @@ use std::{borrow::Cow, ffi::CStr};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
-use ash::vk::{self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageCreateFlags, ImageLayout, ObjectType, SurfaceTransformFlagsKHR};
+use ash::vk::{
+    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageCreateFlags, ImageLayout,
+    ObjectType, SurfaceTransformFlagsKHR,
+};
 use log::{error, info};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::dpi::PhysicalSize;
@@ -998,7 +1001,7 @@ impl GraphicsDevice {
         let flags = {
             if img_layers > 1 {
                 ImageCreateFlags::CUBE_COMPATIBLE
-            }else {
+            } else {
                 ImageCreateFlags::empty()
             }
         };
