@@ -53,6 +53,8 @@ pub struct TurretGame {
     bullet_material: MaterialInstanceHandle,
     bullet_tracer_material: MaterialInstanceHandle,
     barrels: Vec<Barrel>,
+    terrain_pieces: Vec<Terrain>,
+    terrain_settings: TerrainSettings,
 }
 
 struct Bullet {
@@ -69,6 +71,18 @@ struct Barrel {
     position: Vector3<f32>,
     scale: Vector3<f32>,
     collision_box: CollisionBox,
+}
+
+struct Terrain {
+    renderer_handle: RenderModelHandle,
+    position: Vector3<f32>,
+    scale: Vector3<f32>,
+}
+
+struct TerrainSettings {
+    tile_width: u32,
+    tile_height: u32,
+    tile_size: f32,
 }
 
 impl TurretGame {
@@ -195,36 +209,50 @@ impl TurretGame {
             ..Default::default()
         });
 
-        let tile_height = 9;
-        let tile_width = 9;
-        let size = 100.0f32;
-        let offset = Vector3::new(
-            -tile_width as f32 * size,
-            0.0f32,
-            -tile_height as f32 * size,
-        ) + Vector3::new(size, 0.0f32, size);
-        for y in 0..tile_height {
-            for x in 0..tile_width {
-                let handles = spawn_model(&mut renderer, &bullet_model);
-                renderer
-                    .set_render_model_material(&handles, grass_material)
-                    .unwrap();
-                renderer
-                    .set_render_model_transform(
-                        &handles,
-                        from_transforms(
-                            Vector3::new(
-                                y as f32 * (size * 2f32),
-                                -100.0f32,
-                                x as f32 * (size * 2f32),
-                            ) + offset,
-                            Quaternion::from_angle_y(Deg(0.0)),
-                            Vector3::new(size, 1.0, size),
-                        ),
-                    )
-                    .unwrap();
+        let terrain_settings = TerrainSettings {
+            tile_width: 5,
+            tile_height: 9,
+            tile_size: 100.0f32,
+        };
+        let terrain_pieces = {
+            let mut terrain_pieces = Vec::new();
+            let offset = Vector3::new(
+                -(terrain_settings.tile_height as f32 - 1f32) * terrain_settings.tile_size,
+                0.0f32,
+                -(terrain_settings.tile_width as f32 - 1f32) * terrain_settings.tile_size,
+            );
+            for y in 0..terrain_settings.tile_height {
+                for x in 0..terrain_settings.tile_width {
+                    let position = Vector3::new(
+                        y as f32 * (terrain_settings.tile_size * 2f32),
+                        -100.0f32,
+                        x as f32 * (terrain_settings.tile_size * 2f32),
+                    ) + offset;
+                    let scale =
+                        Vector3::new(terrain_settings.tile_size, 1.0, terrain_settings.tile_size);
+                    let terrain = Terrain {
+                        renderer_handle: spawn_model(&mut renderer, &bullet_model)[0],
+                        position,
+                        scale,
+                    };
+                    renderer
+                        .set_render_model_material(&[terrain.renderer_handle], grass_material)
+                        .unwrap();
+                    renderer
+                        .set_render_model_transform(
+                            &[terrain.renderer_handle],
+                            from_transforms(
+                                terrain.position,
+                                Quaternion::from_angle_y(Deg(0.0)),
+                                terrain.scale,
+                            ),
+                        )
+                        .unwrap();
+                    terrain_pieces.push(terrain);
+                }
             }
-        }
+            terrain_pieces
+        };
 
         let lights = vec![];
 
@@ -290,6 +318,8 @@ impl TurretGame {
             bullet_material,
             bullet_tracer_material,
             barrels,
+            terrain_pieces,
+            terrain_settings,
         }
     }
 
@@ -299,7 +329,21 @@ impl TurretGame {
         }
         self.handle_player_input();
 
+        let plane_movement_speed = 50.0f32;
+
+        for terrain in self.terrain_pieces.iter_mut() {
+            terrain.position +=
+                Vector3::new(plane_movement_speed, 0.0f32, 0.0f32) * self.delta_time;
+            let boundary =
+                self.terrain_settings.tile_size * self.terrain_settings.tile_height as f32;
+            if terrain.position.x >= boundary {
+                terrain.position.x = -boundary;
+            }
+        }
+
         for bullet in self.bullets.iter_mut() {
+            bullet.velocity.x += plane_movement_speed / 100.0f32;
+            bullet.velocity.x = bullet.velocity.x.clamp(-800.0f32, 800.0f32);
             bullet.position += bullet.velocity * self.delta_time;
             bullet.collision_box.position = bullet.position;
             bullet.lifetime -= self.delta_time;
@@ -385,7 +429,7 @@ impl TurretGame {
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -1f32, 0f32),
                 self.player.camera.direction,
-                1000f32,
+                500f32,
                 tracer,
             );
             self.bullets.push(bullet);
@@ -408,6 +452,18 @@ impl TurretGame {
         for component in self.lights.iter() {
             self.renderer
                 .set_light(component.handle, &component.light)
+                .unwrap();
+        }
+        for terrain in self.terrain_pieces.iter() {
+            self.renderer
+                .set_render_model_transform(
+                    &[terrain.renderer_handle],
+                    from_transforms(
+                        terrain.position,
+                        Quaternion::from_angle_y(Deg(0f32)),
+                        terrain.scale,
+                    ),
+                )
                 .unwrap();
         }
         for bullet in self.bullets.iter() {
