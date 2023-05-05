@@ -72,8 +72,9 @@ impl AssetManager {
         }
     }
 
-    pub fn load_gltf(&mut self, renderer: &mut Renderer, file: &str) -> Result<Vec<Model>> {
+    pub fn load_gltf(&mut self, renderer: &mut Renderer, file: impl AsRef<std::path::Path>) -> Result<Vec<Model>> {
         profiling::scope!("Load GLTF Asset");
+        let file = file.as_ref().to_str().unwrap();
 
         let (gltf, buffers, _) = {
             profiling::scope!("Load GLTF Asset: Import File");
