@@ -65,10 +65,12 @@ struct Player {
     camera: Camera,
     rate_of_fire: f32,
     time_since_fired: f32,
+    tracer_bullet_rate: i32,
+    bullets_since_last_tracer: i32,
 }
 
 struct Bullet {
-    renderer_handle: Vec<RenderModelHandle>,
+    renderer_handles: Vec<RenderModelHandle>,
     position: Vector3<f32>,
     velocity: Vector3<f32>,
     lifetime: f32,
@@ -98,36 +100,34 @@ impl TurretGame {
         };
         let tile_height = 9;
         let tile_width = 12;
-        let size = 100.0f32;
+        let size = 50.0f32;
         for y in 0..tile_height {
             for x in 0..tile_width {
                 let handles = spawn_model(&mut renderer, &bullet_model);
-                for &handle in handles.iter() {
-                    renderer
-                        .set_render_model_material(
-                            handle,
-                            MaterialInstance {
-                                diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
-                                diffuse_texture: Some(grass_texture),
-                                ..Default::default()
-                            },
-                        )
-                        .unwrap();
-                    renderer
-                        .set_render_model_transform(
-                            handle,
-                            from_transforms(
-                                Vector3::new(
-                                    -(((tile_height - 1) / 2) as f32 * size) + (y as f32 * size),
-                                    -100.0f32,
-                                    -(((tile_width - 1) / 2) as f32 * size) + (x as f32 * size),
-                                ),
-                                Quaternion::from_angle_y(Deg(0.0)),
-                                Vector3::new(size, 1.0, size),
+                renderer
+                    .set_render_model_material(
+                        &handles,
+                        MaterialInstance {
+                            diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
+                            diffuse_texture: Some(grass_texture),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+                renderer
+                    .set_render_model_transform(
+                        &handles,
+                        from_transforms(
+                            Vector3::new(
+                                -(((tile_height - 1) / 2) as f32 * size) + (y as f32 * size),
+                                -100.0f32,
+                                -(((tile_width - 1) / 2) as f32 * size) + (x as f32 * size),
                             ),
-                        )
-                        .unwrap();
-                }
+                            Quaternion::from_angle_y(Deg(0.0)),
+                            Vector3::new(size, 1.0, size),
+                        ),
+                    )
+                    .unwrap();
             }
         }
 
@@ -177,6 +177,8 @@ impl TurretGame {
             },
             rate_of_fire: 8f32,
             time_since_fired: 100f32,
+            tracer_bullet_rate: 3i32,
+            bullets_since_last_tracer: 0i32,
         };
 
         Self {
@@ -215,13 +217,13 @@ impl TurretGame {
         let old_handles: Vec<RenderModelHandle> = self
             .bullets
             .iter()
-            .flat_map(|bullet| bullet.renderer_handle.clone())
+            .flat_map(|bullet| bullet.renderer_handles.clone())
             .collect();
         self.bullets.retain(|bullet| bullet.lifetime >= 0.0f32);
         let new_handles: Vec<RenderModelHandle> = self
             .bullets
             .iter()
-            .flat_map(|bullet| bullet.renderer_handle.clone())
+            .flat_map(|bullet| bullet.renderer_handles.clone())
             .collect();
         for handle in old_handles.into_iter() {
             if !new_handles.contains(&handle) {
@@ -235,13 +237,21 @@ impl TurretGame {
     }
 
     fn handle_player_input(&mut self) {
-        let speed = 25.0f32;
+        let speed = 1.0f32;
         let movement = speed * self.delta_time;
+        let pitch_speed = 1.0f32;
+        let pitch_movement = pitch_speed * self.delta_time;
         if self.input.is_held(VirtualKeyCode::A) {
-            self.player.camera.position -= Vector3::new(0.0, 0.0, movement);
+            self.player.camera.direction -= Vector3::new(0.0, 0.0, movement);
         }
         if self.input.is_held(VirtualKeyCode::D) {
-            self.player.camera.position += Vector3::new(0.0, 0.0, movement);
+            self.player.camera.direction += Vector3::new(0.0, 0.0, movement);
+        }
+        if self.input.is_held(VirtualKeyCode::W) {
+            self.player.camera.direction += Vector3::new(0.0, pitch_movement, 0.0);
+        }
+        if self.input.is_held(VirtualKeyCode::S) {
+            self.player.camera.direction -= Vector3::new(0.0, pitch_movement, 0.0);
         }
 
         self.player.time_since_fired += self.delta_time;
@@ -253,12 +263,23 @@ impl TurretGame {
             && self.player.time_since_fired >= 1.0f32 / self.player.rate_of_fire
         {
             self.player.time_since_fired = 0.0f32;
+            let tracer = {
+                if self.player.bullets_since_last_tracer >= self.player.tracer_bullet_rate {
+                    self.player.bullets_since_last_tracer = 0;
+                    true
+                } else {
+                    false
+                }
+            };
+
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -6f32, 8f32),
-                Vector3::new(1f32, 0.0f32, 0f32),
-                100f32,
+                self.player.camera.direction,
+                1000f32,
+                tracer,
             );
             self.bullets.push(bullet);
+            self.player.bullets_since_last_tracer += 1;
         }
         if self.input.was_released(VirtualKeyCode::Space) {
             if let Some(sound) = self.firing_sound_handle.as_mut() {
@@ -280,22 +301,16 @@ impl TurretGame {
                 .unwrap();
         }
         for bullet in self.bullets.iter() {
-            for &handle in bullet.renderer_handle.iter() {
-                self.renderer
-                    .set_render_model_transform(
-                        handle,
-                        from_transforms(
-                            bullet.position,
-                            Quaternion::from_angle_y(Deg(-90f32))
-                                * Quaternion::look_at(
-                                    bullet.velocity.normalize(),
-                                    Vector3::unit_y(),
-                                ),
-                            Vector3::new(1f32, 0.2f32, 0.2f32),
-                        ),
-                    )
-                    .unwrap();
-            }
+            self.renderer
+                .set_render_model_transform(
+                    &bullet.renderer_handles,
+                    from_transforms(
+                        bullet.position,
+                        Quaternion::from_angle_y(Deg(0f32)),
+                        Vector3::new(0.2f32, 0.2f32, 0.2f32),
+                    ),
+                )
+                .unwrap();
         }
     }
 
@@ -323,6 +338,13 @@ impl TurretGame {
                                     .step_by(0.1),
                             );
                         });
+                        ui.horizontal(|ui| {
+                            ui.label("Tracer Rate of Fire");
+                            ui.add(egui::Slider::new(
+                                &mut self.player.tracer_bullet_rate,
+                                1..=5,
+                            ));
+                        });
                     });
                 egui::Window::new("Timings")
                     .vscroll(false)
@@ -346,22 +368,28 @@ impl TurretGame {
         position: Vector3<f32>,
         direction: Vector3<f32>,
         speed: f32,
+        emissive: bool,
     ) -> Bullet {
         let handles = spawn_model(&mut self.renderer, &self.bullet_model);
-        for &handle in handles.iter() {
-            self.renderer
-                .set_render_model_material(
-                    handle,
-                    MaterialInstance {
-                        diffuse: Vector4::new(0.0f32, 0.6f32, 0.0f32, 1.0f32),
-                        emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-        }
+        let material = {
+            if emissive {
+                MaterialInstance {
+                    diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
+                    emissive: Vector3::new(1.0f32, 1.0f32, 1.0f32),
+                    ..Default::default()
+                }
+            } else {
+                MaterialInstance {
+                    diffuse: Vector4::new(0.4f32, 0.4f32, 0.4f32, 1.0f32),
+                    ..Default::default()
+                }
+            }
+        };
+        self.renderer
+            .set_render_model_material(&handles, material)
+            .unwrap();
         Bullet {
-            renderer_handle: handles,
+            renderer_handles: handles,
             position,
             velocity: direction.normalize() * speed,
             lifetime: 10.0,

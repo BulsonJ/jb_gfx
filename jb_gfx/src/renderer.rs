@@ -1,7 +1,7 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use ash::vk;
 use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageLayout, IndexType, ObjectType,
@@ -2309,28 +2309,32 @@ impl Renderer {
 
     pub fn set_render_model_transform(
         &mut self,
-        handle: RenderModelHandle,
+        handles: &[RenderModelHandle],
         transform: Matrix4<f32>,
     ) -> Result<()> {
-        if let Some(model) = self.render_models.get_mut(handle) {
-            model.transform = transform;
-            Ok(())
-        } else {
-            Err(anyhow!("Unable to find Render Model!"))
+        for &handle in handles.iter() {
+            if let Some(model) = self.render_models.get_mut(handle) {
+                model.transform = transform;
+            } else {
+                bail!(anyhow!("Unable to find Render Model!"))
+            }
         }
+        Ok(())
     }
 
     pub fn set_render_model_material(
         &mut self,
-        handle: RenderModelHandle,
+        handles: &[RenderModelHandle],
         material_instance: MaterialInstance,
     ) -> Result<()> {
-        if let Some(model) = self.render_models.get_mut(handle) {
-            model.material_instance = material_instance;
-            Ok(())
-        } else {
-            Err(anyhow!("Unable to find Render Model!"))
+        for &handle in handles.iter() {
+            if let Some(model) = self.render_models.get_mut(handle) {
+                model.material_instance = material_instance;
+            } else {
+                bail!(anyhow!("Unable to find Render Model!"))
+            }
         }
+        Ok(())
     }
 
     pub fn create_light(&mut self, light: &Light) -> Option<LightHandle> {
