@@ -110,9 +110,9 @@ impl TurretGame {
                             from_transforms(
                                 offset
                                     + Vector3::new(
-                                    barrel_distance,
-                                    spacing * y as f32,
-                                    spacing * x as f32,
+                                        barrel_distance,
+                                        spacing * y as f32,
+                                        spacing * x as f32,
                                     ),
                                 Quaternion::from_angle_y(Deg(0.0)),
                                 Vector3::from_value(scale),
@@ -133,14 +133,19 @@ impl TurretGame {
             ..Default::default()
         });
         let bullet_tracer_material = renderer.add_material_instance(MaterialInstance {
-            diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
-            emissive: Vector3::new(1.0f32, 1.0f32, 0.2f32),
+            diffuse: Vector4::new(0.0f32, 0.0f32, 0.0f32, 1.0f32),
+            emissive: Vector3::new(2.0f32, 2.0f32, 0.0f32),
             ..Default::default()
         });
 
         let tile_height = 9;
-        let tile_width = 12;
-        let size = 50.0f32;
+        let tile_width = 9;
+        let size = 100.0f32;
+        let offset = Vector3::new(
+            -tile_width as f32 * size,
+            0.0f32,
+            -tile_height as f32 * size,
+        ) + Vector3::new(size, 0.0f32, size);
         for y in 0..tile_height {
             for x in 0..tile_width {
                 let handles = spawn_model(&mut renderer, &bullet_model);
@@ -152,10 +157,10 @@ impl TurretGame {
                         &handles,
                         from_transforms(
                             Vector3::new(
-                                -(((tile_height - 1) / 2) as f32 * size) + (y as f32 * size),
-                                -100.0f32,
-                                -(((tile_width - 1) / 2) as f32 * size) + (x as f32 * size),
-                            ),
+                                y as f32 * (size * 2f32),
+                                -200.0f32,
+                                x as f32 * (size * 2f32),
+                            ) + offset,
                             Quaternion::from_angle_y(Deg(0.0)),
                             Vector3::new(size, 1.0, size),
                         ),
@@ -164,21 +169,7 @@ impl TurretGame {
             }
         }
 
-        let lights = vec![create_light(
-            &mut renderer,
-            Light {
-                position: Point3::new(barrel_distance - 5f32, 0.0f32, -10.0f32),
-                intensity: 1.0,
-                ..Default::default()
-            },
-        ),create_light(
-            &mut renderer,
-            Light {
-                position: Point3::new(barrel_distance - 5f32, 0.0f32, 10.0f32),
-                intensity: 1.0,
-                ..Default::default()
-            },
-        )];
+        let lights = vec![];
 
         let mut audio_manager =
             AudioManager::<CpalBackend>::new(AudioManagerSettings::default()).unwrap();
