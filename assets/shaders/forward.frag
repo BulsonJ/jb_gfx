@@ -1,5 +1,4 @@
 #version 460
-#include "assets/shaders/library/pbr.glsl"
 #include "assets/shaders/library/texture.glsl"
 #include "assets/shaders/library/shadow.glsl"
 #include "assets/shaders/library/lighting.glsl"
