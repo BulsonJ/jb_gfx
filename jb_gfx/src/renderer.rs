@@ -110,7 +110,7 @@ impl Renderer {
 
         let mut descriptor_layout_cache = DescriptorLayoutCache::new(device.vk_device.clone());
         let mut descriptor_allocator = DescriptorAllocator::new(device.vk_device.clone());
-        let mut frame_descriptor_allocator = [
+        let frame_descriptor_allocator = [
             DescriptorAllocator::new(device.vk_device.clone()),
             DescriptorAllocator::new(device.vk_device.clone()),
         ];
@@ -254,7 +254,7 @@ impl Renderer {
         };
 
         let sun = DirectionalLight::new((0.0, -1.0, -0.1).into(), (1.0, 1.0, 1.0).into(), 200f32);
-        let mut camera_uniform = {
+        let camera_uniform = {
             // Create default camera so that scene is at least rendered initially
             let camera = DefaultCamera {
                 position: (-8.0, 100.0, 0.0).into(),
@@ -381,7 +381,6 @@ impl Renderer {
             )?;
 
             let camera_buffer = camera_buffer.get(i).unwrap();
-            let light_buffer = light_buffer.get(i).unwrap();
 
             device
                 .resource_manager
@@ -909,7 +908,7 @@ impl Renderer {
         let resource_index = self.device.buffered_resource_number();
 
         // Reset desc allocator
-        self.frame_descriptor_allocator[resource_index].reset_pools();
+        self.frame_descriptor_allocator[resource_index].reset_pools()?;
 
         // Get images
 

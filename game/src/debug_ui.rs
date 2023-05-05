@@ -37,3 +37,7 @@ pub fn draw_timestamps(ui: &mut egui::Ui, timestamps: jb_gfx::renderer::TimeStam
         ui.label(format!("{:.6}", timestamps.total.to_string()));
     });
 }
+
+pub trait DebugPanel {
+    fn draw_debug(&mut self, ui: &mut egui::Ui);
+}

@@ -1,3 +1,4 @@
+pub use camera::*;
 pub use components::*;
 
 pub mod components;
@@ -6,5 +7,4 @@ pub mod input;
 
 pub mod camera;
 pub mod debug_ui;
-
-pub use camera::*;
+pub mod turret_game;
