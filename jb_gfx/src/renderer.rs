@@ -44,6 +44,7 @@ const MAX_OBJECTS: u64 = 10000u64;
 const MAX_QUADS: u64 = 100000u64;
 const MAX_DEBUG_UI: u64 = 100u64;
 
+const MAX_MATERIAL_INSTANCES: usize = 128;
 const MAX_LIGHTS: usize = 64;
 
 const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
@@ -88,6 +89,7 @@ pub struct Renderer {
     stored_lights: SlotMap<LightHandle, Light>,
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    material_instances: SlotMap<MaterialInstanceHandle, MaterialInstance>,
 
     ui_pass: UiPass,
     ui_to_draw: Vec<UIMesh>,
@@ -300,7 +302,7 @@ impl Renderer {
 
         let material_buffer = {
             let buffer_create_info = BufferCreateInfo {
-                size: size_of::<MaterialParamSSBO>() * MAX_OBJECTS as usize,
+                size: size_of::<MaterialParamSSBO>() * MAX_MATERIAL_INSTANCES as usize,
                 usage: vk::BufferUsageFlags::STORAGE_BUFFER,
                 storage_type: BufferStorageType::HostLocal,
             };
@@ -864,6 +866,7 @@ impl Renderer {
             forward: forward_pass,
             deferred_fill,
             deferred_lighting_combine,
+            material_instances: SlotMap::default(),
         });
         result
     }
@@ -986,9 +989,8 @@ impl Renderer {
                 .copy_from_slice(&transform_matrices);
 
             let mut materials = Vec::new();
-            for model in self.render_models.values() {
-                let material_params =
-                    self.get_material_ssbo_from_instance(&model.material_instance);
+            for material_instance in self.material_instances.values() {
+                let material_params = self.get_material_ssbo_from_instance(&material_instance);
                 materials.push(material_params);
             }
             // Push light materials
@@ -1015,13 +1017,18 @@ impl Renderer {
             for (i, model) in self.render_models.keys().enumerate() {
                 let model = self.render_models.get(model).unwrap();
                 if let Some(mesh) = self.mesh_pool.get(model.mesh_handle) {
+                    let material_index = self
+                        .material_instances
+                        .keys()
+                        .position(|handle| handle == model.material_instance)
+                        .unwrap();
                     draw_data.push(DrawData {
                         vertex_offset: mesh.vertex_offset,
                         vertex_count: mesh.vertex_count,
                         index_offset: mesh.index_offset,
                         index_count: mesh.index_count,
                         transform_index: i,
-                        material_index: i,
+                        material_index,
                     });
                 }
             }
@@ -2289,11 +2296,11 @@ impl Renderer {
     pub fn add_render_model(
         &mut self,
         handle: MeshHandle,
-        textures: MaterialInstance,
+        material_handle: MaterialInstanceHandle,
     ) -> RenderModelHandle {
         self.render_models.insert(RenderModel {
             mesh_handle: handle,
-            material_instance: textures,
+            material_instance: material_handle,
             transform: from_transforms(
                 Vector3::from_value(0f32),
                 Quaternion::from_axis_angle(Vector3::new(0.0f32, 1.0f32, 0.0f32), Deg(0f32)),
@@ -2324,7 +2331,7 @@ impl Renderer {
     pub fn set_render_model_material(
         &mut self,
         handles: &[RenderModelHandle],
-        material_instance: MaterialInstance,
+        material_instance: MaterialInstanceHandle,
     ) -> Result<()> {
         for &handle in handles.iter() {
             if let Some(model) = self.render_models.get_mut(handle) {
@@ -2364,6 +2371,27 @@ impl Renderer {
     pub fn draw_ui(&mut self, ui: UIMesh) -> Result<()> {
         self.ui_to_draw.push(ui);
         Ok(())
+    }
+
+    pub fn add_material_instance(
+        &mut self,
+        material_instance: MaterialInstance,
+    ) -> MaterialInstanceHandle {
+        assert!(self.material_instances.len() <= MAX_MATERIAL_INSTANCES);
+
+        self.material_instances.insert(material_instance)
+    }
+
+    pub fn set_material_instance(
+        &mut self,
+        handle: MaterialInstanceHandle,
+        new_material: MaterialInstance,
+    ) -> Result<()> {
+        if let Some(material) = self.material_instances.get_mut(handle) {
+            let _old = std::mem::replace(material, new_material);
+            return Ok(());
+        }
+        Err(anyhow!("No material exists exists"))
     }
 }
 
@@ -2434,7 +2462,7 @@ impl Vertex {
     }
 }
 
-new_key_type! {pub struct RenderModelHandle; pub struct LightHandle; pub struct CameraHandle;}
+new_key_type! {pub struct RenderModelHandle; pub struct LightHandle; pub struct CameraHandle; pub struct MaterialInstanceHandle;}
 
 fn from_transforms(
     position: Vector3<f32>,
@@ -2480,7 +2508,7 @@ impl Default for MaterialInstance {
 
 struct RenderModel {
     mesh_handle: MeshHandle,
-    material_instance: MaterialInstance,
+    material_instance: MaterialInstanceHandle,
     transform: Matrix4<f32>,
 }
 

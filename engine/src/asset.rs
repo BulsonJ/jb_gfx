@@ -8,7 +8,7 @@ use image::EncodableLayout;
 use log::info;
 
 use jb_gfx::prelude::*;
-use jb_gfx::renderer::RenderModelHandle;
+use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
 
 #[derive(Default)]
 pub struct AssetManager {
@@ -336,6 +336,7 @@ impl AssetManager {
                     metallic_roughness_texture: metallic_roughness_tex,
                     occlusion_texture: occlusion_tex,
                 };
+                let material_instance = renderer.add_material_instance(material_instance);
 
                 let model = SubMesh {
                     mesh: mesh_handle,
@@ -401,5 +402,5 @@ pub struct Mesh {
 #[derive(Copy, Clone)]
 pub struct SubMesh {
     pub mesh: MeshHandle,
-    pub material_instance: MaterialInstance,
+    pub material_instance: MaterialInstanceHandle,
 }

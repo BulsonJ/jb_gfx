@@ -18,7 +18,7 @@ use winit::window::Window;
 
 use engine::prelude::*;
 use jb_gfx::prelude::*;
-use jb_gfx::renderer::RenderModelHandle;
+use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
 
 use crate::components::LightComponent;
 use crate::debug_ui::{draw_timestamps, DebugPanel};
@@ -48,6 +48,8 @@ pub struct TurretGame {
     bullets: Vec<Bullet>,
     engine_sound: StaticSoundData,
     engine_looping_sound: Option<StaticSoundHandle>,
+    bullet_material: MaterialInstanceHandle,
+    bullet_tracer_material: MaterialInstanceHandle,
 }
 
 struct Bullet {
@@ -80,6 +82,22 @@ impl TurretGame {
                 .unwrap();
             models[0].clone()
         };
+
+        let grass_material = renderer.add_material_instance(MaterialInstance {
+            diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
+            diffuse_texture: Some(grass_texture),
+            ..Default::default()
+        });
+        let bullet_material = renderer.add_material_instance(MaterialInstance {
+            diffuse: Vector4::new(0.4f32, 0.4f32, 0.4f32, 1.0f32),
+            ..Default::default()
+        });
+        let bullet_tracer_material = renderer.add_material_instance(MaterialInstance {
+            diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
+            emissive: Vector3::new(1.0f32, 1.0f32, 0.2f32),
+            ..Default::default()
+        });
+
         let tile_height = 9;
         let tile_width = 12;
         let size = 50.0f32;
@@ -87,14 +105,7 @@ impl TurretGame {
             for x in 0..tile_width {
                 let handles = spawn_model(&mut renderer, &bullet_model);
                 renderer
-                    .set_render_model_material(
-                        &handles,
-                        MaterialInstance {
-                            diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
-                            diffuse_texture: Some(grass_texture),
-                            ..Default::default()
-                        },
-                    )
+                    .set_render_model_material(&handles, grass_material)
                     .unwrap();
                 renderer
                     .set_render_model_transform(
@@ -181,6 +192,8 @@ impl TurretGame {
             draw_debug_ui: draw_ui,
             bullet_model,
             bullets: Vec::new(),
+            bullet_material,
+            bullet_tracer_material,
         }
     }
 
@@ -296,16 +309,9 @@ impl TurretGame {
         let handles = spawn_model(&mut self.renderer, &self.bullet_model);
         let material = {
             if tracer {
-                MaterialInstance {
-                    diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
-                    emissive: Vector3::new(1.0f32, 1.0f32, 0.2f32),
-                    ..Default::default()
-                }
+                self.bullet_tracer_material
             } else {
-                MaterialInstance {
-                    diffuse: Vector4::new(0.4f32, 0.4f32, 0.4f32, 1.0f32),
-                    ..Default::default()
-                }
+                self.bullet_material
             }
         };
         self.renderer
