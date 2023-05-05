@@ -121,7 +121,7 @@ impl ResourceManager {
             if image_create_info.array_layers == 1 {
                 vk::ImageViewType::TYPE_2D
             } else {
-                vk::ImageViewType::TYPE_2D_ARRAY
+                vk::ImageViewType::CUBE
             }
         };
 

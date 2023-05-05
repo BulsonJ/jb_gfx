@@ -13,11 +13,11 @@ vec4 SampleBindlessTexture(int samplerHandle, int handle, vec2 texCoords)
     return result;
 }
 
-vec4 SampleBindlessSkybox(int samplerHandle, int handle, vec3 viewDir)
+vec3 SampleBindlessSkybox(int samplerHandle, int handle, vec3 viewDir)
 {
-    vec4 result = vec4(0);
+    vec3 result = vec3(0);
     if (handle > 0){
-        result.rgb = texture(samplerCube(bindlessCubeTextures[nonuniformEXT(handle - 1)], samplers[nonuniformEXT(samplerHandle)]), viewDir).rgb;
+        result = texture(samplerCube(bindlessCubeTextures[nonuniformEXT(handle - 1)], samplers[nonuniformEXT(samplerHandle)]), normalize(viewDir)).rgb;
     }
     return result;
 }

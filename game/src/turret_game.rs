@@ -71,12 +71,12 @@ impl TurretGame {
         renderer
             .load_skybox(
                 [
-                    "assets/textures/skybox/clouds1_down.bmp",
                     "assets/textures/skybox/clouds1_east.bmp",
+                    "assets/textures/skybox/clouds1_west.bmp",
+                    "assets/textures/skybox/clouds1_up.bmp",
+                    "assets/textures/skybox/clouds1_down.bmp",
                     "assets/textures/skybox/clouds1_north.bmp",
                     "assets/textures/skybox/clouds1_south.bmp",
-                    "assets/textures/skybox/clouds1_up.bmp",
-                    "assets/textures/skybox/clouds1_west.bmp",
                 ],
                 &ImageFormatType::Default,
             )
@@ -193,7 +193,7 @@ impl TurretGame {
                         from_transforms(
                             Vector3::new(
                                 y as f32 * (size * 2f32),
-                                -200.0f32,
+                                -100.0f32,
                                 x as f32 * (size * 2f32),
                             ) + offset,
                             Quaternion::from_angle_y(Deg(0.0)),

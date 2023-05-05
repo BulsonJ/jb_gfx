@@ -6,10 +6,7 @@ use std::{borrow::Cow, ffi::CStr};
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
-use ash::vk::{
-    self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageLayout, ObjectType,
-    SurfaceTransformFlagsKHR,
-};
+use ash::vk::{self, DebugUtilsObjectNameInfoEXT, DeviceSize, Handle, ImageCreateFlags, ImageLayout, ObjectType, SurfaceTransformFlagsKHR};
 use log::{error, info};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::dpi::PhysicalSize;
@@ -56,6 +53,7 @@ pub struct GraphicsDevice {
     default_sampler: vk::Sampler,
     shadow_sampler: vk::Sampler,
     ui_sampler: vk::Sampler,
+    skybox_sampler: vk::Sampler,
     timestamps: RefCell<Vec<u64>>,
 }
 
@@ -387,6 +385,22 @@ impl GraphicsDevice {
             unsafe { device.create_sampler(&sampler_info, None)? }
         };
 
+        let skybox_sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .min_lod(0.0f32)
+                .max_lod(vk::LOD_CLAMP_NONE)
+                .anisotropy_enable(true)
+                .max_anisotropy(max_sampler_anisotropy);
+
+            unsafe { device.create_sampler(&sampler_info, None)? }
+        };
+
         let upload_context = UploadContext {
             command_pool: upload_command_pool,
             command_buffer: upload_command_buffer,
@@ -433,7 +447,7 @@ impl GraphicsDevice {
             *vk::DescriptorSetLayoutBinding::builder()
                 .binding(0u32)
                 .descriptor_type(vk::DescriptorType::SAMPLER)
-                .descriptor_count(3u32)
+                .descriptor_count(4u32)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT),
             *vk::DescriptorSetLayoutBinding::builder()
                 .binding(1u32)
@@ -471,7 +485,7 @@ impl GraphicsDevice {
         };
 
         let resource_manager = Arc::new(resource_manager);
-        let samplers = vec![default_sampler, shadow_sampler, ui_sampler];
+        let samplers = vec![default_sampler, shadow_sampler, ui_sampler, skybox_sampler];
         let bindless_manager = RefCell::new(BindlessManager::new(
             device.clone(),
             resource_manager.clone(),
@@ -512,6 +526,7 @@ impl GraphicsDevice {
             bindless_descriptor_pool: descriptor_pool,
             shadow_sampler,
             ui_sampler,
+            skybox_sampler,
             timestamps: RefCell::default(),
         };
 
@@ -630,6 +645,7 @@ impl GraphicsDevice {
                         dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
                         new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                         level_count: image.mip_levels,
+                        image_layers: image.img_layers,
                         ..Default::default()
                     })
                     .build(
@@ -978,6 +994,15 @@ impl GraphicsDevice {
             }
         };
 
+        // TODO : Refactor all this to work off cube type instead of assuming based on layers
+        let flags = {
+            if img_layers > 1 {
+                ImageCreateFlags::CUBE_COMPATIBLE
+            }else {
+                ImageCreateFlags::empty()
+            }
+        };
+
         let image_create_info = vk::ImageCreateInfo::builder()
             .format(format)
             .usage(
@@ -994,7 +1019,8 @@ impl GraphicsDevice {
             .array_layers(img_layers)
             .mip_levels(mip_levels)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .tiling(vk::ImageTiling::OPTIMAL);
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .flags(flags);
 
         let image = self.resource_manager.create_image(&image_create_info);
 
@@ -1163,6 +1189,9 @@ impl GraphicsDevice {
     pub fn ui_sampler(&self) -> vk::Sampler {
         self.ui_sampler
     }
+    pub fn skybox_sampler(&self) -> vk::Sampler {
+        self.skybox_sampler
+    }
 }
 
 impl Drop for GraphicsDevice {
@@ -1178,6 +1207,7 @@ impl Drop for GraphicsDevice {
             self.vk_device.destroy_sampler(self.default_sampler, None);
             self.vk_device.destroy_sampler(self.shadow_sampler, None);
             self.vk_device.destroy_sampler(self.ui_sampler, None);
+            self.vk_device.destroy_sampler(self.skybox_sampler, None);
             for semaphore in self.present_complete_semaphore.into_iter() {
                 self.vk_device.destroy_semaphore(semaphore, None);
             }

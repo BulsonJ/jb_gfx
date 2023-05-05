@@ -33,7 +33,7 @@ layout( push_constant ) uniform constants
 
 void main()
 {
-    vec3 skybox = SampleBindlessSkybox(1, pushConstants.handle, normalize(inViewDir)).rgb;
-   // skybox = inViewDir;
+    vec3 skybox = SampleBindlessSkybox(3, pushConstants.handle, inViewDir).rgb;
+    //skybox = inViewDir;
     gAlbedoSpec.rgb = skybox;
 }
