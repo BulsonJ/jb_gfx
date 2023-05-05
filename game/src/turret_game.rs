@@ -12,6 +12,7 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundS
 use kira::tween::{Easing, Tween};
 use kira::LoopBehavior;
 use kira::Volume::Amplitude;
+use log::info;
 use winit::event::{VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::window::Window;
@@ -20,6 +21,7 @@ use engine::prelude::*;
 use jb_gfx::prelude::*;
 use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
 
+use crate::collision::CollisionBox;
 use crate::components::LightComponent;
 use crate::debug_ui::{draw_timestamps, DebugPanel};
 use crate::egui_context::EguiContext;
@@ -50,14 +52,23 @@ pub struct TurretGame {
     engine_looping_sound: Option<StaticSoundHandle>,
     bullet_material: MaterialInstanceHandle,
     bullet_tracer_material: MaterialInstanceHandle,
+    barrels: Vec<Barrel>,
 }
 
 struct Bullet {
-    renderer_handles: Vec<RenderModelHandle>,
+    renderer_handle: RenderModelHandle,
     position: Vector3<f32>,
     velocity: Vector3<f32>,
     scale: Vector3<f32>,
     lifetime: f32,
+    collision_box: CollisionBox,
+}
+
+struct Barrel {
+    renderer_handle: RenderModelHandle,
+    position: Vector3<f32>,
+    scale: Vector3<f32>,
+    collision_box: CollisionBox,
 }
 
 impl TurretGame {
@@ -124,10 +135,10 @@ impl TurretGame {
             models[0].clone()
         };
         // Spawn barrels
-        let barrel_distance = 40.0f32;
-        {
-            let barrel_height = 3;
-            let barrel_width = 3;
+        let barrels = {
+            let barrel_distance = 40.0f32;
+            let barrel_height = 6;
+            let barrel_width = 6;
             let spacing = 10.0f32;
             let offset = Vector3::new(
                 0.0f32,
@@ -135,28 +146,39 @@ impl TurretGame {
                 -barrel_height as f32 * spacing,
             ) / 2f32
                 + Vector3::new(0.0f32, 5.0f32, 5.0f32);
-            let scale = 5f32;
+
+            let mut barrels = Vec::new();
             for y in 0..barrel_height {
                 for x in 0..barrel_width {
-                    let barrel = spawn_model(&mut renderer, &barrel_model)[0];
+                    let position = offset
+                        + Vector3::new(barrel_distance, spacing * y as f32, spacing * x as f32);
+                    let scale = Vector3::from_value(5f32);
+
+                    let barrel = Barrel {
+                        renderer_handle: spawn_model(&mut renderer, &barrel_model)[0],
+                        position,
+                        scale,
+                        collision_box: CollisionBox {
+                            position,
+                            size: Vector3::new(2f32, 4f32, 2f32),
+                        },
+                    };
                     renderer
                         .set_render_model_transform(
-                            &[barrel],
+                            &[barrel.renderer_handle],
                             from_transforms(
-                                offset
-                                    + Vector3::new(
-                                        barrel_distance,
-                                        spacing * y as f32,
-                                        spacing * x as f32,
-                                    ),
+                                barrel.position,
                                 Quaternion::from_angle_y(Deg(0.0)),
-                                Vector3::from_value(scale),
+                                barrel.scale,
                             ),
                         )
                         .unwrap();
+
+                    barrels.push(barrel);
                 }
             }
-        }
+            barrels
+        };
 
         let grass_material = renderer.add_material_instance(MaterialInstance {
             diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
@@ -267,6 +289,7 @@ impl TurretGame {
             bullets: Vec::new(),
             bullet_material,
             bullet_tracer_material,
+            barrels,
         }
     }
 
@@ -278,24 +301,57 @@ impl TurretGame {
 
         for bullet in self.bullets.iter_mut() {
             bullet.position += bullet.velocity * self.delta_time;
+            bullet.collision_box.position = bullet.position;
             bullet.lifetime -= self.delta_time;
         }
 
-        // Remove any bullets that need deleting and remove render handles;
-        let old_handles: Vec<RenderModelHandle> = self
-            .bullets
-            .iter()
-            .flat_map(|bullet| bullet.renderer_handles.clone())
-            .collect();
-        self.bullets.retain(|bullet| bullet.lifetime >= 0.0f32);
-        let new_handles: Vec<RenderModelHandle> = self
-            .bullets
-            .iter()
-            .flat_map(|bullet| bullet.renderer_handles.clone())
-            .collect();
-        for handle in old_handles.into_iter() {
-            if !new_handles.contains(&handle) {
-                self.renderer.remove_render_model(handle);
+        for barrel in self.barrels.iter_mut() {
+            barrel.collision_box.position = barrel.position;
+        }
+
+        {
+            profiling::scope!("Check Collisions");
+
+            let mut destroy_barrels = Vec::new();
+            let mut destroy_bullets = Vec::new();
+            for (i, bullet) in self.bullets.iter().enumerate() {
+                for (j, barrel) in self.barrels.iter().enumerate() {
+                    if bullet.collision_box.check_collision(&barrel.collision_box) {
+                        destroy_barrels.push(j);
+                        destroy_bullets.push(i);
+                    }
+                }
+            }
+            for &i in destroy_barrels.iter() {
+                let removed_barrel = self.barrels.remove(i);
+                self.renderer
+                    .remove_render_model(removed_barrel.renderer_handle);
+            }
+            for &i in destroy_bullets.iter() {
+                let removed = self.bullets.remove(i);
+                self.renderer.remove_render_model(removed.renderer_handle);
+            }
+        }
+
+        {
+            profiling::scope!("Remove old bullets");
+
+            // Remove any bullets that need deleting and remove render handles;
+            let old_handles: Vec<RenderModelHandle> = self
+                .bullets
+                .iter()
+                .map(|bullet| bullet.renderer_handle)
+                .collect();
+            self.bullets.retain(|bullet| bullet.lifetime >= 0.0f32);
+            let new_handles: Vec<RenderModelHandle> = self
+                .bullets
+                .iter()
+                .map(|bullet| bullet.renderer_handle)
+                .collect();
+            for handle in old_handles.into_iter() {
+                if !new_handles.contains(&handle) {
+                    self.renderer.remove_render_model(handle);
+                }
             }
         }
 
@@ -357,7 +413,7 @@ impl TurretGame {
         for bullet in self.bullets.iter() {
             self.renderer
                 .set_render_model_transform(
-                    &bullet.renderer_handles,
+                    &[bullet.renderer_handle],
                     from_transforms(
                         bullet.position,
                         Quaternion::from_angle_y(Deg(0f32)),
@@ -365,6 +421,18 @@ impl TurretGame {
                     ),
                 )
                 .unwrap();
+        }
+        for barrel in self.barrels.iter() {
+            self.renderer
+                .set_render_model_transform(
+                    &[barrel.renderer_handle],
+                    from_transforms(
+                        barrel.position,
+                        Quaternion::from_angle_y(Deg(0f32)),
+                        barrel.scale,
+                    ),
+                )
+                .unwrap()
         }
     }
 
@@ -399,12 +467,18 @@ impl TurretGame {
             }
         };
 
+        let collision_box = CollisionBox {
+            position,
+            size: Vector3::new(1f32, 1f32, 1f32),
+        };
+
         Bullet {
-            renderer_handles: handles,
+            renderer_handle: handles[0],
             position,
             velocity: direction.normalize() * speed,
             scale,
             lifetime: 10.0,
+            collision_box,
         }
     }
 }
