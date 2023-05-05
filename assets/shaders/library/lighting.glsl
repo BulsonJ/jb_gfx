@@ -1,3 +1,12 @@
+struct Light{
+    vec4 position;
+    vec3 colour;
+    float intensity;
+};
+
+layout(std140,set = 1, binding = 1) uniform LightBuffer{
+    Light lights[4];
+} lightData;
 
 vec3 CalculateDirectionalLight(vec3 normal, vec3 worldPos, vec3 cameraPos, vec3 lightDir, vec3 lightColour, float lightStrength) {
     float diff = max(dot(normal, lightDir), 0.0);
@@ -13,12 +22,6 @@ vec3 CalculateDirectionalLight(vec3 normal, vec3 worldPos, vec3 cameraPos, vec3 
 
     return diffuse + specular;
 }
-
-struct Light{
-    vec4 position;
-    vec3 colour;
-    float intensity;
-};
 
 vec3 CalculatePointLight(vec3 normal, vec3 worldPos, vec3 cameraPos, Light light) {
     vec3 lightDir = normalize(light.position.xyz - worldPos);

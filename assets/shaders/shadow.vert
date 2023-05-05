@@ -1,27 +1,13 @@
 //we will be using glsl version 4.5 syntax
 #version 450
 #extension GL_EXT_nonuniform_qualifier: enable
+#include "assets/shaders/library/camera.glsl"
 
 layout (location = 0) in vec3 vPosition;
 layout (location = 1) in vec2 vTexCoords;
 layout (location = 2) in vec3 vNormal;
 layout (location = 3) in vec3 vColor;
 layout (location = 4) in vec4 vTangent;
-
-layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
-	mat4 proj;
-	mat4 view;
-	mat4 invProjView;
-	vec4 cameraPos;
-	vec4 ambientLight;
-	vec3 directionalLightColour;
-	float directionalLightStrength;
-	vec4 directionalLightDirection;
-	mat4 sunProj;
-	mat4 sunView;
-	int pointLightCount;
-	int padding[3];
-} cameraData;
 
 struct ModelMatrix{
 	mat4 model;

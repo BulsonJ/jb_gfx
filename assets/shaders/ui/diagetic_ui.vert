@@ -1,23 +1,9 @@
 #version 450
 #extension GL_EXT_nonuniform_qualifier: enable
+#include "assets/shaders/library/camera.glsl"
 
 layout (location = 0) out vec2 outTexCoords;
 layout (location = 1) out int outDrawDataIndex;
-
-layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
-	mat4 proj;
-	mat4 view;
-	mat4 invProjView;
-	vec4 cameraPos;
-	vec4 ambientLight;
-	vec3 directionalLightColour;
-	float directionalLightStrength;
-	vec4 directionalLightDirection;
-	mat4 sunProj;
-	mat4 sunView;
-	int pointLightCount;
-	int padding[3];
-} cameraData;
 
 struct DiageticUIDrawData{
 	vec3 position;

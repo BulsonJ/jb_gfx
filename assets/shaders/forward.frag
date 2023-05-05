@@ -3,6 +3,7 @@
 #include "assets/shaders/library/texture.glsl"
 #include "assets/shaders/library/shadow.glsl"
 #include "assets/shaders/library/lighting.glsl"
+#include "assets/shaders/library/camera.glsl"
 
 //shader input
 layout (location = 0) in vec3 inColor;
@@ -14,25 +15,6 @@ layout (location = 7) in vec4 inShadowCoord;
 
 layout (location = 0) out vec4 outFragColor;
 layout (location = 1) out vec4 outBrightColor;
-
-layout(std140,set = 1, binding = 0) uniform  CameraBuffer{
-	mat4 proj;
-	mat4 view;
-	mat4 invProjView;
-	vec4 cameraPos;
-	vec4 ambientLight;
-	vec3 directionalLightColour;
-	float directionalLightStrength;
-	vec4 directionalLightDirection;
-	mat4 sunProj;
-	mat4 sunView;
-	int pointLightCount;
-	int padding[3];
-} cameraData;
-
-layout(std140,set = 1, binding = 1) uniform LightBuffer{
-	Light lights[4];
-} lightData;
 
 struct MaterialParameters {
 	vec4 diffuse;
