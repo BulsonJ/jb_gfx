@@ -645,7 +645,7 @@ impl GraphicsDevice {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
                         mip_level: 0u32,
                         base_array_layer: 0u32,
-                        layer_count: 1u32,
+                        layer_count: image.img_layers,
                     })
                     .image_extent(vk::Extent3D {
                         width: image.width,
@@ -691,6 +691,7 @@ impl GraphicsDevice {
                             new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                             base_mip_level: i - 1,
                             level_count: 1,
+                            image_layers: image.img_layers,
                         })
                         .build(
                             self,
@@ -702,7 +703,7 @@ impl GraphicsDevice {
                             aspect_mask: vk::ImageAspectFlags::COLOR,
                             mip_level: i - 1,
                             base_array_layer: 0,
-                            layer_count: 1,
+                            layer_count: image.img_layers,
                         })
                         .src_offsets([
                             vk::Offset3D { x: 0, y: 0, z: 0 },
@@ -716,7 +717,7 @@ impl GraphicsDevice {
                             aspect_mask: vk::ImageAspectFlags::COLOR,
                             mip_level: i,
                             base_array_layer: 0,
-                            layer_count: 1,
+                            layer_count: image.img_layers,
                         })
                         .dst_offsets([
                             vk::Offset3D { x: 0, y: 0, z: 0 },
@@ -756,6 +757,7 @@ impl GraphicsDevice {
                             new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                             base_mip_level: i - 1,
                             level_count: 1,
+                            image_layers: image.img_layers,
                         })
                         .build(
                             self,
@@ -781,6 +783,7 @@ impl GraphicsDevice {
                         new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                         base_mip_level: image.mip_levels - 1,
                         level_count: 1,
+                        image_layers: image.img_layers,
                     })
                     .build(
                         self,
@@ -945,10 +948,11 @@ impl GraphicsDevice {
         img_height: u32,
         image_type: &ImageFormatType,
         mip_levels: u32,
+        img_layers: u32,
     ) -> Result<ImageHandle> {
         profiling::scope!("Load Image");
 
-        let img_size = (img_width * img_height * 4u32) as DeviceSize;
+        let img_size = (img_width * img_height * 4u32 * img_layers) as DeviceSize;
 
         let staging_buffer_create_info = BufferCreateInfo {
             size: img_size as usize,
@@ -987,7 +991,7 @@ impl GraphicsDevice {
                 depth: 1,
             })
             .image_type(vk::ImageType::TYPE_2D)
-            .array_layers(1u32)
+            .array_layers(img_layers)
             .mip_levels(mip_levels)
             .samples(vk::SampleCountFlags::TYPE_1)
             .tiling(vk::ImageTiling::OPTIMAL);
@@ -1000,6 +1004,7 @@ impl GraphicsDevice {
             width: img_width,
             height: img_height,
             mip_levels,
+            img_layers,
         });
 
         self.bindless_manager
@@ -1221,6 +1226,7 @@ struct ImageToUpload {
     width: u32,
     height: u32,
     mip_levels: u32,
+    img_layers: u32,
 }
 
 pub(crate) fn cmd_copy_buffer(

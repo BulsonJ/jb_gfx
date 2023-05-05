@@ -62,6 +62,7 @@ impl AssetManager {
                 img.height(),
                 &ImageFormatType::Default,
                 mip_levels,
+                1,
             ) {
                 self.loaded_textures
                     .insert(image.name().unwrap().to_string(), loaded_texture);
@@ -72,7 +73,11 @@ impl AssetManager {
         }
     }
 
-    pub fn load_gltf(&mut self, renderer: &mut Renderer, file: impl AsRef<std::path::Path>) -> Result<Vec<Model>> {
+    pub fn load_gltf(
+        &mut self,
+        renderer: &mut Renderer,
+        file: impl AsRef<std::path::Path>,
+    ) -> Result<Vec<Model>> {
         profiling::scope!("Load GLTF Asset");
         let file = file.as_ref().to_str().unwrap();
 

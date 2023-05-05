@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::mem::size_of;
 use std::sync::Arc;
 
@@ -33,7 +34,7 @@ use crate::util::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
     ImageDescriptorInfo, JBDescriptorBuilder,
 };
-use crate::util::meshpool::MeshPool;
+use crate::util::meshpool::{MeshPool, PooledMesh};
 use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
     CameraTrait, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData,
@@ -94,6 +95,11 @@ pub struct Renderer {
     ui_pass: UiPass,
     ui_to_draw: Vec<UIMesh>,
 
+    skybox: Option<ImageHandle>,
+    skybox_pso: PipelineHandle,
+    skybox_pso_layout: vk::PipelineLayout,
+    cube_mesh: MeshHandle,
+
     pub sun: DirectionalLight,
     pub draw_debug_ui: bool,
     pub debug_ui_size: f32,
@@ -117,7 +123,7 @@ impl Renderer {
             DescriptorAllocator::new(device.vk_device.clone()),
         ];
         let mut pipeline_layout_cache = PipelineLayoutCache::new(device.vk_device.clone());
-        let mesh_pool = MeshPool::new(device.clone());
+        let mut mesh_pool = MeshPool::new(device.clone());
 
         let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
@@ -825,6 +831,65 @@ impl Renderer {
             DeferredLightingCombinePass { pso, pso_layout }
         };
 
+        let cube_mesh = mesh_pool.add_mesh(&MeshData::cube()).unwrap();
+
+        let (skybox_pso, skybox_pso_layout) = {
+            let push_constant_range = *vk::PushConstantRange::builder()
+                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+                .size(size_of::<i32>() as u32)
+                .offset(0u32);
+
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                &[
+                    device.bindless_descriptor_set_layout(),
+                    descriptor_set_layout,
+                ],
+                &[push_constant_range],
+            )?;
+
+            let pso = {
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(true)
+                    .depth_write_enable(false)
+                    .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
+
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/skybox.vert".to_string(),
+                    fragment_shader: "assets/shaders/skybox.frag".to_string(),
+                    vertex_input_state: Vertex::get_vertex_input_desc(),
+                    color_attachment_formats: vec![
+                        PipelineColorAttachment {
+                            format: DEFERRED_POSITION_FORMAT,
+                            blend: false,
+                            ..Default::default()
+                        },
+                        PipelineColorAttachment {
+                            format: DEFERRED_NORMAL_FORMAT,
+                            blend: false,
+                            ..Default::default()
+                        },
+                        PipelineColorAttachment {
+                            format: DEFERRED_COLOR_FORMAT,
+                            blend: false,
+                            ..Default::default()
+                        },
+                    ],
+                    depth_attachment_format: Some(depth_image_format),
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::NONE,
+                };
+
+                pipeline_manager.create_pipeline(&pso_build_info)?
+            };
+
+            (pso, pso_layout)
+        };
+
         info!("Renderer Created");
         let result = Ok(Self {
             device,
@@ -867,6 +932,10 @@ impl Renderer {
             deferred_fill,
             deferred_lighting_combine,
             material_instances: SlotMap::default(),
+            skybox: None,
+            skybox_pso,
+            skybox_pso_layout,
+            cube_mesh,
         });
         result
     }
@@ -1307,6 +1376,29 @@ impl Renderer {
                         // Draw commands
 
                         self.draw_objects(&draw_data)?;
+
+                        if self.skybox.is_some() {
+                            let pso = self.pipeline_manager.get_pipeline(self.skybox_pso);
+                            unsafe {
+                                self.device.vk_device.cmd_bind_pipeline(
+                                    self.device.graphics_command_buffer(),
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    pso,
+                                );
+                                self.device.vk_device.cmd_bind_descriptor_sets(
+                                    self.device.graphics_command_buffer(),
+                                    vk::PipelineBindPoint::GRAPHICS,
+                                    self.skybox_pso_layout,
+                                    0u32,
+                                    &[
+                                        self.device.bindless_descriptor_set(),
+                                        self.descriptor_set[resource_index],
+                                    ],
+                                    &[],
+                                );
+                            };
+                            self.draw_skybox()?;
+                        }
                         Ok(())
                     },
                 )?;
@@ -2143,6 +2235,65 @@ impl Renderer {
         Ok(())
     }
 
+    fn draw_skybox(&self) -> Result<()> {
+        let vertex_buffer = self.mesh_pool.vertex_buffer();
+        let index_buffer = self.mesh_pool.index_buffer();
+
+        unsafe {
+            self.device.vk_device.cmd_bind_vertex_buffers(
+                self.device.graphics_command_buffer(),
+                0u32,
+                &[vertex_buffer],
+                &[0u64],
+            )
+        };
+
+        unsafe {
+            self.device.vk_device.cmd_bind_index_buffer(
+                self.device.graphics_command_buffer(),
+                index_buffer,
+                DeviceSize::zero(),
+                IndexType::UINT32,
+            );
+        }
+
+        let push_constants = self
+            .device
+            .get_descriptor_index(&self.skybox.unwrap())
+            .unwrap() as i32;
+        unsafe {
+            self.device.vk_device.cmd_push_constants(
+                self.device.graphics_command_buffer(),
+                self.skybox_pso_layout,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                0u32,
+                bytemuck::cast_slice(&[push_constants]),
+            )
+        };
+
+        let mesh = self.mesh_pool.get(self.cube_mesh).unwrap();
+        let index_count = {
+            if mesh.index_count == 0 {
+                mesh.vertex_count
+            } else {
+                mesh.index_count
+            }
+        };
+
+        unsafe {
+            self.device.vk_device.cmd_draw_indexed(
+                self.device.graphics_command_buffer(),
+                index_count as u32,
+                1u32,
+                mesh.index_offset as u32,
+                mesh.vertex_offset as i32,
+                0u32,
+            );
+        }
+
+        Ok(())
+    }
+
     /// Loads a texture into GPU memory and returns back a Texture or an error.
     ///
     /// # Arguments
@@ -2183,6 +2334,7 @@ impl Renderer {
             img.height(),
             image_type,
             mip_levels,
+            1,
         )?;
 
         // Debug name image
@@ -2211,6 +2363,64 @@ impl Renderer {
         Ok(image)
     }
 
+    pub fn load_skybox(
+        &mut self,
+        file_location: [&str; 6],
+        image_type: &ImageFormatType,
+    ) -> Result<()> {
+        profiling::scope!("Renderer: Load Texture");
+
+        let img = {
+            profiling::scope!("image::open");
+            [
+                image::open(file_location[0]).unwrap().to_rgba8(),
+                image::open(file_location[1]).unwrap().to_rgba8(),
+                image::open(file_location[2]).unwrap().to_rgba8(),
+                image::open(file_location[3]).unwrap().to_rgba8(),
+                image::open(file_location[4]).unwrap().to_rgba8(),
+                image::open(file_location[5]).unwrap().to_rgba8(),
+            ]
+        };
+
+        let img_bytes: Vec<u8> = img.iter().flat_map(|img| img.as_bytes().to_vec()).collect();
+        let mip_levels = (img[0].width().max(img[0].height()) as f32).log2().floor() as u32 + 1u32;
+
+        let image = self.load_texture_from_bytes(
+            &img_bytes,
+            img[0].width(),
+            img[0].height(),
+            image_type,
+            mip_levels,
+            6,
+        )?;
+
+        // Debug name image
+        {
+            let image_name = file_location[0].rsplit_once('/').unwrap().1;
+            let name = "Image:".to_string() + image_name;
+            let image_handle = self
+                .device
+                .resource_manager
+                .get_image(image)
+                .unwrap()
+                .image()
+                .as_raw();
+            self.device
+                .set_vulkan_debug_name(image_handle, ObjectType::IMAGE, &name)?;
+
+            trace!(
+                "Texture Loaded: {} | Size: [{},{}] | Mip Levels:[{}]",
+                image_name,
+                img[0].width(),
+                img[0].height(),
+                mip_levels
+            );
+        }
+
+        self.skybox = Some(image);
+        Ok(())
+    }
+
     pub fn load_texture_from_bytes(
         &self,
         img_bytes: &[u8],
@@ -2218,12 +2428,13 @@ impl Renderer {
         img_height: u32,
         image_type: &ImageFormatType,
         mip_levels: u32,
+        img_layers: u32,
     ) -> Result<ImageHandle> {
         profiling::scope!("Renderer: Load Texture(From Bytes)");
 
-        let image = self
-            .device
-            .load_image(img_bytes, img_width, img_height, image_type, mip_levels)?;
+        let image = self.device.load_image(
+            img_bytes, img_width, img_height, image_type, mip_levels, img_layers,
+        )?;
 
         Ok(image)
     }

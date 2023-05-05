@@ -68,6 +68,20 @@ impl TurretGame {
         renderer.render().unwrap();
         let mut asset_manager = AssetManager::default();
 
+        renderer
+            .load_skybox(
+                [
+                    "assets/textures/skybox/clouds1_down.bmp",
+                    "assets/textures/skybox/clouds1_east.bmp",
+                    "assets/textures/skybox/clouds1_north.bmp",
+                    "assets/textures/skybox/clouds1_south.bmp",
+                    "assets/textures/skybox/clouds1_up.bmp",
+                    "assets/textures/skybox/clouds1_west.bmp",
+                ],
+                &ImageFormatType::Default,
+            )
+            .unwrap();
+
         // Spawn plane
         {
             let plane_model = {
@@ -81,7 +95,7 @@ impl TurretGame {
                 .set_render_model_transform(
                     &[plane],
                     from_transforms(
-                        Vector3::new(0.0f32,-2.0f32,0.0f32),
+                        Vector3::new(0.0f32, -2.0f32, 0.0f32),
                         Quaternion::from_angle_y(Deg(0.0)),
                         Vector3::from_value(1f32),
                     ),

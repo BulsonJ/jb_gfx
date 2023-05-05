@@ -67,6 +67,7 @@ impl EguiContext {
                 delta.image.height() as u32,
                 &ImageFormatType::Default,
                 1,
+                1,
             );
             self.stored_textures.insert(*id, image.unwrap());
         }

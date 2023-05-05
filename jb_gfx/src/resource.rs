@@ -117,14 +117,22 @@ impl ResourceManager {
         }
         .unwrap();
 
+        let view_type = {
+            if image_create_info.array_layers == 1 {
+                vk::ImageViewType::TYPE_2D
+            } else {
+                vk::ImageViewType::TYPE_2D_ARRAY
+            }
+        };
+
         let default_image_view_create_info = vk::ImageViewCreateInfo::builder()
             .format(image_create_info.format)
             .image(vk_image)
-            .view_type(vk::ImageViewType::TYPE_2D)
+            .view_type(view_type)
             .subresource_range(vk::ImageSubresourceRange {
                 aspect_mask: get_image_aspect_flags_from_format(image_create_info.format),
                 level_count: image_create_info.mip_levels,
-                layer_count: 1u32,
+                layer_count: image_create_info.array_layers,
                 ..Default::default()
             })
             .build();

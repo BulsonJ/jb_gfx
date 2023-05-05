@@ -77,6 +77,10 @@ void main()
 
     result += emissive;
 
+    if (depth == 1){
+        result = albedo;
+    }
+
     outFragColor = vec4(result,1.0f);
 
     // Bright Colours

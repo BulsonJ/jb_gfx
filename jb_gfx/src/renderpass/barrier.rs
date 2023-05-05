@@ -15,6 +15,7 @@ pub struct ImageBarrier {
     pub new_layout: ImageLayout,
     pub base_mip_level: u32,
     pub level_count: u32,
+    pub image_layers: u32,
 }
 
 pub enum ImageHandleType {
@@ -34,6 +35,7 @@ impl Default for ImageBarrier {
             new_layout: ImageLayout::UNDEFINED,
             base_mip_level: 0,
             level_count: 1,
+            image_layers: 1,
         }
     }
 }
@@ -85,7 +87,7 @@ impl ImageBarrierBuilder {
                     base_mip_level: image_barrier.base_mip_level,
                     level_count: image_barrier.level_count,
                     base_array_layer: 0,
-                    layer_count: 1,
+                    layer_count: image_barrier.image_layers,
                 });
             image_memory_barriers.push(*barrier);
         }
