@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use cgmath::{
-    Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rotation, Rotation3, Vector3,
-    Vector4,
+    Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rotation, Rotation3,
+    Vector3, Vector4,
 };
 use egui::Ui;
 use egui_winit::EventResponse;
@@ -82,6 +82,46 @@ impl TurretGame {
                 .unwrap();
             models[0].clone()
         };
+        let barrel_model = {
+            let models = asset_manager
+                .load_gltf(&mut renderer, "assets/models/barrel/barrel.gltf")
+                .unwrap();
+            models[0].clone()
+        };
+        // Spawn barrels
+        let barrel_distance = 40.0f32;
+        {
+            let barrel_height = 3;
+            let barrel_width = 3;
+            let spacing = 10.0f32;
+            let offset = Vector3::new(
+                0.0f32,
+                -barrel_width as f32 * spacing,
+                -barrel_height as f32 * spacing,
+            ) / 2f32
+                + Vector3::new(0.0f32, 5.0f32, 5.0f32);
+            let scale = 5f32;
+            for y in 0..barrel_height {
+                for x in 0..barrel_width {
+                    let barrel = spawn_model(&mut renderer, &barrel_model)[0];
+                    renderer
+                        .set_render_model_transform(
+                            &[barrel],
+                            from_transforms(
+                                offset
+                                    + Vector3::new(
+                                    barrel_distance,
+                                    spacing * y as f32,
+                                    spacing * x as f32,
+                                    ),
+                                Quaternion::from_angle_y(Deg(0.0)),
+                                Vector3::from_value(scale),
+                            ),
+                        )
+                        .unwrap();
+                }
+            }
+        }
 
         let grass_material = renderer.add_material_instance(MaterialInstance {
             diffuse: Vector4::new(1.0f32, 1.0f32, 1.0f32, 1.0f32),
@@ -127,8 +167,15 @@ impl TurretGame {
         let lights = vec![create_light(
             &mut renderer,
             Light {
-                position: Point3::new(-10.0f32, -5.0f32, 16.0f32),
-                intensity: 5.0,
+                position: Point3::new(barrel_distance - 5f32, 0.0f32, -10.0f32),
+                intensity: 1.0,
+                ..Default::default()
+            },
+        ),create_light(
+            &mut renderer,
+            Light {
+                position: Point3::new(barrel_distance - 5f32, 0.0f32, 10.0f32),
+                intensity: 1.0,
                 ..Default::default()
             },
         )];
@@ -254,7 +301,7 @@ impl TurretGame {
             };
 
             let bullet = self.spawn_bullet(
-                self.player.camera.position.to_vec() + Vector3::new(0f32, -6f32, 0f32),
+                self.player.camera.position.to_vec() + Vector3::new(0f32, -1f32, 0f32),
                 self.player.camera.direction,
                 1000f32,
                 tracer,
