@@ -2,6 +2,8 @@ use anyhow::Result;
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageLayout, PipelineStageFlags2};
 use log::info;
+use std::collections::HashMap;
+use std::mem::replace;
 
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::renderpass::RenderPass;
@@ -36,9 +38,9 @@ use crate::GraphicsDevice;
 /// ```
 #[derive(Default)]
 pub struct RenderPassBuilder {
-    colour_attachments: Vec<(AttachmentInfo, vk::ImageUsageFlags)>,
-    depth_attachment: Option<(AttachmentInfo, vk::ImageUsageFlags)>,
-    texture_inputs: Vec<(ImageHandle, vk::ImageUsageFlags)>,
+    colour_attachments: Vec<AttachmentInfo>,
+    depth_attachment: Option<AttachmentInfo>,
+    texture_inputs: Vec<ImageHandle>,
     viewport_size: (u32, u32),
 }
 
@@ -67,8 +69,8 @@ impl RenderPassBuilder {
     /// ```
     ///
     /// ```
-    pub fn add_colour_attachment(mut self, attachment: AttachmentInfo, last_usage: vk::ImageUsageFlags) -> Self {
-        self.colour_attachments.push((attachment, last_usage));
+    pub fn add_colour_attachment(mut self, attachment: AttachmentInfo) -> Self {
+        self.colour_attachments.push(attachment);
         self
     }
 
@@ -79,17 +81,13 @@ impl RenderPassBuilder {
     /// ```
     ///
     /// ```
-    pub fn set_depth_attachment(mut self, attachment: AttachmentInfo, last_usage: vk::ImageUsageFlags) -> Self {
-        self.depth_attachment = Some((attachment, last_usage));
+    pub fn set_depth_attachment(mut self, attachment: AttachmentInfo) -> Self {
+        self.depth_attachment = Some(attachment);
         self
     }
 
-    pub fn set_texture_input(
-        mut self,
-        handle: ImageHandle,
-        last_usage: vk::ImageUsageFlags,
-    ) -> Self {
-        self.texture_inputs.push((handle, last_usage));
+    pub fn set_texture_input(mut self, handle: ImageHandle) -> Self {
+        self.texture_inputs.push(handle);
         self
     }
 
@@ -104,11 +102,12 @@ impl RenderPassBuilder {
     pub fn start<F: Fn(&mut RenderPass) -> Result<()>>(
         self,
         device: &GraphicsDevice,
+        usage_tracker: &mut ImageUsageTracker,
         command_buffer: &vk::CommandBuffer,
         render_pass: F,
     ) -> Result<()> {
         let viewport = {
-            if let Some((attach,_)) = self.colour_attachments.first() {
+            if let Some(attach) = self.colour_attachments.first() {
                 match attach.target {
                     AttachmentHandle::SwapchainImage => get_viewport_info(self.viewport_size, true),
                     AttachmentHandle::Image(_) => get_viewport_info(self.viewport_size, false),
@@ -139,15 +138,20 @@ impl RenderPassBuilder {
         let mut image_barriers = Vec::new();
 
         let mut colour_attachments = Vec::new();
-        for (attachment,last_usage) in self.colour_attachments.iter() {
+        for attachment in self.colour_attachments.iter() {
             colour_attachments.push(convert_attach_info(device, attachment));
 
-            if *last_usage != vk::ImageUsageFlags::COLOR_ATTACHMENT {
+            let &mut last_usage = usage_tracker
+                .get_last_usage(attachment.target)
+                .get_or_insert(vk::ImageUsageFlags::empty());
+            if last_usage != vk::ImageUsageFlags::COLOR_ATTACHMENT {
+                usage_tracker
+                    .set_last_usage(attachment.target, vk::ImageUsageFlags::COLOR_ATTACHMENT);
                 let barrier = ImageBarrier {
                     image: attachment.target,
-                    src_stage_mask: get_stage_flag_from_usage(*last_usage),
-                    src_access_mask: get_access_flag_from_usage(*last_usage),
-                    old_layout: get_image_layout_from_usage(*last_usage),
+                    src_stage_mask: get_stage_flag_from_usage(last_usage),
+                    src_access_mask: get_access_flag_from_usage(last_usage),
+                    old_layout: get_image_layout_from_usage(last_usage),
                     dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                     dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                     new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
@@ -157,8 +161,15 @@ impl RenderPassBuilder {
             }
         }
 
-        if let Some((attachment,last_usage)) = self.depth_attachment {
+        if let Some(attachment) = self.depth_attachment {
+            let &mut last_usage = usage_tracker
+                .get_last_usage(attachment.target)
+                .get_or_insert(vk::ImageUsageFlags::empty());
             if last_usage != vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+                usage_tracker.set_last_usage(
+                    attachment.target,
+                    vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                );
                 let barrier = ImageBarrier {
                     image: attachment.target,
                     src_stage_mask: get_stage_flag_from_usage(last_usage),
@@ -173,8 +184,15 @@ impl RenderPassBuilder {
             }
         }
 
-        for &(handle, last_usage) in self.texture_inputs.iter() {
+        for &handle in self.texture_inputs.iter() {
+            let &mut last_usage = usage_tracker
+                .get_last_usage(AttachmentHandle::Image(handle))
+                .get_or_insert(vk::ImageUsageFlags::empty());
             if last_usage != vk::ImageUsageFlags::SAMPLED {
+                usage_tracker.set_last_usage(
+                    AttachmentHandle::Image(handle),
+                    vk::ImageUsageFlags::SAMPLED,
+                );
                 let barrier = ImageBarrier {
                     image: AttachmentHandle::Image(handle),
                     src_stage_mask: get_stage_flag_from_usage(last_usage),
@@ -195,7 +213,7 @@ impl RenderPassBuilder {
         }
         barrier_builder.build(device, command_buffer)?;
 
-        if let Some((attachment,_)) = &self.depth_attachment {
+        if let Some(attachment) = &self.depth_attachment {
             let depth_attach_info = convert_attach_info(device, attachment);
             let render_info = vk::RenderingInfo::builder()
                 .render_area(*scissor)
@@ -278,11 +296,13 @@ pub struct AttachmentInfo {
 /// A RenderPass Attachment
 ///
 /// A handle to either a [RenderTargetHandle] or a SwapchainImage(index)
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Hash)]
 pub enum AttachmentHandle {
     Image(ImageHandle),
     SwapchainImage,
 }
+
+impl Eq for AttachmentHandle {}
 
 impl Default for AttachmentInfo {
     fn default() -> Self {
@@ -370,5 +390,24 @@ fn get_image_layout_from_usage(flags: vk::ImageUsageFlags) -> vk::ImageLayout {
         vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
     } else {
         vk::ImageLayout::UNDEFINED
+    }
+}
+
+#[derive(Default)]
+pub struct ImageUsageTracker {
+    usages: HashMap<AttachmentHandle, vk::ImageUsageFlags>,
+}
+
+impl ImageUsageTracker {
+    pub fn get_last_usage(&self, handle: AttachmentHandle) -> Option<vk::ImageUsageFlags> {
+        self.usages.get(&handle).cloned()
+    }
+
+    pub fn set_last_usage(&mut self, handle: AttachmentHandle, usage: vk::ImageUsageFlags) {
+        if let Some(old) = self.usages.get_mut(&handle) {
+            let _ = replace(old, usage);
+        } else {
+            self.usages.insert(handle, usage);
+        }
     }
 }

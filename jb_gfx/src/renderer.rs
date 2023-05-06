@@ -28,7 +28,9 @@ use crate::pipeline::{
     PipelineManager, VertexInputDescription,
 };
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
-use crate::renderpass::builder::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
+use crate::renderpass::builder::{
+    AttachmentHandle, AttachmentInfo, ImageUsageTracker, RenderPassBuilder,
+};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::util::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
@@ -981,6 +983,7 @@ impl Renderer {
 
         // Reset desc allocator
         self.frame_descriptor_allocator[resource_index].reset_pools()?;
+        let mut frame_usage_tracker = ImageUsageTracker::default();
 
         // Get images
 
@@ -1225,9 +1228,10 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                }, vk::ImageUsageFlags::empty())
+                })
                 .start(
                     &self.device,
+                    &mut frame_usage_tracker,
                     &self.device.graphics_command_buffer(),
                     |_render_pass| {
                         profiling::scope!("Shadow Pass");
@@ -1274,7 +1278,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(deferred_normals),
                     clear_value: vk::ClearValue {
@@ -1283,7 +1287,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(deferred_color_specs),
                     clear_value: vk::ClearValue {
@@ -1295,7 +1299,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .set_depth_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(depth_image),
                     clear_value: vk::ClearValue {
@@ -1305,9 +1309,10 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .start(
                     &self.device,
+                    &mut frame_usage_tracker,
                     &self.device.graphics_command_buffer(),
                     |_render_pass| {
                         profiling::scope!("Deferred Pass");
@@ -1406,15 +1411,14 @@ impl Renderer {
             .unwrap();
 
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .set_texture_input(deferred_positions, vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .set_texture_input(deferred_normals, vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .set_texture_input(deferred_color_specs, vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .set_texture_input(depth_image, vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                .set_texture_input(deferred_positions)
+                .set_texture_input(deferred_normals)
+                .set_texture_input(deferred_color_specs)
+                .set_texture_input(depth_image)
                 .set_texture_input(
                     self.render_targets
                         .get(self.directional_light_shadow_image)
                         .unwrap(),
-                    vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
                 )
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(forward_image),
@@ -1424,7 +1428,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(bright_extracted_image),
                     clear_value: vk::ClearValue {
@@ -1433,9 +1437,10 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .start(
                     &self.device,
+                    &mut frame_usage_tracker,
                     &self.device.graphics_command_buffer(),
                     |_render_pass| {
                         profiling::scope!("Combine Deferred Pass");
@@ -1620,19 +1625,8 @@ impl Renderer {
                             .build(&self.device, &self.device.graphics_command_buffer())?;
                     }
 
-                    let last_usage = {
-                        if i == 0 {
-                            vk::ImageUsageFlags::empty()
-                        } else {
-                            vk::ImageUsageFlags::SAMPLED
-                        }
-                    };
-
                     RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                        .set_texture_input(
-                            bloom_image[!horizontal as usize],
-                            vk::ImageUsageFlags::COLOR_ATTACHMENT,
-                        )
+                        .set_texture_input(bloom_image[!horizontal as usize])
                         .add_colour_attachment(AttachmentInfo {
                             target: AttachmentHandle::Image(bloom_image[horizontal as usize]),
                             clear_value: vk::ClearValue {
@@ -1641,9 +1635,10 @@ impl Renderer {
                                 },
                             },
                             ..Default::default()
-                        }, last_usage)
+                        })
                         .start(
                             &self.device,
+                            &mut frame_usage_tracker,
                             &self.device.graphics_command_buffer(),
                             |_render_pass| {
                                 profiling::scope!("Bloom Pass");
@@ -1709,9 +1704,10 @@ impl Renderer {
                             },
                         },
                         ..Default::default()
-                    },vk::ImageUsageFlags::empty())
+                    })
                     .start(
                         &self.device,
+                        &mut frame_usage_tracker,
                         &self.device.graphics_command_buffer(),
                         |_render_pass| {
                             profiling::scope!("Bloom Pass");
@@ -1750,8 +1746,8 @@ impl Renderer {
             .unwrap();
 
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .set_texture_input(forward_image, vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                .set_texture_input(bloom_image[0], vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .set_texture_input(forward_image)
+                .set_texture_input(bloom_image[0])
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::SwapchainImage,
                     clear_value: vk::ClearValue {
@@ -1760,9 +1756,10 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                },vk::ImageUsageFlags::empty())
+                })
                 .start(
                     &self.device,
+                    &mut frame_usage_tracker,
                     &self.device.graphics_command_buffer(),
                     |_render_pass| {
                         profiling::scope!("Combine Pass");
@@ -1818,7 +1815,7 @@ impl Renderer {
                     },
                     load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
-                }, vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                })
                 .set_depth_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(depth_image),
                     clear_value: vk::ClearValue {
@@ -1829,9 +1826,10 @@ impl Renderer {
                     },
                     load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
-                }, vk::ImageUsageFlags::SAMPLED)
+                })
                 .start(
                     &self.device,
+                    &mut frame_usage_tracker,
                     &self.device.graphics_command_buffer(),
                     |render_pass| {
                         profiling::scope!("UI Pass");
