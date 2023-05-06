@@ -1,9 +1,9 @@
+use std::collections::HashMap;
+use std::mem::replace;
+
 use anyhow::Result;
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageLayout, PipelineStageFlags2};
-use log::info;
-use std::collections::HashMap;
-use std::mem::replace;
 
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::renderpass::RenderPass;

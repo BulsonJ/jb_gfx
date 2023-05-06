@@ -1,4 +1,3 @@
-use std::io::Read;
 use std::mem::size_of;
 use std::sync::Arc;
 
@@ -8,7 +7,7 @@ use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageLayout, IndexType, ObjectType,
     PipelineStageFlags2,
 };
-use bytemuck::{offset_of, Zeroable};
+use bytemuck::offset_of;
 use cgmath::{
     Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
@@ -36,7 +35,7 @@ use crate::util::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
     ImageDescriptorInfo, JBDescriptorBuilder,
 };
-use crate::util::meshpool::{MeshPool, PooledMesh};
+use crate::util::meshpool::MeshPool;
 use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
     CameraTrait, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData,

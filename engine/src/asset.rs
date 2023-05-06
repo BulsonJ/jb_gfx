@@ -8,7 +8,7 @@ use image::EncodableLayout;
 use log::info;
 
 use jb_gfx::prelude::*;
-use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
+use jb_gfx::renderer::MaterialInstanceHandle;
 
 #[derive(Default)]
 pub struct AssetManager {

@@ -1,9 +1,10 @@
-use crate::debug_ui::DebugPanel;
-use crate::input::Input;
-use crate::Camera;
 use cgmath::Vector3;
 use egui::Ui;
 use winit::event::VirtualKeyCode;
+
+use crate::debug_ui::DebugPanel;
+use crate::input::Input;
+use crate::Camera;
 
 pub struct Player {
     pub(crate) camera: Camera,

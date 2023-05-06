@@ -1,10 +1,9 @@
 use std::time::Duration;
 
 use cgmath::{
-    Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Point3, Quaternion, Rotation, Rotation3,
-    Vector3, Vector4, Zero,
+    Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Quaternion, Rotation, Rotation3, Vector3,
+    Vector4, Zero,
 };
-use egui::Ui;
 use egui_winit::EventResponse;
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
@@ -12,7 +11,6 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundS
 use kira::tween::{Easing, Tween};
 use kira::LoopBehavior;
 use kira::Volume::Amplitude;
-use log::info;
 use rand::{thread_rng, Rng};
 use winit::event::{VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -28,7 +26,7 @@ use crate::debug_ui::{draw_timestamps, DebugPanel};
 use crate::egui_context::EguiContext;
 use crate::input::Input;
 use crate::turret_game::player::Player;
-use crate::{debug_ui, Camera};
+use crate::Camera;
 
 pub mod player;
 
