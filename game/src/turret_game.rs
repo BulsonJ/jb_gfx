@@ -13,6 +13,7 @@ use kira::tween::{Easing, Tween};
 use kira::LoopBehavior;
 use kira::Volume::Amplitude;
 use log::info;
+use rand::{thread_rng, Rng};
 use winit::event::{VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
 use winit::window::Window;
@@ -426,9 +427,14 @@ impl TurretGame {
                 }
             };
 
+            let spread = 0.05f32;
+            let y_direction = thread_rng().gen_range(-spread..spread);
+            let z_direction = thread_rng().gen_range(-spread..spread);
+            let offset = Vector3::new(0.0f32, y_direction, z_direction);
+
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -1f32, 0f32),
-                self.player.camera.direction,
+                self.player.camera.direction + offset,
                 500f32,
                 tracer,
             );
