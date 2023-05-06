@@ -27,7 +27,7 @@ use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
 };
-use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::renderpass::builder::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::util::descriptor::{
@@ -1215,16 +1215,6 @@ impl Renderer {
             vk::PipelineStageFlags2::TOP_OF_PIPE,
         );
         {
-            ImageBarrierBuilder::default()
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(shadow_image),
-                    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                })
-                .build(&self.device, &self.device.graphics_command_buffer())?;
-
             RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
                 .set_depth_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(shadow_image),
@@ -1235,7 +1225,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                }, vk::ImageUsageFlags::empty())
                 .start(
                     &self.device,
                     &self.device.graphics_command_buffer(),
@@ -1275,37 +1265,6 @@ impl Renderer {
 
         // Deferred pass
         {
-            ImageBarrierBuilder::default()
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(deferred_positions),
-                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(deferred_normals),
-                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(deferred_color_specs),
-                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(depth_image),
-                    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                })
-                .build(&self.device, &self.device.graphics_command_buffer())?;
-
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(deferred_positions),
@@ -1315,7 +1274,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(deferred_normals),
                     clear_value: vk::ClearValue {
@@ -1324,7 +1283,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(deferred_color_specs),
                     clear_value: vk::ClearValue {
@@ -1336,7 +1295,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .set_depth_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(depth_image),
                     clear_value: vk::ClearValue {
@@ -1346,7 +1305,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .start(
                     &self.device,
                     &self.device.graphics_command_buffer(),
@@ -1446,64 +1405,17 @@ impl Renderer {
             .build()
             .unwrap();
 
-            ImageBarrierBuilder::default()
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(deferred_positions),
-                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(deferred_normals),
-                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(deferred_color_specs),
-                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(depth_image),
-                    src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-                    src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(
-                        self.render_targets
-                            .get(self.directional_light_shadow_image)
-                            .unwrap(),
-                    ),
-                    src_stage_mask: PipelineStageFlags2::LATE_FRAGMENT_TESTS,
-                    src_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .build(&self.device, &self.device.graphics_command_buffer())?;
-
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                .set_texture_input(deferred_positions, vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .set_texture_input(deferred_normals, vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .set_texture_input(deferred_color_specs, vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .set_texture_input(depth_image, vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+                .set_texture_input(
+                    self.render_targets
+                        .get(self.directional_light_shadow_image)
+                        .unwrap(),
+                    vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                )
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(forward_image),
                     clear_value: vk::ClearValue {
@@ -1512,7 +1424,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(bright_extracted_image),
                     clear_value: vk::ClearValue {
@@ -1521,7 +1433,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .start(
                     &self.device,
                     &self.device.graphics_command_buffer(),
@@ -1568,30 +1480,6 @@ impl Renderer {
                     },
                 )?;
         }
-
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(forward_image),
-                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::Image(bright_extracted_image),
-                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                ..Default::default()
-            })
-            //.add_image_barrier(ImageBarrier {
-            //    image: ImageHandleType::Image(depth_image),
-            //    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-            //    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-            //    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-            //    ..Default::default()
-            //})
-            .build(&self.device, &self.device.graphics_command_buffer())?;
 
         let deferred_lighting_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
@@ -1717,46 +1605,10 @@ impl Renderer {
                 let mut horizontal = true;
                 for i in 0..10 {
                     if i == 0 {
+                        // TODO : Special case for texture input as only happens on first run
                         ImageBarrierBuilder::default()
                             .add_image_barrier(ImageBarrier {
-                                image: ImageHandleType::Image(bright_extracted_image),
-                                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                                dst_access_mask: AccessFlags2::SHADER_READ,
-                                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                                ..Default::default()
-                            })
-                            .add_image_barrier(ImageBarrier {
-                                image: ImageHandleType::Image(bloom_image[1]),
-                                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                                ..Default::default()
-                            })
-                            .add_image_barrier(ImageBarrier {
-                                image: ImageHandleType::Image(bloom_image[0]),
-                                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                                dst_access_mask: AccessFlags2::SHADER_READ,
-                                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                                ..Default::default()
-                            })
-                            .build(&self.device, &self.device.graphics_command_buffer())?;
-                    } else {
-                        ImageBarrierBuilder::default()
-                            .add_image_barrier(ImageBarrier {
-                                image: ImageHandleType::Image(bloom_image[horizontal as usize]),
-                                src_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                                src_access_mask: AccessFlags2::SHADER_READ,
-                                dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                                dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                                old_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                                new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                                ..Default::default()
-                            })
-                            .add_image_barrier(ImageBarrier {
-                                image: ImageHandleType::Image(bloom_image[!horizontal as usize]),
+                                image: AttachmentHandle::Image(bright_extracted_image),
                                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                                 dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
@@ -1768,7 +1620,19 @@ impl Renderer {
                             .build(&self.device, &self.device.graphics_command_buffer())?;
                     }
 
+                    let last_usage = {
+                        if i == 0 {
+                            vk::ImageUsageFlags::empty()
+                        } else {
+                            vk::ImageUsageFlags::SAMPLED
+                        }
+                    };
+
                     RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                        .set_texture_input(
+                            bloom_image[!horizontal as usize],
+                            vk::ImageUsageFlags::COLOR_ATTACHMENT,
+                        )
                         .add_colour_attachment(AttachmentInfo {
                             target: AttachmentHandle::Image(bloom_image[horizontal as usize]),
                             clear_value: vk::ClearValue {
@@ -1777,7 +1641,7 @@ impl Renderer {
                                 },
                             },
                             ..Default::default()
-                        })
+                        }, last_usage)
                         .start(
                             &self.device,
                             &self.device.graphics_command_buffer(),
@@ -1836,16 +1700,6 @@ impl Renderer {
                     horizontal = !horizontal;
                 }
             } else {
-                ImageBarrierBuilder::default()
-                    .add_image_barrier(ImageBarrier {
-                        image: ImageHandleType::Image(bloom_image[0]),
-                        dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                        dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                        new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                        ..Default::default()
-                    })
-                    .build(&self.device, &self.device.graphics_command_buffer())?;
-
                 RenderPassBuilder::new((self.device.size().width, self.device.size().height))
                     .add_colour_attachment(AttachmentInfo {
                         target: AttachmentHandle::Image(bloom_image[0]),
@@ -1855,7 +1709,7 @@ impl Renderer {
                             },
                         },
                         ..Default::default()
-                    })
+                    },vk::ImageUsageFlags::empty())
                     .start(
                         &self.device,
                         &self.device.graphics_command_buffer(),
@@ -1873,35 +1727,6 @@ impl Renderer {
 
         // Combine Pass
         {
-            ImageBarrierBuilder::default()
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::SwapchainImage,
-                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(forward_image),
-                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .add_image_barrier(ImageBarrier {
-                    image: ImageHandleType::Image(bloom_image[0]),
-                    src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                })
-                .build(&self.device, &self.device.graphics_command_buffer())?;
             let (combine_set, _) = JBDescriptorBuilder::new(
                 &self.device.resource_manager,
                 &mut self.descriptor_layout_cache,
@@ -1925,6 +1750,8 @@ impl Renderer {
             .unwrap();
 
             RenderPassBuilder::new((self.device.size().width, self.device.size().height))
+                .set_texture_input(forward_image, vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .set_texture_input(bloom_image[0], vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 .add_colour_attachment(AttachmentInfo {
                     target: AttachmentHandle::SwapchainImage,
                     clear_value: vk::ClearValue {
@@ -1933,7 +1760,7 @@ impl Renderer {
                         },
                     },
                     ..Default::default()
-                })
+                },vk::ImageUsageFlags::empty())
                 .start(
                     &self.device,
                     &self.device.graphics_command_buffer(),
@@ -1991,7 +1818,7 @@ impl Renderer {
                     },
                     load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
-                })
+                }, vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 .set_depth_attachment(AttachmentInfo {
                     target: AttachmentHandle::Image(depth_image),
                     clear_value: vk::ClearValue {
@@ -2002,7 +1829,7 @@ impl Renderer {
                     },
                     load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
-                })
+                }, vk::ImageUsageFlags::SAMPLED)
                 .start(
                     &self.device,
                     &self.device.graphics_command_buffer(),
@@ -2109,7 +1936,7 @@ impl Renderer {
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: ImageHandleType::SwapchainImage,
+                image: AttachmentHandle::SwapchainImage,
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
                 old_layout: ImageLayout::ATTACHMENT_OPTIMAL,

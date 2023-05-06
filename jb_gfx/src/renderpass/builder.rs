@@ -1,6 +1,9 @@
 use anyhow::Result;
 use ash::vk;
+use ash::vk::{AccessFlags2, ImageLayout, PipelineStageFlags2};
+use log::info;
 
+use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::renderpass::RenderPass;
 use crate::resource::ImageHandle;
 use crate::GraphicsDevice;
@@ -33,8 +36,9 @@ use crate::GraphicsDevice;
 /// ```
 #[derive(Default)]
 pub struct RenderPassBuilder {
-    colour_attachments: Vec<AttachmentInfo>,
-    depth_attachment: Option<AttachmentInfo>,
+    colour_attachments: Vec<(AttachmentInfo, vk::ImageUsageFlags)>,
+    depth_attachment: Option<(AttachmentInfo, vk::ImageUsageFlags)>,
+    texture_inputs: Vec<(ImageHandle, vk::ImageUsageFlags)>,
     viewport_size: (u32, u32),
 }
 
@@ -63,8 +67,8 @@ impl RenderPassBuilder {
     /// ```
     ///
     /// ```
-    pub fn add_colour_attachment(mut self, attachment: AttachmentInfo) -> Self {
-        self.colour_attachments.push(attachment);
+    pub fn add_colour_attachment(mut self, attachment: AttachmentInfo, last_usage: vk::ImageUsageFlags) -> Self {
+        self.colour_attachments.push((attachment, last_usage));
         self
     }
 
@@ -75,8 +79,17 @@ impl RenderPassBuilder {
     /// ```
     ///
     /// ```
-    pub fn set_depth_attachment(mut self, attachment: AttachmentInfo) -> Self {
-        self.depth_attachment = Some(attachment);
+    pub fn set_depth_attachment(mut self, attachment: AttachmentInfo, last_usage: vk::ImageUsageFlags) -> Self {
+        self.depth_attachment = Some((attachment, last_usage));
+        self
+    }
+
+    pub fn set_texture_input(
+        mut self,
+        handle: ImageHandle,
+        last_usage: vk::ImageUsageFlags,
+    ) -> Self {
+        self.texture_inputs.push((handle, last_usage));
         self
     }
 
@@ -95,7 +108,7 @@ impl RenderPassBuilder {
         render_pass: F,
     ) -> Result<()> {
         let viewport = {
-            if let Some(attach) = self.colour_attachments.first() {
+            if let Some((attach,_)) = self.colour_attachments.first() {
                 match attach.target {
                     AttachmentHandle::SwapchainImage => get_viewport_info(self.viewport_size, true),
                     AttachmentHandle::Image(_) => get_viewport_info(self.viewport_size, false),
@@ -123,12 +136,66 @@ impl RenderPassBuilder {
                 .cmd_set_scissor(*command_buffer, 0u32, &[*scissor])
         };
 
+        let mut image_barriers = Vec::new();
+
         let mut colour_attachments = Vec::new();
-        for attachment in self.colour_attachments.iter() {
+        for (attachment,last_usage) in self.colour_attachments.iter() {
             colour_attachments.push(convert_attach_info(device, attachment));
+
+            if *last_usage != vk::ImageUsageFlags::COLOR_ATTACHMENT {
+                let barrier = ImageBarrier {
+                    image: attachment.target,
+                    src_stage_mask: get_stage_flag_from_usage(*last_usage),
+                    src_access_mask: get_access_flag_from_usage(*last_usage),
+                    old_layout: get_image_layout_from_usage(*last_usage),
+                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    ..Default::default()
+                };
+                image_barriers.push(barrier);
+            }
         }
 
-        if let Some(attachment) = &self.depth_attachment {
+        if let Some((attachment,last_usage)) = self.depth_attachment {
+            if last_usage != vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+                let barrier = ImageBarrier {
+                    image: attachment.target,
+                    src_stage_mask: get_stage_flag_from_usage(last_usage),
+                    src_access_mask: get_access_flag_from_usage(last_usage),
+                    old_layout: get_image_layout_from_usage(last_usage),
+                    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
+                    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                    ..Default::default()
+                };
+                image_barriers.push(barrier);
+            }
+        }
+
+        for &(handle, last_usage) in self.texture_inputs.iter() {
+            if last_usage != vk::ImageUsageFlags::SAMPLED {
+                let barrier = ImageBarrier {
+                    image: AttachmentHandle::Image(handle),
+                    src_stage_mask: get_stage_flag_from_usage(last_usage),
+                    src_access_mask: get_access_flag_from_usage(last_usage),
+                    old_layout: get_image_layout_from_usage(last_usage),
+                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
+                    dst_access_mask: AccessFlags2::SHADER_READ,
+                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    ..Default::default()
+                };
+                image_barriers.push(barrier);
+            }
+        }
+
+        let mut barrier_builder = ImageBarrierBuilder::default();
+        for barrier in image_barriers.into_iter() {
+            barrier_builder = barrier_builder.add_image_barrier(barrier);
+        }
+        barrier_builder.build(device, command_buffer)?;
+
+        if let Some((attachment,_)) = &self.depth_attachment {
             let depth_attach_info = convert_attach_info(device, attachment);
             let render_info = vk::RenderingInfo::builder()
                 .render_area(*scissor)
@@ -273,5 +340,35 @@ fn get_viewport_info(size: (u32, u32), flipped: bool) -> vk::Viewport {
             .min_depth(0.0f32)
             .max_depth(1.0f32)
             .build()
+    }
+}
+
+fn get_stage_flag_from_usage(flags: vk::ImageUsageFlags) -> vk::PipelineStageFlags2 {
+    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+        vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS
+    } else if flags == vk::ImageUsageFlags::SAMPLED {
+        vk::PipelineStageFlags2::FRAGMENT_SHADER
+    } else {
+        vk::PipelineStageFlags2::empty()
+    }
+}
+
+fn get_access_flag_from_usage(flags: vk::ImageUsageFlags) -> vk::AccessFlags2 {
+    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE
+    } else if flags == vk::ImageUsageFlags::SAMPLED {
+        vk::AccessFlags2::SHADER_READ
+    } else {
+        vk::AccessFlags2::empty()
+    }
+}
+
+fn get_image_layout_from_usage(flags: vk::ImageUsageFlags) -> vk::ImageLayout {
+    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+        vk::ImageLayout::ATTACHMENT_OPTIMAL
+    } else if flags == vk::ImageUsageFlags::SAMPLED {
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+    } else {
+        vk::ImageLayout::UNDEFINED
     }
 }

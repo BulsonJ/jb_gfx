@@ -3,6 +3,7 @@ use std::ffi::CString;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::CStr};
 
+use crate::AttachmentHandle;
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
@@ -15,7 +16,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
-use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder, ImageHandleType};
+use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
@@ -643,7 +644,7 @@ impl GraphicsDevice {
             {
                 ImageBarrierBuilder::default()
                     .add_image_barrier(ImageBarrier {
-                        image: ImageHandleType::Image(image.image_handle),
+                        image: AttachmentHandle::Image(image.image_handle),
                         dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                         dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
                         new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -701,7 +702,7 @@ impl GraphicsDevice {
                 for i in 1..image.mip_levels {
                     ImageBarrierBuilder::default()
                         .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(image.image_handle),
+                            image: AttachmentHandle::Image(image.image_handle),
                             src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                             src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
                             dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
@@ -767,7 +768,7 @@ impl GraphicsDevice {
 
                     ImageBarrierBuilder::default()
                         .add_image_barrier(ImageBarrier {
-                            image: ImageHandleType::Image(image.image_handle),
+                            image: AttachmentHandle::Image(image.image_handle),
                             src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                             src_access_mask: vk::AccessFlags2::TRANSFER_READ,
                             dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
@@ -793,7 +794,7 @@ impl GraphicsDevice {
 
                 ImageBarrierBuilder::default()
                     .add_image_barrier(ImageBarrier {
-                        image: ImageHandleType::Image(image.image_handle),
+                        image: AttachmentHandle::Image(image.image_handle),
                         src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                         src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
                         dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,

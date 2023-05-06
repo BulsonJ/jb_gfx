@@ -3,10 +3,10 @@ use ash::vk;
 use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
 
 use crate::resource::ImageHandle;
-use crate::GraphicsDevice;
+use crate::{AttachmentHandle, GraphicsDevice};
 
 pub struct ImageBarrier {
-    pub image: ImageHandleType,
+    pub image: AttachmentHandle,
     pub src_stage_mask: PipelineStageFlags2,
     pub src_access_mask: AccessFlags2,
     pub dst_stage_mask: PipelineStageFlags2,
@@ -18,15 +18,10 @@ pub struct ImageBarrier {
     pub image_layers: u32,
 }
 
-pub enum ImageHandleType {
-    Image(ImageHandle),
-    SwapchainImage,
-}
-
 impl Default for ImageBarrier {
     fn default() -> Self {
         Self {
-            image: ImageHandleType::Image(ImageHandle::default()),
+            image: AttachmentHandle::Image(ImageHandle::default()),
             src_stage_mask: PipelineStageFlags2::NONE,
             src_access_mask: AccessFlags2::NONE,
             dst_stage_mask: PipelineStageFlags2::NONE,
@@ -55,14 +50,14 @@ impl ImageBarrierBuilder {
         let mut image_memory_barriers = Vec::new();
         for image_barrier in self.barriers.iter() {
             let image = match image_barrier.image {
-                ImageHandleType::Image(image) => {
+                AttachmentHandle::Image(image) => {
                     Some(device.resource_manager.get_image(image).unwrap())
                 }
                 _ => None,
             };
 
             let image_handle = match image_barrier.image {
-                ImageHandleType::SwapchainImage => device.get_present_image(),
+                AttachmentHandle::SwapchainImage => device.get_present_image(),
                 _ => image.unwrap().image(),
             };
 
