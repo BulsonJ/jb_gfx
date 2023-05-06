@@ -139,7 +139,7 @@ impl RenderPassBuilder {
 
         let mut colour_attachments = Vec::new();
         for attachment in self.colour_attachments.iter() {
-            colour_attachments.push(convert_attach_info(device, attachment));
+            colour_attachments.push(convert_attach_info(device, usage_tracker, attachment));
 
             let &mut last_usage = usage_tracker
                 .get_last_usage(attachment.target)
@@ -166,10 +166,6 @@ impl RenderPassBuilder {
                 .get_last_usage(attachment.target)
                 .get_or_insert(vk::ImageUsageFlags::empty());
             if last_usage != vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
-                usage_tracker.set_last_usage(
-                    attachment.target,
-                    vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-                );
                 let barrier = ImageBarrier {
                     image: attachment.target,
                     src_stage_mask: get_stage_flag_from_usage(last_usage),
@@ -214,7 +210,14 @@ impl RenderPassBuilder {
         barrier_builder.build(device, command_buffer)?;
 
         if let Some(attachment) = &self.depth_attachment {
-            let depth_attach_info = convert_attach_info(device, attachment);
+            let depth_attach_info = convert_attach_info(device, usage_tracker, attachment);
+
+            // Set usage here so it doesn't mess up finding load/clear op
+            usage_tracker.set_last_usage(
+                attachment.target,
+                vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            );
+
             let render_info = vk::RenderingInfo::builder()
                 .render_area(*scissor)
                 .layer_count(1u32)
@@ -288,8 +291,6 @@ impl RenderPassBuilder {
 pub struct AttachmentInfo {
     pub target: AttachmentHandle,
     pub image_layout: vk::ImageLayout,
-    pub load_op: vk::AttachmentLoadOp,
-    pub store_op: vk::AttachmentStoreOp,
     pub clear_value: vk::ClearValue,
 }
 
@@ -309,8 +310,6 @@ impl Default for AttachmentInfo {
         Self {
             target: AttachmentHandle::Image(ImageHandle::default()),
             image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
-            load_op: vk::AttachmentLoadOp::CLEAR,
-            store_op: vk::AttachmentStoreOp::STORE,
             clear_value: vk::ClearValue::default(),
         }
     }
@@ -318,6 +317,7 @@ impl Default for AttachmentInfo {
 
 fn convert_attach_info(
     device: &GraphicsDevice,
+    usage_tracker: &ImageUsageTracker,
     attachment: &AttachmentInfo,
 ) -> vk::RenderingAttachmentInfo {
     let image_view = {
@@ -331,11 +331,22 @@ fn convert_attach_info(
         }
     };
 
+    let &mut last_usage = usage_tracker
+        .get_last_usage(attachment.target)
+        .get_or_insert(vk::ImageUsageFlags::empty());
+    let load_op = {
+        if last_usage == vk::ImageUsageFlags::empty() {
+            vk::AttachmentLoadOp::CLEAR
+        } else {
+            vk::AttachmentLoadOp::LOAD
+        }
+    };
+
     let attach_info = vk::RenderingAttachmentInfo::builder()
         .image_view(image_view)
         .image_layout(attachment.image_layout)
-        .load_op(attachment.load_op)
-        .store_op(attachment.store_op)
+        .load_op(load_op)
+        .store_op(vk::AttachmentStoreOp::STORE)
         .clear_value(attachment.clear_value);
 
     *attach_info

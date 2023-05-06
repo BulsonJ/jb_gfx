@@ -1813,7 +1813,6 @@ impl Renderer {
                             float32: [0.0, 0.0, 0.0, 0.0],
                         },
                     },
-                    load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
                 })
                 .set_depth_attachment(AttachmentInfo {
@@ -1824,7 +1823,6 @@ impl Renderer {
                             stencil: 0,
                         },
                     },
-                    load_op: vk::AttachmentLoadOp::LOAD,
                     ..Default::default()
                 })
                 .start(
