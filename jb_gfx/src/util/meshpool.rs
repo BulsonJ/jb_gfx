@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk;
+use ash::vk::{DeviceSize, IndexType};
+use cgmath::Zero;
 use log::trace;
 use slotmap::{new_key_type, SlotMap};
 
@@ -191,6 +193,22 @@ impl MeshPool {
                 );
                 Ok(self.meshes.insert(render_mesh))
             }
+        }
+    }
+
+    pub fn bind(&self, cmd: vk::CommandBuffer) {
+        let vertex_buffer = self.vertex_buffer();
+        let index_buffer = self.index_buffer();
+        unsafe {
+            self.device
+                .vk_device
+                .cmd_bind_vertex_buffers(cmd, 0u32, &[vertex_buffer], &[0u64]);
+            self.device.vk_device.cmd_bind_index_buffer(
+                cmd,
+                index_buffer,
+                DeviceSize::zero(),
+                IndexType::UINT32,
+            );
         }
     }
 }

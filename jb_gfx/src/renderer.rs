@@ -1209,7 +1209,11 @@ impl Renderer {
             ui_draw_calls
         };
 
-        // Barrier images
+        // Bind
+
+        {
+            self.mesh_pool.bind(self.device.graphics_command_buffer());
+        }
 
         // Shadow pass
         let shadow_pass_start = self.device.write_timestamp(
@@ -1995,27 +1999,6 @@ impl Renderer {
     }
 
     fn draw_objects(&self, draws: &[DrawData]) -> Result<()> {
-        let vertex_buffer = self.mesh_pool.vertex_buffer();
-        let index_buffer = self.mesh_pool.index_buffer();
-
-        unsafe {
-            self.device.vk_device.cmd_bind_vertex_buffers(
-                self.device.graphics_command_buffer(),
-                0u32,
-                &[vertex_buffer],
-                &[0u64],
-            )
-        };
-
-        unsafe {
-            self.device.vk_device.cmd_bind_index_buffer(
-                self.device.graphics_command_buffer(),
-                index_buffer,
-                DeviceSize::zero(),
-                IndexType::UINT32,
-            );
-        }
-
         for draw in draws.iter() {
             let push_constants = PushConstants {
                 handles: [
@@ -2058,27 +2041,6 @@ impl Renderer {
     }
 
     fn draw_skybox(&self) -> Result<()> {
-        let vertex_buffer = self.mesh_pool.vertex_buffer();
-        let index_buffer = self.mesh_pool.index_buffer();
-
-        unsafe {
-            self.device.vk_device.cmd_bind_vertex_buffers(
-                self.device.graphics_command_buffer(),
-                0u32,
-                &[vertex_buffer],
-                &[0u64],
-            )
-        };
-
-        unsafe {
-            self.device.vk_device.cmd_bind_index_buffer(
-                self.device.graphics_command_buffer(),
-                index_buffer,
-                DeviceSize::zero(),
-                IndexType::UINT32,
-            );
-        }
-
         let push_constants = self
             .device
             .get_descriptor_index(&self.skybox.unwrap())
