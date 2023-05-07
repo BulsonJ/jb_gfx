@@ -27,9 +27,8 @@ use crate::pipeline::{
     PipelineManager, VertexInputDescription,
 };
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
-use crate::renderpass::builder::{
-    AttachmentHandle, AttachmentInfo, ImageUsageTracker, RenderPassBuilder,
-};
+use crate::renderpass::builder::RenderPassBuilder;
+use crate::renderpass::resource::ImageUsageTracker;
 use crate::resource::{BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle};
 use crate::util::descriptor::{
     BufferDescriptorInfo, DescriptorAllocator, DescriptorLayoutBuilder, DescriptorLayoutCache,
@@ -38,8 +37,8 @@ use crate::util::descriptor::{
 use crate::util::meshpool::MeshPool;
 use crate::util::targets::{RenderImageType, RenderTargetHandle, RenderTargetSize, RenderTargets};
 use crate::{
-    CameraTrait, Colour, DirectionalLight, GraphicsDevice, ImageFormatType, Light, MeshData,
-    MeshHandle, Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
+    AttachmentHandle, AttachmentInfo, CameraTrait, Colour, DirectionalLight, GraphicsDevice,
+    ImageFormatType, Light, MeshData, MeshHandle, Vertex, FRAMES_IN_FLIGHT, SHADOWMAP_SIZE,
 };
 
 const MAX_OBJECTS: u64 = 10000u64;
@@ -1615,16 +1614,11 @@ impl Renderer {
                     if i == 0 {
                         // TODO : Special case for texture input as only happens on first run
                         ImageBarrierBuilder::default()
-                            .add_image_barrier(ImageBarrier {
-                                image: AttachmentHandle::Image(bright_extracted_image),
-                                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                                dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                                dst_access_mask: AccessFlags2::SHADER_READ,
-                                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                                new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                                ..Default::default()
-                            })
+                            .add_image_barrier(
+                                ImageBarrier::new(AttachmentHandle::Image(bright_extracted_image))
+                                    .old_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                                    .new_usage(vk::ImageUsageFlags::SAMPLED),
+                            )
                             .build(&self.device, &self.device.graphics_command_buffer())?;
                     }
 

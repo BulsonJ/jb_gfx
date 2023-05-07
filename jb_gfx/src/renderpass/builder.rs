@@ -5,7 +5,9 @@ use anyhow::Result;
 use ash::vk;
 use ash::vk::{AccessFlags2, ImageLayout, PipelineStageFlags2};
 
+use crate::renderpass::attachment::{AttachmentHandle, AttachmentInfo};
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
+use crate::renderpass::resource::ImageUsageTracker;
 use crate::renderpass::RenderPass;
 use crate::resource::ImageHandle;
 use crate::GraphicsDevice;
@@ -147,16 +149,9 @@ impl RenderPassBuilder {
             if last_usage != vk::ImageUsageFlags::COLOR_ATTACHMENT {
                 usage_tracker
                     .set_last_usage(attachment.target, vk::ImageUsageFlags::COLOR_ATTACHMENT);
-                let barrier = ImageBarrier {
-                    image: attachment.target,
-                    src_stage_mask: get_stage_flag_from_usage(last_usage),
-                    src_access_mask: get_access_flag_from_usage(last_usage),
-                    old_layout: get_image_layout_from_usage(last_usage),
-                    dst_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                    dst_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                };
+                let barrier = ImageBarrier::new(attachment.target)
+                    .old_usage(last_usage)
+                    .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
                 image_barriers.push(barrier);
             }
         }
@@ -166,16 +161,9 @@ impl RenderPassBuilder {
                 .get_last_usage(attachment.target)
                 .get_or_insert(vk::ImageUsageFlags::empty());
             if last_usage != vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
-                let barrier = ImageBarrier {
-                    image: attachment.target,
-                    src_stage_mask: get_stage_flag_from_usage(last_usage),
-                    src_access_mask: get_access_flag_from_usage(last_usage),
-                    old_layout: get_image_layout_from_usage(last_usage),
-                    dst_stage_mask: PipelineStageFlags2::EARLY_FRAGMENT_TESTS,
-                    dst_access_mask: AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                    new_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                    ..Default::default()
-                };
+                let barrier = ImageBarrier::new(attachment.target)
+                    .old_usage(last_usage)
+                    .new_usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT);
                 image_barriers.push(barrier);
             }
         }
@@ -189,16 +177,9 @@ impl RenderPassBuilder {
                     AttachmentHandle::Image(handle),
                     vk::ImageUsageFlags::SAMPLED,
                 );
-                let barrier = ImageBarrier {
-                    image: AttachmentHandle::Image(handle),
-                    src_stage_mask: get_stage_flag_from_usage(last_usage),
-                    src_access_mask: get_access_flag_from_usage(last_usage),
-                    old_layout: get_image_layout_from_usage(last_usage),
-                    dst_stage_mask: PipelineStageFlags2::FRAGMENT_SHADER,
-                    dst_access_mask: AccessFlags2::SHADER_READ,
-                    new_layout: ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    ..Default::default()
-                };
+                let barrier = ImageBarrier::new(AttachmentHandle::Image(handle))
+                    .old_usage(last_usage)
+                    .new_usage(vk::ImageUsageFlags::SAMPLED);
                 image_barriers.push(barrier);
             }
         }
@@ -259,62 +240,6 @@ impl RenderPassBuilder {
     }
 }
 
-/// A RenderPass Attachment
-///
-/// This represents an attachment to a [RenderPass]. It contains
-/// an AttachmentHandle which is the handle to the image of the attachment.
-/// It also determines the [vk::ImageLayout] the image must be in, the
-/// load [vk::AttachmentLoadOp] and store [vk::AttachmentStoreOp] operations that take place.
-/// Finally, it contains the [vk::ClearValue] of the attachment.
-///
-/// # Usage
-///
-/// This is fed into a [RenderPassBuilder] to create a [RenderPass]
-///
-/// ```
-/// use ash::vk::{ClearColorValue, ClearValue};
-/// use jb_gfx::{AttachmentHandle, AttachmentInfo, RenderPassBuilder};
-///
-/// RenderPassBuilder::new((1920,1080))
-/// .add_colour_attachment(AttachmentInfo {
-///     target: AttachmentHandle::Image(device.render_image),
-///            clear_value: ClearValue {
-///                color: ClearColorValue {
-///                    float32: clear_colour.extend(0.0).into(),
-///                },
-///            },
-///            ..Default::default()
-///     });
-///
-/// ```
-#[derive(Copy, Clone)]
-pub struct AttachmentInfo {
-    pub target: AttachmentHandle,
-    pub image_layout: vk::ImageLayout,
-    pub clear_value: vk::ClearValue,
-}
-
-/// A RenderPass Attachment
-///
-/// A handle to either a [RenderTargetHandle] or a SwapchainImage(index)
-#[derive(Copy, Clone, PartialEq, Hash)]
-pub enum AttachmentHandle {
-    Image(ImageHandle),
-    SwapchainImage,
-}
-
-impl Eq for AttachmentHandle {}
-
-impl Default for AttachmentInfo {
-    fn default() -> Self {
-        Self {
-            target: AttachmentHandle::Image(ImageHandle::default()),
-            image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
-            clear_value: vk::ClearValue::default(),
-        }
-    }
-}
-
 fn convert_attach_info(
     device: &GraphicsDevice,
     usage_tracker: &ImageUsageTracker,
@@ -371,54 +296,5 @@ fn get_viewport_info(size: (u32, u32), flipped: bool) -> vk::Viewport {
             .min_depth(0.0f32)
             .max_depth(1.0f32)
             .build()
-    }
-}
-
-fn get_stage_flag_from_usage(flags: vk::ImageUsageFlags) -> vk::PipelineStageFlags2 {
-    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
-        vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS
-    } else if flags == vk::ImageUsageFlags::SAMPLED {
-        vk::PipelineStageFlags2::FRAGMENT_SHADER
-    } else {
-        vk::PipelineStageFlags2::empty()
-    }
-}
-
-fn get_access_flag_from_usage(flags: vk::ImageUsageFlags) -> vk::AccessFlags2 {
-    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
-        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE
-    } else if flags == vk::ImageUsageFlags::SAMPLED {
-        vk::AccessFlags2::SHADER_READ
-    } else {
-        vk::AccessFlags2::empty()
-    }
-}
-
-fn get_image_layout_from_usage(flags: vk::ImageUsageFlags) -> vk::ImageLayout {
-    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
-        vk::ImageLayout::ATTACHMENT_OPTIMAL
-    } else if flags == vk::ImageUsageFlags::SAMPLED {
-        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
-    } else {
-        vk::ImageLayout::UNDEFINED
-    }
-}
-
-#[derive(Default)]
-pub struct ImageUsageTracker {
-    usages: HashMap<AttachmentHandle, vk::ImageUsageFlags>,
-}
-
-impl ImageUsageTracker {
-    pub fn get_last_usage(&self, handle: AttachmentHandle) -> Option<vk::ImageUsageFlags> {
-        self.usages.get(&handle).cloned()
-    }
-
-    pub fn set_last_usage(&mut self, handle: AttachmentHandle, usage: vk::ImageUsageFlags) {
-        if let Some(old) = self.usages.get_mut(&handle) {
-            let _ = replace(old, usage);
-        } else {
-            self.usages.insert(handle, usage);
-        }
     }
 }

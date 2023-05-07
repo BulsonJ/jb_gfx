@@ -3,6 +3,7 @@ use std::ffi::CString;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::CStr};
 
+use crate::renderpass::attachment::AttachmentHandle;
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
@@ -20,7 +21,6 @@ use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
 };
 use crate::util::bindless::BindlessManager;
-use crate::AttachmentHandle;
 
 pub const FRAMES_IN_FLIGHT: usize = 2usize;
 pub const SHADOWMAP_SIZE: u32 = 4096u32;

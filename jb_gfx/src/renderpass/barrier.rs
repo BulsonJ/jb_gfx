@@ -18,6 +18,44 @@ pub struct ImageBarrier {
     pub image_layers: u32,
 }
 
+impl ImageBarrier {
+    pub fn new(attachment: AttachmentHandle) -> Self {
+        Self {
+            image: attachment,
+            ..Default::default()
+        }
+    }
+
+    pub fn old_usage(mut self, usage: vk::ImageUsageFlags) -> Self {
+        self.src_access_mask = get_access_flag_from_usage(usage);
+        self.src_stage_mask = get_stage_flag_from_usage(usage);
+        self.old_layout = get_image_layout_from_usage(usage);
+        self
+    }
+
+    pub fn new_usage(mut self, usage: vk::ImageUsageFlags) -> Self {
+        self.dst_access_mask = get_access_flag_from_usage(usage);
+        self.dst_stage_mask = get_stage_flag_from_usage(usage);
+        self.new_layout = get_image_layout_from_usage(usage);
+        self
+    }
+
+    pub fn base_mip_level(mut self, base_mip_level: u32) -> Self {
+        self.base_mip_level = base_mip_level;
+        self
+    }
+
+    pub fn level_count(mut self, level_count: u32) -> Self {
+        self.level_count = level_count;
+        self
+    }
+
+    pub fn image_layers(mut self, image_layers: u32) -> Self {
+        self.image_layers = image_layers;
+        self
+    }
+}
+
 impl Default for ImageBarrier {
     fn default() -> Self {
         Self {
@@ -97,5 +135,41 @@ impl ImageBarrierBuilder {
         };
 
         Ok(())
+    }
+}
+
+fn get_stage_flag_from_usage(flags: vk::ImageUsageFlags) -> vk::PipelineStageFlags2 {
+    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+        vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS
+    } else if flags == vk::ImageUsageFlags::SAMPLED {
+        vk::PipelineStageFlags2::FRAGMENT_SHADER
+    } else if flags == vk::ImageUsageFlags::COLOR_ATTACHMENT {
+        vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT
+    } else {
+        vk::PipelineStageFlags2::empty()
+    }
+}
+
+fn get_access_flag_from_usage(flags: vk::ImageUsageFlags) -> vk::AccessFlags2 {
+    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE
+    } else if flags == vk::ImageUsageFlags::SAMPLED {
+        vk::AccessFlags2::SHADER_READ
+    } else if flags == vk::ImageUsageFlags::COLOR_ATTACHMENT {
+        vk::AccessFlags2::COLOR_ATTACHMENT_WRITE
+    } else {
+        vk::AccessFlags2::empty()
+    }
+}
+
+fn get_image_layout_from_usage(flags: vk::ImageUsageFlags) -> vk::ImageLayout {
+    if flags == vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT {
+        vk::ImageLayout::ATTACHMENT_OPTIMAL
+    } else if flags == vk::ImageUsageFlags::SAMPLED {
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+    } else if flags == vk::ImageUsageFlags::COLOR_ATTACHMENT {
+        vk::ImageLayout::ATTACHMENT_OPTIMAL
+    } else {
+        vk::ImageLayout::UNDEFINED
     }
 }

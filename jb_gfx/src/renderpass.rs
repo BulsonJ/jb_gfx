@@ -1,7 +1,9 @@
 use ash::vk;
 
+pub mod attachment;
 pub mod barrier;
 pub mod builder;
+pub mod resource;
 
 pub struct RenderPass<'a> {
     device: &'a ash::Device,
