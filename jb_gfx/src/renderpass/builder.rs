@@ -265,7 +265,7 @@ fn convert_attach_info(
 
     let attach_info = vk::RenderingAttachmentInfo::builder()
         .image_view(image_view)
-        .image_layout(attachment.image_layout)
+        .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
         .load_op(load_op)
         .store_op(vk::AttachmentStoreOp::STORE)
         .clear_value(attachment.clear_value);

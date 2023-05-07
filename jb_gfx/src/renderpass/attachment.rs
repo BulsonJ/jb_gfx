@@ -30,7 +30,6 @@ use crate::ImageHandle;
 #[derive(Copy, Clone)]
 pub struct AttachmentInfo {
     pub target: AttachmentHandle,
-    pub image_layout: vk::ImageLayout,
     pub clear_value: vk::ClearValue,
 }
 
@@ -49,7 +48,6 @@ impl Default for AttachmentInfo {
     fn default() -> Self {
         Self {
             target: AttachmentHandle::Image(ImageHandle::default()),
-            image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
             clear_value: vk::ClearValue::default(),
         }
     }
