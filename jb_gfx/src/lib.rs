@@ -12,5 +12,5 @@ pub mod renderer;
 pub mod renderpass;
 pub mod resource;
 
-pub mod util;
 pub mod rendergraph;
+pub mod util;

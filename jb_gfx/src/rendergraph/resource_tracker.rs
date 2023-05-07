@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use slotmap::SlotMap;
 
-use crate::rendergraph::virtual_resource::{VirtualRenderPassHandle, VirtualResource, VirtualTextureResource, VirtualTextureResourceHandle};
+use crate::rendergraph::virtual_resource::{
+    VirtualRenderPassHandle, VirtualResource, VirtualTextureResource, VirtualTextureResourceHandle,
+};
 
 #[derive(Default)]
 pub struct RenderPassTracker {
@@ -11,7 +13,7 @@ pub struct RenderPassTracker {
 }
 
 impl RenderPassTracker {
-    fn get_render_pass(
+    pub(crate) fn get_render_pass(
         &mut self,
         name: &str,
     ) -> (VirtualRenderPassHandle, &mut VirtualRenderPass) {
@@ -32,7 +34,7 @@ impl RenderPassTracker {
 
 /// Internal RenderPass used for tracking resources
 #[derive(Clone, Default)]
-struct VirtualRenderPass {
+pub struct VirtualRenderPass {
     pub name: String,
     pub color_attachments: Vec<VirtualTextureResourceHandle>,
     pub depth_attachment: Option<VirtualTextureResourceHandle>,
@@ -45,7 +47,7 @@ pub struct RenderResourceTracker {
 }
 
 impl RenderResourceTracker {
-    fn get_texture_resource(
+    pub(crate) fn get_texture_resource(
         &mut self,
         name: &str,
     ) -> (VirtualTextureResourceHandle, &mut VirtualTextureResource) {

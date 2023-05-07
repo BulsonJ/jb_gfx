@@ -12,7 +12,7 @@ pub enum SizeClass {
     Custom(u32, u32),
 }
 
-impl Default for SizeClass{
+impl Default for SizeClass {
     fn default() -> Self {
         Self::SwapchainRelative
     }

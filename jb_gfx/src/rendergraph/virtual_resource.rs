@@ -24,19 +24,19 @@ pub struct VirtualTextureResource {
 }
 
 impl VirtualTextureResource {
-    fn set_attachment_info(&mut self, info: AttachmentInfo) {
+    pub fn set_attachment_info(&mut self, info: AttachmentInfo) {
         self.attachment_info = info
     }
 
-    fn get_attachment_info(&self) -> &AttachmentInfo {
+    pub fn get_attachment_info(&self) -> &AttachmentInfo {
         &self.attachment_info
     }
 
-    fn set_image_usage(&mut self, usage: vk::ImageUsageFlags) {
+    pub fn set_image_usage(&mut self, usage: vk::ImageUsageFlags) {
         self.usage |= usage
     }
 
-    fn get_image_usage(&self) -> vk::ImageUsageFlags {
+    pub fn get_image_usage(&self) -> vk::ImageUsageFlags {
         self.usage
     }
 }

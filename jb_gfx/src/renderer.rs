@@ -25,6 +25,7 @@ use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
 };
+use crate::rendergraph::{RenderList, RenderPassLayout};
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::renderpass::builder::RenderPassBuilder;
 use crate::renderpass::resource::ImageUsageTracker;
@@ -888,6 +889,33 @@ impl Renderer {
 
             (pso, pso_layout)
         };
+
+        {
+            let mut list = RenderList::new(device.clone());
+
+            let forward = crate::rendergraph::attachment::AttachmentInfo {
+                format: vk::Format::R8G8B8A8_SRGB,
+                ..Default::default()
+            };
+            let bright = crate::rendergraph::attachment::AttachmentInfo {
+                format: vk::Format::R8G8B8A8_SRGB,
+                ..Default::default()
+            };
+            let depth = crate::rendergraph::attachment::AttachmentInfo {
+                format: vk::Format::D32_SFLOAT,
+                ..Default::default()
+            };
+            let forward_pass = list.add_pass(
+                "forward_pass",
+                RenderPassLayout::default()
+                    .add_color_attachment("forward", &forward)
+                    .add_color_attachment("forward", &bright)
+                    .set_depth_stencil_attachment("depth", &depth),
+            );
+            list.bake();
+
+            list.run_pass(forward_pass, |cmd| {});
+        }
 
         info!("Renderer Created");
         let result = Ok(Self {
