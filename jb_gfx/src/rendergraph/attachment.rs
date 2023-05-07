@@ -1,6 +1,6 @@
 use ash::vk;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct AttachmentInfo {
     pub size: SizeClass,
     pub format: vk::Format,
@@ -10,4 +10,10 @@ pub struct AttachmentInfo {
 pub enum SizeClass {
     SwapchainRelative,
     Custom(u32, u32),
+}
+
+impl Default for SizeClass{
+    fn default() -> Self {
+        Self::SwapchainRelative
+    }
 }

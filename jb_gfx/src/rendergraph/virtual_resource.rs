@@ -1,6 +1,7 @@
-use crate::AttachmentInfo;
 use ash::vk;
 use slotmap::new_key_type;
+
+use crate::rendergraph::attachment::AttachmentInfo;
 
 new_key_type! {pub struct VirtualTextureResourceHandle; pub struct VirtualRenderPassHandle;}
 

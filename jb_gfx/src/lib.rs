@@ -13,3 +13,4 @@ pub mod renderpass;
 pub mod resource;
 
 pub mod util;
+pub mod rendergraph;
