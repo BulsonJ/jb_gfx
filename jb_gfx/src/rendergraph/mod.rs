@@ -61,6 +61,7 @@ impl RenderList {
 pub struct RenderPassLayout {
     pub color_attachments: Vec<(String, AttachmentInfo)>,
     pub depth_attachment: Option<(String, AttachmentInfo)>,
+    pub texture_inputs: Vec<String>,
 }
 
 impl RenderPassLayout {
@@ -72,6 +73,11 @@ impl RenderPassLayout {
 
     pub fn set_depth_stencil_attachment(mut self, name: &str, info: &AttachmentInfo) -> Self {
         self.depth_attachment = Some((name.to_string(), info.clone()));
+        self
+    }
+
+    pub fn add_texture_input(mut self, name: &str) -> Self {
+        self.texture_inputs.push(name.to_string());
         self
     }
 }

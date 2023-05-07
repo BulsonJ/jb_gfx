@@ -910,7 +910,7 @@ impl Renderer {
                 RenderPassLayout::default()
                     .add_color_attachment("forward", &forward)
                     .add_color_attachment("forward", &bright)
-                    .set_depth_stencil_attachment("depth", &depth),
+                    .set_depth_stencil_attachment("depth", &depth)
             );
             list.bake();
 
