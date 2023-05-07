@@ -1,7 +1,9 @@
-use crate::AttachmentHandle;
-use ash::vk;
 use std::collections::HashMap;
 use std::mem::replace;
+
+use ash::vk;
+
+use crate::AttachmentHandle;
 
 #[derive(Default)]
 pub struct ImageUsageTracker {

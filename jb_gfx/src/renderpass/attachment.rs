@@ -1,6 +1,6 @@
-use crate::renderpass::resource::ImageUsageTracker;
-use crate::{GraphicsDevice, ImageHandle};
 use ash::vk;
+
+use crate::ImageHandle;
 
 /// A RenderPass Attachment
 ///

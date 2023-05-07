@@ -4,8 +4,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use ash::vk;
 use ash::vk::{
-    AccessFlags2, ClearDepthStencilValue, DeviceSize, Handle, ImageLayout, IndexType, ObjectType,
-    PipelineStageFlags2,
+    AccessFlags2, ClearDepthStencilValue, Handle, ImageLayout, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::offset_of;
 use cgmath::{

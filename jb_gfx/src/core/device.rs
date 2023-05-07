@@ -3,7 +3,6 @@ use std::ffi::CString;
 use std::sync::Arc;
 use std::{borrow::Cow, ffi::CStr};
 
-use crate::renderpass::attachment::AttachmentHandle;
 use anyhow::{ensure, Result};
 use ash::extensions::khr::Synchronization2;
 use ash::extensions::{ext::DebugUtils, khr::DynamicRendering};
@@ -16,6 +15,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
+use crate::renderpass::attachment::AttachmentHandle;
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::resource::{
     BufferCreateInfo, BufferHandle, BufferStorageType, ImageHandle, ResourceManager,
