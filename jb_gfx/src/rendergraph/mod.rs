@@ -1,7 +1,9 @@
 use ash::vk;
+use std::collections::HashMap;
 use std::sync::Arc;
+use log::info;
 
-use crate::rendergraph::attachment::{AttachmentInfo};
+use crate::rendergraph::attachment::{AttachmentInfo, SizeClass};
 use crate::rendergraph::resource_tracker::{RenderPassTracker, RenderResourceTracker};
 use crate::rendergraph::virtual_resource::{VirtualRenderPassHandle, VirtualResource};
 use crate::GraphicsDevice;
@@ -15,6 +17,7 @@ pub struct RenderList {
     device: Arc<GraphicsDevice>,
     passes: RenderPassTracker,
     resource: RenderResourceTracker,
+    order_of_passes: Vec<VirtualRenderPassHandle>,
 }
 
 impl RenderList {
@@ -23,22 +26,29 @@ impl RenderList {
             device,
             passes: RenderPassTracker::default(),
             resource: RenderResourceTracker::default(),
+            order_of_passes: Vec::default(),
         }
     }
 
-    pub fn add_pass(&mut self, name: &str, pass_layout: RenderPassLayout) -> VirtualRenderPassHandle {
+    pub fn add_pass(
+        &mut self,
+        name: &str,
+        pass_layout: RenderPassLayout,
+    ) -> VirtualRenderPassHandle {
         let (pass_handle, render_pass) = self.passes.get_render_pass(name);
         render_pass.name = name.to_string();
         for attach in pass_layout.color_attachments {
             let (resource_handle, resource) = self.resource.get_texture_resource(&attach.0);
             resource.set_image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
             resource.write_in_pass(pass_handle);
+            resource.set_attachment_info(attach.1);
             render_pass.color_attachments.push(resource_handle);
         }
         if let Some(attach) = pass_layout.depth_attachment {
             let (resource_handle, resource) = self.resource.get_texture_resource(&attach.0);
             resource.set_image_usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT);
             resource.write_in_pass(pass_handle);
+            resource.set_attachment_info(attach.1);
             render_pass.depth_attachment = Some(resource_handle);
         }
         for input in pass_layout.texture_inputs {
@@ -51,10 +61,46 @@ impl RenderList {
     }
 
     pub fn bake(&mut self) {
+        // Create physical images
+        let mut images = HashMap::new();
+        for (handle, resource) in self.resource.get_resources() {
+            let size = {
+                match resource.get_attachment_info().size {
+                    SizeClass::SwapchainRelative => {
+                        (self.device.size().width, self.device.size().height)
+                    }
+                    SizeClass::Custom(width, height) => (width, height),
+                }
+            };
 
+            let image_create_info = vk::ImageCreateInfo::builder()
+                .format(resource.get_attachment_info().format)
+                .usage(resource.get_image_usage())
+                .extent(vk::Extent3D {
+                    width: size.0,
+                    height: size.1,
+                    depth: 1,
+                })
+                .image_type(vk::ImageType::TYPE_2D)
+                .array_layers(1)
+                .mip_levels(1)
+                .samples(vk::SampleCountFlags::TYPE_1)
+                .tiling(vk::ImageTiling::OPTIMAL);
+
+            let image = self
+                .device
+                .resource_manager
+                .create_image(&image_create_info);
+
+            images.insert(handle, image);
+            info!("Image Created: {}", resource.name());
+        }
     }
 
-    pub fn run_pass<F>(&self, render_pass: VirtualRenderPassHandle, commands: F) where F : Fn(vk::CommandBuffer) {
+    pub fn run_pass<F>(&self, render_pass: VirtualRenderPassHandle, commands: F)
+    where
+        F: Fn(vk::CommandBuffer),
+    {
         // DO IMAGE BARRIERS NEEDED
         // START RENDERPASS
         commands(self.device.graphics_command_buffer());

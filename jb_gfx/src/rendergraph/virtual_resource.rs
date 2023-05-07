@@ -14,7 +14,7 @@ pub trait VirtualResource {
     fn get_write_passes(&self) -> &[VirtualRenderPassHandle];
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct VirtualTextureResource {
     name: String,
     attachment_info: AttachmentInfo,

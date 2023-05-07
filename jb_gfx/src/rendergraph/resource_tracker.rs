@@ -1,3 +1,4 @@
+use slotmap::basic::Iter;
 use std::collections::HashMap;
 
 use slotmap::SlotMap;
@@ -64,5 +65,9 @@ impl RenderResourceTracker {
             resource.set_name(name);
             (handle, resource)
         }
+    }
+
+    pub fn get_resources(&self) -> Iter<VirtualTextureResourceHandle, VirtualTextureResource> {
+        self.resources.iter()
     }
 }
