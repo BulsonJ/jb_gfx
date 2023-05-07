@@ -38,6 +38,7 @@ pub struct VirtualRenderPass {
     pub name: String,
     pub color_attachments: Vec<VirtualTextureResourceHandle>,
     pub depth_attachment: Option<VirtualTextureResourceHandle>,
+    pub texture_inputs: Vec<VirtualTextureResourceHandle>,
 }
 
 #[derive(Default)]

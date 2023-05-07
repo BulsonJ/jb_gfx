@@ -41,6 +41,12 @@ impl RenderList {
             resource.write_in_pass(pass_handle);
             render_pass.depth_attachment = Some(resource_handle);
         }
+        for input in pass_layout.texture_inputs {
+            let (resource_handle, resource) = self.resource.get_texture_resource(&input);
+            resource.set_image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
+            resource.read_in_pass(pass_handle);
+            render_pass.texture_inputs.push(resource_handle);
+        }
         pass_handle
     }
 
