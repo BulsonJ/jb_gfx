@@ -909,10 +909,7 @@ impl Renderer {
                 .add_color_attachment("forward", &forward)
                 .add_color_attachment("bright", &bright)
                 .set_depth_stencil_attachment("depth", &depth);
-            let forward_pass = list.add_pass(
-                "forward_pass",
-                pass_desc,
-            );
+            let forward_pass = list.add_pass("forward_pass", pass_desc);
             list.bake();
 
             list.run_pass(forward_pass, |cmd| {});

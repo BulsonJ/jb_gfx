@@ -31,6 +31,13 @@ impl RenderPassTracker {
             (handle, pass)
         }
     }
+
+    pub(crate) fn retrieve_render_pass(
+        &self,
+        handle: VirtualRenderPassHandle,
+    ) -> &VirtualRenderPass {
+        self.passes.get(handle).unwrap()
+    }
 }
 
 /// Internal RenderPass used for tracking resources
@@ -65,6 +72,13 @@ impl RenderResourceTracker {
             resource.set_name(name);
             (handle, resource)
         }
+    }
+
+    pub(crate) fn retrieve_resource(
+        &self,
+        handle: VirtualTextureResourceHandle,
+    ) -> &VirtualTextureResource {
+        self.resources.get(handle).unwrap()
     }
 
     pub fn get_resources(&self) -> Iter<VirtualTextureResourceHandle, VirtualTextureResource> {
