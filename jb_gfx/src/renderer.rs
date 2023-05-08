@@ -118,6 +118,7 @@ pub struct Renderer {
     bloom_vertical: VirtualRenderPassHandle,
     combine: VirtualRenderPassHandle,
     ui: VirtualRenderPassHandle,
+    pub bloom_final: VirtualRenderPassHandle,
 }
 
 impl Renderer {
@@ -214,18 +215,25 @@ impl Renderer {
                 .add_color_attachment("bloom_horizontal", &bloom_attachment)
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
         );
-        let bloom_horizontal = list.add_pass(
-            "bloom_horizontal_pass",
+        let bloom_vertical = list.add_pass(
+            "bloom_vertical_pass",
             RenderPassLayout::default()
                 .add_texture_input("bloom_horizontal")
                 .add_color_attachment("bloom_vertical", &bloom_attachment)
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
         );
-        let bloom_vertical = list.add_pass(
-            "bloom_vertical_pass",
+        let bloom_horizontal = list.add_pass(
+            "bloom_horizontal_pass",
             RenderPassLayout::default()
                 .add_texture_input("bloom_vertical")
                 .add_color_attachment("bloom_horizontal", &bloom_attachment)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
+        );
+        let bloom_final = list.add_pass(
+            "bloom_final_pass",
+            RenderPassLayout::default()
+                .add_texture_input("bloom_horizontal")
+                .add_color_attachment("bloom_vertical", &bloom_attachment)
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
         );
 
@@ -371,7 +379,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/combine.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: swapchain_image_format,
+                    format: render_image_format,
                     blend: false,
                     ..Default::default()
                 }],
@@ -699,7 +707,7 @@ impl Renderer {
                     fragment_shader: "assets/shaders/ui/ui.frag".to_string(),
                     vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                     color_attachment_formats: vec![PipelineColorAttachment {
-                        format: swapchain_image_format,
+                        format: render_image_format,
                         blend: true,
                         src_blend_factor_color: vk::BlendFactor::ONE,
                         dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
@@ -790,7 +798,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/ui/diagetic_ui.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: swapchain_image_format,
+                    format: render_image_format,
                     blend: true,
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
@@ -1066,6 +1074,7 @@ impl Renderer {
             bloom_initial,
             bloom_horizontal,
             bloom_vertical,
+            bloom_final,
             combine,
             ui,
         });
@@ -1518,261 +1527,283 @@ impl Renderer {
                );
            };
         });
-        //
-        //let mut horizontal = true;
-        //
-        //for i in 0..10 {
-        //    let pass = {
-        //        if i == 0 {
-        //            self.bloom_initial
-        //        } else if horizontal {
-        //            self.bloom_horizontal
-        //        } else {
-        //            self.bloom_vertical
-        //        }
-        //    };
-        //    self.list.run_pass(pass, |list, cmd| {
-        //        let bright = list.get_physical_resource("bright");
-        //        let horizontal_image = list.get_physical_resource("bloom_horizontal");
-        //        let vertical_image = list.get_physical_resource("bloom_vertical");
-        //
-        //        let (first_bloom_set, _) = JBDescriptorBuilder::new(
-        //            &self.device.resource_manager,
-        //            &mut self.descriptor_layout_cache,
-        //            &mut self.frame_descriptor_allocator[resource_index],
-        //        )
-        //        .bind_image(ImageDescriptorInfo {
-        //            binding: 0,
-        //            image: bright,
-        //            sampler: self.device.ui_sampler(),
-        //            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        //            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        //        })
-        //        .build()
-        //        .unwrap();
-        //        let (bloom_set, _) = JBDescriptorBuilder::new(
-        //            &self.device.resource_manager,
-        //            &mut self.descriptor_layout_cache,
-        //            &mut self.frame_descriptor_allocator[resource_index],
-        //        )
-        //        .bind_image(ImageDescriptorInfo {
-        //            binding: 0,
-        //            image: vertical_image,
-        //            sampler: self.device.ui_sampler(),
-        //            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        //            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        //        })
-        //        .build()
-        //        .unwrap();
-        //        let (bloom_set_two, _) = JBDescriptorBuilder::new(
-        //            &self.device.resource_manager,
-        //            &mut self.descriptor_layout_cache,
-        //            &mut self.frame_descriptor_allocator[resource_index],
-        //        )
-        //        .bind_image(ImageDescriptorInfo {
-        //            binding: 0,
-        //            image: horizontal_image,
-        //            sampler: self.device.ui_sampler(),
-        //            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        //            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        //        })
-        //        .build()
-        //        .unwrap();
-        //        let bloom_sets = [bloom_set, bloom_set_two];
-        //
-        //        let pipeline = self
-        //            .pipeline_manager
-        //            .get_pipeline(self.bloom_pass.bloom_pso);
-        //
-        //        let set = {
-        //            if i == 0 {
-        //                first_bloom_set
-        //            } else {
-        //                bloom_sets[!horizontal as usize]
-        //            }
-        //        };
-        //        unsafe {
-        //            self.device.vk_device.cmd_bind_pipeline(
-        //                self.device.graphics_command_buffer(),
-        //                vk::PipelineBindPoint::GRAPHICS,
-        //                pipeline,
-        //            );
-        //            self.device.vk_device.cmd_bind_descriptor_sets(
-        //                self.device.graphics_command_buffer(),
-        //                vk::PipelineBindPoint::GRAPHICS,
-        //                self.bloom_pass.bloom_pso_layout,
-        //                0u32,
-        //                &[set],
-        //                &[],
-        //            );
-        //        };
-        //
-        //        // Draw commands
-        //
-        //        unsafe {
-        //            self.device.vk_device.cmd_push_constants(
-        //                self.device.graphics_command_buffer(),
-        //                self.bloom_pass.bloom_pso_layout,
-        //                vk::ShaderStageFlags::FRAGMENT,
-        //                0u32,
-        //                bytemuck::cast_slice(&[horizontal as i32]),
-        //            );
-        //            self.device.vk_device.cmd_draw(
-        //                self.device.graphics_command_buffer(),
-        //                6u32,
-        //                1u32,
-        //                0u32,
-        //                0u32,
-        //            );
-        //        };
-        //    });
-        //    horizontal = !horizontal;
-        //}
-        //self.list.run_pass(self.combine, |list, cmd| {
-        //    let forward = list.get_physical_resource("forward");
-        //    let bloom_result = list.get_physical_resource("bloom_vertical");
-        //
-        //    let (combine_set, _) = JBDescriptorBuilder::new(
-        //        &self.device.resource_manager,
-        //        &mut self.descriptor_layout_cache,
-        //        &mut self.frame_descriptor_allocator[resource_index],
-        //    )
-        //    .bind_image(ImageDescriptorInfo {
-        //        binding: 0,
-        //        image: forward,
-        //        sampler: self.device.ui_sampler(),
-        //        desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        //        stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        //    })
-        //    .bind_image(ImageDescriptorInfo {
-        //        binding: 1,
-        //        image: bloom_result,
-        //        sampler: self.device.ui_sampler(),
-        //        desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        //        stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-        //    })
-        //    .build()
-        //    .unwrap();
-        //
-        //    let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
-        //
-        //    unsafe {
-        //        self.device.vk_device.cmd_bind_pipeline(
-        //            self.device.graphics_command_buffer(),
-        //            vk::PipelineBindPoint::GRAPHICS,
-        //            pipeline,
-        //        );
-        //        self.device.vk_device.cmd_bind_descriptor_sets(
-        //            self.device.graphics_command_buffer(),
-        //            vk::PipelineBindPoint::GRAPHICS,
-        //            self.combine_pso_layout,
-        //            0u32,
-        //            &[combine_set],
-        //            &[],
-        //        );
-        //    };
-        //
-        //    // Draw commands
-        //
-        //    unsafe {
-        //        self.device.vk_device.cmd_draw(
-        //            self.device.graphics_command_buffer(),
-        //            6u32,
-        //            1u32,
-        //            0u32,
-        //            0u32,
-        //        );
-        //    };
-        //});
-        //self.list.run_pass(self.ui, |list, cmd| {
-        //    if self.draw_debug_ui {
-        //        let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
-        //
-        //        unsafe {
-        //            self.device.vk_device.cmd_bind_pipeline(
-        //                self.device.graphics_command_buffer(),
-        //                vk::PipelineBindPoint::GRAPHICS,
-        //                pipeline,
-        //            );
-        //            self.device.vk_device.cmd_bind_descriptor_sets(
-        //                self.device.graphics_command_buffer(),
-        //                vk::PipelineBindPoint::GRAPHICS,
-        //                self.world_debug_pso_layout,
-        //                0u32,
-        //                &[
-        //                    self.device.bindless_descriptor_set(),
-        //                    self.world_debug_desc_set[resource_index],
-        //                ],
-        //                &[],
-        //            );
-        //        };
-        //
-        //        unsafe {
-        //            self.device.vk_device.cmd_draw(
-        //                self.device.graphics_command_buffer(),
-        //                6u32 * debug_ui_draw_amount as u32,
-        //                1u32,
-        //                0u32,
-        //                0u32,
-        //            );
-        //        };
-        //    }
-        //
-        //    let pipeline = self.pipeline_manager.get_pipeline(self.ui_pass.pso);
-        //
-        //    unsafe {
-        //        self.device.vk_device.cmd_bind_pipeline(
-        //            self.device.graphics_command_buffer(),
-        //            vk::PipelineBindPoint::GRAPHICS,
-        //            pipeline,
-        //        );
-        //        self.device.vk_device.cmd_bind_descriptor_sets(
-        //            self.device.graphics_command_buffer(),
-        //            vk::PipelineBindPoint::GRAPHICS,
-        //            self.ui_pass.pso_layout,
-        //            0u32,
-        //            &[
-        //                self.device.bindless_descriptor_set(),
-        //                self.ui_pass.desc_set[resource_index],
-        //            ],
-        //            &[],
-        //        );
-        //    };
-        //
-        //    let index_buffer = self
-        //        .device
-        //        .resource_manager
-        //        .get_buffer(self.ui_pass.index_buffer[resource_index])
-        //        .unwrap();
-        //
-        //    unsafe {
-        //        self.device.vk_device.cmd_bind_index_buffer(
-        //            self.device.graphics_command_buffer(),
-        //            index_buffer.buffer(),
-        //            0u64,
-        //            vk::IndexType::UINT32,
-        //        );
-        //    }
-        //
-        //    for draw in ui_draw_calls.iter() {
-        //        let max = [
-        //            draw.scissor.1[0] - draw.scissor.0[0],
-        //            draw.scissor.1[1] - draw.scissor.0[1],
-        //        ];
-        //        //render_pass.set_scissor(draw.scissor.0, max);
-        //        // Draw commands
-        //        unsafe {
-        //            self.device.vk_device.cmd_draw_indexed(
-        //                self.device.graphics_command_buffer(),
-        //                draw.amount as u32,
-        //                1u32,
-        //                draw.index_offset as u32,
-        //                draw.vertex_offset as i32,
-        //                0u32,
-        //            );
-        //        };
-        //    }
-        //});
+
+        let mut horizontal = true;
+
+        let bright = self.list.get_physical_resource("bright");
+        let horizontal_image = self.list.get_physical_resource("bloom_horizontal");
+        let vertical_image = self.list.get_physical_resource("bloom_vertical");
+
+        let (first_bloom_set, _) = JBDescriptorBuilder::new(
+            &self.device.resource_manager,
+            &mut self.descriptor_layout_cache,
+            &mut self.frame_descriptor_allocator[resource_index],
+        )
+            .bind_image(ImageDescriptorInfo {
+                binding: 0,
+                image: bright,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .build()
+            .unwrap();
+        let (bloom_set, _) = JBDescriptorBuilder::new(
+            &self.device.resource_manager,
+            &mut self.descriptor_layout_cache,
+            &mut self.frame_descriptor_allocator[resource_index],
+        )
+            .bind_image(ImageDescriptorInfo {
+                binding: 0,
+                image: vertical_image,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .build()
+            .unwrap();
+        let (bloom_set_two, _) = JBDescriptorBuilder::new(
+            &self.device.resource_manager,
+            &mut self.descriptor_layout_cache,
+            &mut self.frame_descriptor_allocator[resource_index],
+        )
+            .bind_image(ImageDescriptorInfo {
+                binding: 0,
+                image: horizontal_image,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .build()
+            .unwrap();
+
+        for i in 0..10 {
+            let pass = {
+                if i == 0 {
+                    self.bloom_initial
+                }else if i == 10 {
+                    self.bloom_final
+                } else if horizontal {
+                    self.bloom_horizontal
+                } else {
+                    self.bloom_vertical
+                }
+            };
+
+            let set = {
+                if i == 0 {
+                    first_bloom_set
+                } else if horizontal{
+                    bloom_set
+                } else {
+                    bloom_set_two
+                }
+            };
+
+            self.list.run_pass(pass, |list, cmd| {
+
+                let pipeline = self
+                    .pipeline_manager
+                    .get_pipeline(self.bloom_pass.bloom_pso);
+
+                unsafe {
+                    self.device.vk_device.cmd_bind_pipeline(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline,
+                    );
+                    self.device.vk_device.cmd_bind_descriptor_sets(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.bloom_pass.bloom_pso_layout,
+                        0u32,
+                        &[set],
+                        &[],
+                    );
+                };
+
+                // Draw commands
+
+                unsafe {
+                    self.device.vk_device.cmd_push_constants(
+                        self.device.graphics_command_buffer(),
+                        self.bloom_pass.bloom_pso_layout,
+                        vk::ShaderStageFlags::FRAGMENT,
+                        0u32,
+                        bytemuck::cast_slice(&[horizontal as i32]),
+                    );
+                    self.device.vk_device.cmd_draw(
+                        self.device.graphics_command_buffer(),
+                        6u32,
+                        1u32,
+                        0u32,
+                        0u32,
+                    );
+                };
+            });
+            horizontal = !horizontal;
+        }
+        self.list.run_pass(self.combine, |list, cmd| {
+            let forward = list.get_physical_resource("forward");
+            let bloom_result = list.get_physical_resource("bloom_vertical");
+
+            let (combine_set, _) = JBDescriptorBuilder::new(
+                &self.device.resource_manager,
+                &mut self.descriptor_layout_cache,
+                &mut self.frame_descriptor_allocator[resource_index],
+            )
+            .bind_image(ImageDescriptorInfo {
+                binding: 0,
+                image: forward,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .bind_image(ImageDescriptorInfo {
+                binding: 1,
+                image: bloom_result,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+            })
+            .build()
+            .unwrap();
+
+            let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
+
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.combine_pso_layout,
+                    0u32,
+                    &[combine_set],
+                    &[],
+                );
+            };
+
+            // Draw commands
+
+            unsafe {
+                self.device.vk_device.cmd_draw(
+                    self.device.graphics_command_buffer(),
+                    6u32,
+                    1u32,
+                    0u32,
+                    0u32,
+                );
+            };
+        });
+        self.list.run_pass(self.ui, |list, cmd| {
+            if self.draw_debug_ui {
+                let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
+
+                unsafe {
+                    self.device.vk_device.cmd_bind_pipeline(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline,
+                    );
+                    self.device.vk_device.cmd_bind_descriptor_sets(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.world_debug_pso_layout,
+                        0u32,
+                        &[
+                            self.device.bindless_descriptor_set(),
+                            self.world_debug_desc_set[resource_index],
+                        ],
+                        &[],
+                    );
+                };
+
+                unsafe {
+                    self.device.vk_device.cmd_draw(
+                        self.device.graphics_command_buffer(),
+                        6u32 * debug_ui_draw_amount as u32,
+                        1u32,
+                        0u32,
+                        0u32,
+                    );
+                };
+            }
+
+            let pipeline = self.pipeline_manager.get_pipeline(self.ui_pass.pso);
+
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.ui_pass.pso_layout,
+                    0u32,
+                    &[
+                        self.device.bindless_descriptor_set(),
+                        self.ui_pass.desc_set[resource_index],
+                    ],
+                    &[],
+                );
+            };
+
+            let index_buffer = self
+                .device
+                .resource_manager
+                .get_buffer(self.ui_pass.index_buffer[resource_index])
+                .unwrap();
+
+            unsafe {
+                self.device.vk_device.cmd_bind_index_buffer(
+                    self.device.graphics_command_buffer(),
+                    index_buffer.buffer(),
+                    0u64,
+                    vk::IndexType::UINT32,
+                );
+            }
+
+            for draw in ui_draw_calls.iter() {
+                let max = [
+                    draw.scissor.1[0] - draw.scissor.0[0],
+                    draw.scissor.1[1] - draw.scissor.0[1],
+                ];
+
+                let scissor = vk::Rect2D::builder()
+                    .offset(vk::Offset2D { x: draw.scissor.0[0] as i32, y: draw.scissor.0[1] as i32 })
+                    .extent(vk::Extent2D {
+                        width: draw.scissor.1[0] as u32,
+                        height:  draw.scissor.1[1] as u32,
+                    });
+
+                unsafe {
+                    self.device.vk_device.cmd_set_scissor(
+                        cmd,
+                        0u32,
+                        &[*scissor]
+                    );
+                };
+
+                //render_pass.set_scissor(draw.scissor.0, max);
+                // Draw commands
+                unsafe {
+                    self.device.vk_device.cmd_draw_indexed(
+                        self.device.graphics_command_buffer(),
+                        draw.amount as u32,
+                        1u32,
+                        draw.index_offset as u32,
+                        draw.vertex_offset as i32,
+                        0u32,
+                    );
+                };
+            }
+        });
 
         // Shadow pass
         let shadow_pass_start = self.device.write_timestamp(
