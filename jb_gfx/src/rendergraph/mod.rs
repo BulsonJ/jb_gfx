@@ -1,9 +1,9 @@
 use ash::vk;
+use ash::vk::Handle;
 use log::info;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-use ash::vk::Handle;
 
 use crate::rendergraph::attachment::{AttachmentInfo, SizeClass};
 use crate::rendergraph::resource_tracker::{RenderPassTracker, RenderResourceTracker};
@@ -25,11 +25,12 @@ pub struct RenderList {
     order_of_passes: Vec<VirtualRenderPassHandle>,
     physical_passes: HashMap<VirtualRenderPassHandle, PhysicalRenderPass>,
     physical_images: HashMap<VirtualTextureResourceHandle, ImageHandle>,
-    pub swapchain_size: (u32,u32)
+    pub swapchain_size: (u32, u32),
+    backbuffer_source: String,
 }
 
 impl RenderList {
-    pub fn new(device: Arc<GraphicsDevice>, swapchain_size: (u32,u32)) -> Self {
+    pub fn new(device: Arc<GraphicsDevice>, swapchain_size: (u32, u32)) -> Self {
         Self {
             device,
             passes: RenderPassTracker::default(),
@@ -38,6 +39,7 @@ impl RenderList {
             physical_passes: HashMap::default(),
             physical_images: HashMap::default(),
             swapchain_size,
+            backbuffer_source : String::default(),
         }
     }
 
@@ -78,21 +80,33 @@ impl RenderList {
         pass_handle
     }
 
+    pub fn set_backbuffer(&mut self, name: &str) {
+        self.backbuffer_source = name.to_string();
+    }
+
     pub fn bake(&mut self) {
         // Create physical images
         for (handle, resource) in self.resource.get_resources() {
             let size = {
                 match resource.get_attachment_info().size {
-                    SizeClass::SwapchainRelative => {
-                        self.swapchain_size
-                    }
+                    SizeClass::SwapchainRelative => self.swapchain_size,
                     SizeClass::Custom(width, height) => (width, height),
+                }
+            };
+
+            let usage = {
+                if resource.name() == self.backbuffer_source {
+                    let mut flags = resource.get_image_usage();
+                    flags |= vk::ImageUsageFlags::TRANSFER_SRC;
+                    flags
+                } else {
+                    resource.get_image_usage()
                 }
             };
 
             let image_create_info = vk::ImageCreateInfo::builder()
                 .format(resource.get_attachment_info().format)
-                .usage(resource.get_image_usage())
+                .usage(usage)
                 .extent(vk::Extent3D {
                     width: size.0,
                     height: size.1,
@@ -110,11 +124,15 @@ impl RenderList {
                 .create_image(&image_create_info);
 
             {
-                let image = self
-                    .device
-                    .resource_manager.get_image(image).unwrap();
+                let image = self.device.resource_manager.get_image(image).unwrap();
 
-                self.device.set_vulkan_debug_name(image.image().as_raw(), vk::ObjectType::IMAGE, resource.name()).unwrap();
+                self.device
+                    .set_vulkan_debug_name(
+                        image.image().as_raw(),
+                        vk::ObjectType::IMAGE,
+                        resource.name(),
+                    )
+                    .unwrap();
             }
 
             self.physical_images.insert(handle, image);

@@ -255,6 +255,8 @@ impl Renderer {
                 .set_depth_stencil_clear(1.0, 0),
         );
 
+        list.set_backbuffer("output");
+
         list.bake();
 
         let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
@@ -1455,77 +1457,77 @@ impl Renderer {
             let color = list.get_physical_resource("color");
             let depth = list.get_physical_resource("depth");
 
-           let (render_target_set, _) = JBDescriptorBuilder::new(
-               &self.device.resource_manager,
-               &mut self.descriptor_layout_cache,
-               &mut self.frame_descriptor_allocator[resource_index],
-           )
-           .bind_image(ImageDescriptorInfo {
-               binding: 0,
-               image: emissive,
-               sampler: self.device.ui_sampler(),
-               desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-               stage_flags: vk::ShaderStageFlags::FRAGMENT,
-           })
-           .bind_image(ImageDescriptorInfo {
-               binding: 1,
-               image: normal,
-               sampler: self.device.ui_sampler(),
-               desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-               stage_flags: vk::ShaderStageFlags::FRAGMENT,
-           })
-           .bind_image(ImageDescriptorInfo {
-               binding: 2,
-               image: color,
-               sampler: self.device.ui_sampler(),
-               desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-               stage_flags: vk::ShaderStageFlags::FRAGMENT,
-           })
-           .bind_image(ImageDescriptorInfo {
-               binding: 3,
-               image: depth,
-               sampler: self.device.ui_sampler(),
-               desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-               stage_flags: vk::ShaderStageFlags::FRAGMENT,
-           })
-           .build()
-           .unwrap();
+            let (render_target_set, _) = JBDescriptorBuilder::new(
+                &self.device.resource_manager,
+                &mut self.descriptor_layout_cache,
+                &mut self.frame_descriptor_allocator[resource_index],
+            )
+            .bind_image(ImageDescriptorInfo {
+                binding: 0,
+                image: emissive,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            })
+            .bind_image(ImageDescriptorInfo {
+                binding: 1,
+                image: normal,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            })
+            .bind_image(ImageDescriptorInfo {
+                binding: 2,
+                image: color,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            })
+            .bind_image(ImageDescriptorInfo {
+                binding: 3,
+                image: depth,
+                sampler: self.device.ui_sampler(),
+                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            })
+            .build()
+            .unwrap();
 
-           let pipeline = self
-               .pipeline_manager
-               .get_pipeline(self.deferred_lighting_combine.pso);
+            let pipeline = self
+                .pipeline_manager
+                .get_pipeline(self.deferred_lighting_combine.pso);
 
-           unsafe {
-               self.device.vk_device.cmd_bind_pipeline(
-                   self.device.graphics_command_buffer(),
-                   vk::PipelineBindPoint::GRAPHICS,
-                   pipeline,
-               );
-               self.device.vk_device.cmd_bind_descriptor_sets(
-                   self.device.graphics_command_buffer(),
-                   vk::PipelineBindPoint::GRAPHICS,
-                   self.deferred_lighting_combine.pso_layout,
-                   0u32,
-                   &[
-                       self.device.bindless_descriptor_set(),
-                       self.descriptor_set[resource_index],
-                       render_target_set,
-                   ],
-                   &[],
-               );
-           };
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.deferred_lighting_combine.pso_layout,
+                    0u32,
+                    &[
+                        self.device.bindless_descriptor_set(),
+                        self.descriptor_set[resource_index],
+                        render_target_set,
+                    ],
+                    &[],
+                );
+            };
 
-           //// Draw commands
+            //// Draw commands
 
-           unsafe {
-               self.device.vk_device.cmd_draw(
-                   self.device.graphics_command_buffer(),
-                   6u32,
-                   1u32,
-                   0u32,
-                   0u32,
-               );
-           };
+            unsafe {
+                self.device.vk_device.cmd_draw(
+                    self.device.graphics_command_buffer(),
+                    6u32,
+                    1u32,
+                    0u32,
+                    0u32,
+                );
+            };
         });
 
         let mut horizontal = true;
@@ -1539,49 +1541,49 @@ impl Renderer {
             &mut self.descriptor_layout_cache,
             &mut self.frame_descriptor_allocator[resource_index],
         )
-            .bind_image(ImageDescriptorInfo {
-                binding: 0,
-                image: bright,
-                sampler: self.device.ui_sampler(),
-                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            })
-            .build()
-            .unwrap();
+        .bind_image(ImageDescriptorInfo {
+            binding: 0,
+            image: bright,
+            sampler: self.device.ui_sampler(),
+            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+        })
+        .build()
+        .unwrap();
         let (bloom_set, _) = JBDescriptorBuilder::new(
             &self.device.resource_manager,
             &mut self.descriptor_layout_cache,
             &mut self.frame_descriptor_allocator[resource_index],
         )
-            .bind_image(ImageDescriptorInfo {
-                binding: 0,
-                image: vertical_image,
-                sampler: self.device.ui_sampler(),
-                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            })
-            .build()
-            .unwrap();
+        .bind_image(ImageDescriptorInfo {
+            binding: 0,
+            image: vertical_image,
+            sampler: self.device.ui_sampler(),
+            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+        })
+        .build()
+        .unwrap();
         let (bloom_set_two, _) = JBDescriptorBuilder::new(
             &self.device.resource_manager,
             &mut self.descriptor_layout_cache,
             &mut self.frame_descriptor_allocator[resource_index],
         )
-            .bind_image(ImageDescriptorInfo {
-                binding: 0,
-                image: horizontal_image,
-                sampler: self.device.ui_sampler(),
-                desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            })
-            .build()
-            .unwrap();
+        .bind_image(ImageDescriptorInfo {
+            binding: 0,
+            image: horizontal_image,
+            sampler: self.device.ui_sampler(),
+            desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+        })
+        .build()
+        .unwrap();
 
         for i in 0..10 {
             let pass = {
                 if i == 0 {
                     self.bloom_initial
-                }else if i == 10 {
+                } else if i == 10 {
                     self.bloom_final
                 } else if horizontal {
                     self.bloom_horizontal
@@ -1593,7 +1595,7 @@ impl Renderer {
             let set = {
                 if i == 0 {
                     first_bloom_set
-                } else if horizontal{
+                } else if horizontal {
                     bloom_set
                 } else {
                     bloom_set_two
@@ -1601,7 +1603,6 @@ impl Renderer {
             };
 
             self.list.run_pass(pass, |list, cmd| {
-
                 let pipeline = self
                     .pipeline_manager
                     .get_pipeline(self.bloom_pass.bloom_pso);
@@ -1789,11 +1790,9 @@ impl Renderer {
                     });
 
                 unsafe {
-                    self.device.vk_device.cmd_set_scissor(
-                        cmd,
-                        0u32,
-                        &[*scissor]
-                    );
+                    self.device
+                        .vk_device
+                        .cmd_set_scissor(cmd, 0u32, &[*scissor]);
                 };
 
                 //render_pass.set_scissor(draw.scissor.0, max);
@@ -1852,10 +1851,79 @@ impl Renderer {
         );
 
         // Transition render image to transfer src
+        let output = self.list.get_physical_resource("output");
+        ImageBarrierBuilder::default()
+            .add_image_barrier(ImageBarrier {
+                image: AttachmentHandle::Image(output),
+                src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                dst_stage_mask: vk::PipelineStageFlags2::BLIT,
+                dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
+                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
+                new_layout: ImageLayout::TRANSFER_SRC_OPTIMAL,
+                ..Default::default()
+            })
+            .add_image_barrier(ImageBarrier {
+                image: AttachmentHandle::SwapchainImage,
+                dst_stage_mask: vk::PipelineStageFlags2::BLIT,
+                dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
+                ..Default::default()
+            })
+            .build(&self.device, &self.device.graphics_command_buffer())?;
+
+        let image_blit = vk::ImageBlit::builder()
+            .src_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_offsets([
+                vk::Offset3D { x: 0, y: 0, z: 0 },
+                vk::Offset3D {
+                    x: self.device.size().width as i32,
+                    y: self.device.size().height as i32,
+                    z: 1,
+                },
+            ])
+            .dst_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .dst_offsets([
+                vk::Offset3D { x: 0, y: 0, z: 0 },
+                vk::Offset3D {
+                    x: self.device.size().width as i32,
+                    y: self.device.size().height as i32,
+                    z: 1,
+                },
+            ]);
+        let regions = [*image_blit];
+        unsafe {
+            self.device.vk_device.cmd_blit_image(
+                self.device.graphics_command_buffer(),
+                self.device
+                    .resource_manager
+                    .get_image(output)
+                    .unwrap()
+                    .image(),
+                ImageLayout::TRANSFER_SRC_OPTIMAL,
+                self.device.get_present_image(),
+                ImageLayout::TRANSFER_DST_OPTIMAL,
+                &regions,
+                vk::Filter::NEAREST,
+            )
+        }
 
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
                 image: AttachmentHandle::SwapchainImage,
+                src_stage_mask: PipelineStageFlags2::BLIT,
+                src_access_mask: AccessFlags2::TRANSFER_WRITE,
+                old_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
                 new_layout: ImageLayout::PRESENT_SRC_KHR,
                 ..Default::default()
             })
