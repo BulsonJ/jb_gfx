@@ -256,6 +256,7 @@ impl Renderer {
         );
 
         list.set_backbuffer("output");
+        list.set_pass_order(&[shadow, gbuffer, deferred_lighting, bloom_initial, bloom_vertical, bloom_horizontal, bloom_final, combine, ui]);
 
         list.bake();
 

@@ -78,8 +78,11 @@ impl RenderList {
         render_pass.stencil_clear = pass_layout.stencil_clear;
 
         self.order_of_passes.push(pass_handle);
-
         pass_handle
+    }
+
+    pub fn set_pass_order(&mut self, passes: &[VirtualRenderPassHandle]) {
+        self.order_of_passes = passes.to_vec();
     }
 
     pub fn set_backbuffer(&mut self, name: &str) {
