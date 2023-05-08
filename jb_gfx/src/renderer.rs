@@ -57,7 +57,6 @@ const DEFERRED_COLOR_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 /// Used to draw objects using the GPU.
 pub struct Renderer {
     device: Arc<GraphicsDevice>,
-    render_targets: RenderTargets,
     descriptor_layout_cache: DescriptorLayoutCache,
     descriptor_allocator: DescriptorAllocator,
     frame_descriptor_allocator: [DescriptorAllocator; FRAMES_IN_FLIGHT],
@@ -67,13 +66,10 @@ pub struct Renderer {
     timestamps: TimeStamp,
 
     shadow_pso: PipelineHandle,
-    directional_light_shadow_image: RenderTargetHandle,
 
-    depth_image: RenderTargetHandle,
     forward: ForwardPass,
     deferred_fill: DeferredPass,
     deferred_lighting_combine: DeferredLightingCombinePass,
-    bright_extracted_image: RenderTargetHandle,
 
     bloom_pass: BloomPass,
     combine_pso: PipelineHandle,
@@ -126,7 +122,6 @@ impl Renderer {
         profiling::scope!("Renderer::new");
 
         let device = Arc::new(GraphicsDevice::new(window)?);
-        let mut render_targets = RenderTargets::new(device.clone());
         let mut pipeline_manager = PipelineManager::new(device.clone());
 
         let render_image_format = vk::Format::R8G8B8A8_SRGB;
@@ -262,41 +257,10 @@ impl Renderer {
 
         let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
-        let depth_image = render_targets.create_render_target(
-            depth_image_format,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Depth,
-        )?;
-        let directional_light_shadow_image = render_targets.create_render_target(
-            depth_image_format,
-            RenderTargetSize::Static(SHADOWMAP_SIZE, SHADOWMAP_SIZE),
-            RenderImageType::Depth,
-        )?;
-        let forward_image = render_targets.create_render_target(
-            render_image_format,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
-        let bright_extracted_image = render_targets.create_render_target(
-            render_image_format,
-            RenderTargetSize::Fullscreen,
-            RenderImageType::Colour,
-        )?;
+
+
 
         let bloom_pass = {
-            let bloom_image = [
-                render_targets.create_render_target(
-                    render_image_format,
-                    RenderTargetSize::Fullscreen,
-                    RenderImageType::Colour,
-                )?,
-                render_targets.create_render_target(
-                    render_image_format,
-                    RenderTargetSize::Fullscreen,
-                    RenderImageType::Colour,
-                )?,
-            ];
-
             let bloom_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
                 .bind_image(
                     0,
@@ -343,7 +307,6 @@ impl Renderer {
             };
 
             BloomPass {
-                bloom_image,
                 bloom_pso,
                 bloom_pso_layout,
             }
@@ -610,7 +573,6 @@ impl Renderer {
                 ForwardPass {
                     pso_layout,
                     pso,
-                    forward_image,
                 },
                 shadow_pso,
             )
@@ -816,22 +778,6 @@ impl Renderer {
         };
 
         let deferred_fill = {
-            let positions = render_targets.create_render_target(
-                DEFERRED_POSITION_FORMAT,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?;
-            let normals = render_targets.create_render_target(
-                DEFERRED_NORMAL_FORMAT,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?;
-            let color_specs = render_targets.create_render_target(
-                DEFERRED_COLOR_FORMAT,
-                RenderTargetSize::Fullscreen,
-                RenderImageType::Colour,
-            )?;
-
             let push_constant_range = *vk::PushConstantRange::builder()
                 .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
                 .size(size_of::<PushConstants>() as u32)
@@ -886,9 +832,6 @@ impl Renderer {
             };
 
             DeferredPass {
-                positions,
-                normals,
-                color_specs,
                 pso,
                 pso_layout,
             }
@@ -1042,14 +985,10 @@ impl Renderer {
             sun,
             ui_pass,
             ui_to_draw: Vec::new(),
-            depth_image,
-            directional_light_shadow_image,
-            render_targets,
             descriptor_layout_cache,
             descriptor_allocator,
             timestamps: TimeStamp::default(),
             pipeline_layout_cache,
-            bright_extracted_image,
             bloom_pass,
             frame_descriptor_allocator,
             combine_pso,
@@ -1086,7 +1025,6 @@ impl Renderer {
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
         if self.device.resize(new_size)? {
-            self.render_targets.recreate_render_targets()?;
             self.list.reset();
             self.list.swapchain_size = (self.device.size().width, self.device.size().height);
             self.list.bake();
@@ -1127,38 +1065,6 @@ impl Renderer {
 
         // Reset desc allocator
         self.frame_descriptor_allocator[resource_index].reset_pools()?;
-        let mut frame_usage_tracker = ImageUsageTracker::default();
-
-        // Get images
-
-        let forward_image = self.render_targets.get(self.forward.forward_image).unwrap();
-        let bright_extracted_image = self
-            .render_targets
-            .get(self.bright_extracted_image)
-            .unwrap();
-        let depth_image = self.render_targets.get(self.depth_image).unwrap();
-        let shadow_image = self
-            .render_targets
-            .get(self.directional_light_shadow_image)
-            .unwrap();
-        let bloom_image = [
-            self.render_targets
-                .get(self.bloom_pass.bloom_image[0])
-                .unwrap(),
-            self.render_targets
-                .get(self.bloom_pass.bloom_image[1])
-                .unwrap(),
-        ];
-
-        let deferred_positions = self
-            .render_targets
-            .get(self.deferred_fill.positions)
-            .unwrap();
-        let deferred_normals = self.render_targets.get(self.deferred_fill.normals).unwrap();
-        let deferred_color_specs = self
-            .render_targets
-            .get(self.deferred_fill.color_specs)
-            .unwrap();
 
         // Copy gpu data
         {
@@ -2565,13 +2471,9 @@ pub struct TimeStamp {
 struct ForwardPass {
     pso_layout: vk::PipelineLayout,
     pso: PipelineHandle,
-    forward_image: RenderTargetHandle,
 }
 
 struct DeferredPass {
-    positions: RenderTargetHandle,
-    normals: RenderTargetHandle,
-    color_specs: RenderTargetHandle,
     pso: PipelineHandle,
     pso_layout: vk::PipelineLayout,
 }
@@ -2591,7 +2493,6 @@ struct UiPass {
 }
 
 struct BloomPass {
-    bloom_image: [RenderTargetHandle; 2],
     bloom_pso: PipelineHandle,
     bloom_pso_layout: vk::PipelineLayout,
 }
