@@ -376,6 +376,14 @@ impl RenderList {
         }
     }
 
+    pub fn reset(&mut self){
+        self.physical_passes.clear();
+        for image in self.physical_images.iter() {
+            self.device.resource_manager.destroy_image(*image.1);
+        }
+        self.physical_images.clear();
+    }
+
     pub fn run_pass<F>(&mut self, render_pass: VirtualRenderPassHandle, commands: F)
     where
         F: FnOnce(&mut Self, vk::CommandBuffer),

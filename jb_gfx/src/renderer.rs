@@ -1086,6 +1086,10 @@ impl Renderer {
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) -> Result<()> {
         if self.device.resize(new_size)? {
             self.render_targets.recreate_render_targets()?;
+            self.list.reset();
+            self.list.swapchain_size = (self.device.size().width, self.device.size().height);
+            self.list.bake();
+
 
             let shadow = self.list.get_physical_resource("scene_shadow");
 
