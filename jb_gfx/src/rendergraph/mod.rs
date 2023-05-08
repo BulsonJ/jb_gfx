@@ -147,10 +147,19 @@ impl RenderList {
                     .unwrap()
                     .image_view();
 
+                let load_op = {
+                    let virtual_resource = self.resource.retrieve_resource(color);
+                    if virtual_resource.get_write_passes().first().unwrap() == &pass {
+                        vk::AttachmentLoadOp::CLEAR
+                    } else {
+                        vk::AttachmentLoadOp::LOAD
+                    }
+                };
+
                 let physical_attachment_info = vk::RenderingAttachmentInfo {
                     image_view: physical_image_view,
                     image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
-                    load_op: vk::AttachmentLoadOp::CLEAR, // TODO : Do this based on past usage
+                    load_op,
                     store_op: vk::AttachmentStoreOp::STORE,
                     clear_value: physical_render_pass.clear_color,
                     ..Default::default()

@@ -1770,16 +1770,22 @@ impl Renderer {
             }
 
             for draw in ui_draw_calls.iter() {
+                let y = self.device.size().height as i32;
+                let height = self.device.size().height as i32;
+
                 let max = [
                     draw.scissor.1[0] - draw.scissor.0[0],
                     draw.scissor.1[1] - draw.scissor.0[1],
                 ];
 
                 let scissor = vk::Rect2D::builder()
-                    .offset(vk::Offset2D { x: draw.scissor.0[0] as i32, y: draw.scissor.0[1] as i32 })
+                    .offset(vk::Offset2D {
+                        x: draw.scissor.0[0] as i32,
+                        y: height - (draw.scissor.0[1] as i32 + max[1] as i32),
+                    })
                     .extent(vk::Extent2D {
-                        width: draw.scissor.1[0] as u32,
-                        height:  draw.scissor.1[1] as u32,
+                        width: max[0] as u32,
+                        height: max[1] as u32,
                     });
 
                 unsafe {
