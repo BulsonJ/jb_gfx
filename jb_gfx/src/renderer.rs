@@ -381,7 +381,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/combine.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
+                    format: swapchain_image_format,
                     blend: false,
                     ..Default::default()
                 }],
@@ -709,7 +709,7 @@ impl Renderer {
                     fragment_shader: "assets/shaders/ui/ui.frag".to_string(),
                     vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                     color_attachment_formats: vec![PipelineColorAttachment {
-                        format: render_image_format,
+                        format: swapchain_image_format,
                         blend: true,
                         src_blend_factor_color: vk::BlendFactor::ONE,
                         dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
@@ -800,7 +800,7 @@ impl Renderer {
                 fragment_shader: "assets/shaders/ui/diagetic_ui.frag".to_string(),
                 vertex_input_state: Vertex::get_ui_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
-                    format: render_image_format,
+                    format: swapchain_image_format,
                     blend: true,
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
@@ -1090,7 +1090,6 @@ impl Renderer {
             self.list.swapchain_size = (self.device.size().width, self.device.size().height);
             self.list.bake();
 
-
             let shadow = self.list.get_physical_resource("scene_shadow");
 
             JBDescriptorBuilder::new(
@@ -1359,6 +1358,9 @@ impl Renderer {
         {
             self.mesh_pool.bind(self.device.graphics_command_buffer());
         }
+
+        self.list
+            .setup_attachments(self.device.get_present_image_view());
 
         self.list.run_pass(self.shadow, |list, cmd| {
             let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
@@ -1786,7 +1788,8 @@ impl Renderer {
                 let scissor = vk::Rect2D::builder()
                     .offset(vk::Offset2D {
                         x: draw.scissor.0[0] as i32,
-                        y: height - (draw.scissor.0[1] as i32 + max[1] as i32),
+                        y: draw.scissor.0[1] as i32
+                        //y: height - (draw.scissor.0[1] as i32 + max[1] as i32),
                     })
                     .extent(vk::Extent2D {
                         width: max[0] as u32,
@@ -1854,80 +1857,12 @@ impl Renderer {
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
 
-        // Transition render image to transfer src
-        let output = self.list.get_physical_resource("output");
         ImageBarrierBuilder::default()
             .add_image_barrier(ImageBarrier {
-                image: AttachmentHandle::Image(output),
+                image: AttachmentHandle::SwapchainImage,
                 src_stage_mask: PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 src_access_mask: AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_stage_mask: vk::PipelineStageFlags2::BLIT,
-                dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
-                old_layout: ImageLayout::ATTACHMENT_OPTIMAL,
-                new_layout: ImageLayout::TRANSFER_SRC_OPTIMAL,
-                ..Default::default()
-            })
-            .add_image_barrier(ImageBarrier {
-                image: AttachmentHandle::SwapchainImage,
-                dst_stage_mask: vk::PipelineStageFlags2::BLIT,
-                dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
-                new_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
-                ..Default::default()
-            })
-            .build(&self.device, &self.device.graphics_command_buffer())?;
-
-        let image_blit = vk::ImageBlit::builder()
-            .src_subresource(vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
-            .src_offsets([
-                vk::Offset3D { x: 0, y: 0, z: 0 },
-                vk::Offset3D {
-                    x: self.device.size().width as i32,
-                    y: self.device.size().height as i32,
-                    z: 1,
-                },
-            ])
-            .dst_subresource(vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
-            .dst_offsets([
-                vk::Offset3D { x: 0, y: 0, z: 0 },
-                vk::Offset3D {
-                    x: self.device.size().width as i32,
-                    y: self.device.size().height as i32,
-                    z: 1,
-                },
-            ]);
-        let regions = [*image_blit];
-        unsafe {
-            self.device.vk_device.cmd_blit_image(
-                self.device.graphics_command_buffer(),
-                self.device
-                    .resource_manager
-                    .get_image(output)
-                    .unwrap()
-                    .image(),
-                ImageLayout::TRANSFER_SRC_OPTIMAL,
-                self.device.get_present_image(),
-                ImageLayout::TRANSFER_DST_OPTIMAL,
-                &regions,
-                vk::Filter::NEAREST,
-            )
-        }
-
-        ImageBarrierBuilder::default()
-            .add_image_barrier(ImageBarrier {
-                image: AttachmentHandle::SwapchainImage,
-                src_stage_mask: PipelineStageFlags2::BLIT,
-                src_access_mask: AccessFlags2::TRANSFER_WRITE,
-                old_layout: ImageLayout::TRANSFER_DST_OPTIMAL,
+                old_layout: ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                 new_layout: ImageLayout::PRESENT_SRC_KHR,
                 ..Default::default()
             })

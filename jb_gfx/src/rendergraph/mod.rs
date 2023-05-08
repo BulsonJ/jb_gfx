@@ -24,6 +24,7 @@ pub struct RenderList {
     resource: RenderResourceTracker,
     order_of_passes: Vec<VirtualRenderPassHandle>,
     physical_passes: HashMap<VirtualRenderPassHandle, PhysicalRenderPass>,
+    physical_barriers: HashMap<VirtualRenderPassHandle, Vec<ImageBarrier>>,
     physical_images: HashMap<VirtualTextureResourceHandle, ImageHandle>,
     pub swapchain_size: (u32, u32),
     backbuffer_source: String,
@@ -37,9 +38,10 @@ impl RenderList {
             resource: RenderResourceTracker::default(),
             order_of_passes: Vec::default(),
             physical_passes: HashMap::default(),
+            physical_barriers: HashMap::default(),
             physical_images: HashMap::default(),
             swapchain_size,
-            backbuffer_source : String::default(),
+            backbuffer_source: String::default(),
         }
     }
 
@@ -87,157 +89,48 @@ impl RenderList {
     pub fn bake(&mut self) {
         // Create physical images
         for (handle, resource) in self.resource.get_resources() {
-            let size = {
-                match resource.get_attachment_info().size {
-                    SizeClass::SwapchainRelative => self.swapchain_size,
-                    SizeClass::Custom(width, height) => (width, height),
-                }
-            };
-
-            let usage = {
-                if resource.name() == self.backbuffer_source {
-                    let mut flags = resource.get_image_usage();
-                    flags |= vk::ImageUsageFlags::TRANSFER_SRC;
-                    flags
-                } else {
-                    resource.get_image_usage()
-                }
-            };
-
-            let image_create_info = vk::ImageCreateInfo::builder()
-                .format(resource.get_attachment_info().format)
-                .usage(usage)
-                .extent(vk::Extent3D {
-                    width: size.0,
-                    height: size.1,
-                    depth: 1,
-                })
-                .image_type(vk::ImageType::TYPE_2D)
-                .array_layers(1)
-                .mip_levels(1)
-                .samples(vk::SampleCountFlags::TYPE_1)
-                .tiling(vk::ImageTiling::OPTIMAL);
-
-            let image = self
-                .device
-                .resource_manager
-                .create_image(&image_create_info);
-
-            {
-                let image = self.device.resource_manager.get_image(image).unwrap();
-
-                self.device
-                    .set_vulkan_debug_name(
-                        image.image().as_raw(),
-                        vk::ObjectType::IMAGE,
-                        resource.name(),
-                    )
-                    .unwrap();
-            }
-
-            self.physical_images.insert(handle, image);
-            info!("Image Created: {}", resource.name());
-        }
-
-        for &pass in self.order_of_passes.iter() {
-            let mut physical_render_pass = PhysicalRenderPass::default();
-
-            let renderpass = self.passes.retrieve_render_pass(pass);
-
-            physical_render_pass.clear_color = vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: renderpass.clear_colour,
-                },
-            };
-            physical_render_pass.depth_stencil_clear = vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: renderpass.depth_clear,
-                    stencil: renderpass.stencil_clear,
-                },
-            };
-
-            for &color in renderpass.color_attachments.iter() {
-                let physical_image = self.physical_images.get(&color).unwrap();
-                let physical_image_view = self
-                    .device
-                    .resource_manager
-                    .get_image(*physical_image)
-                    .unwrap()
-                    .image_view();
-
-                let load_op = {
-                    let virtual_resource = self.resource.retrieve_resource(color);
-                    if virtual_resource.get_write_passes().first().unwrap() == &pass {
-                        vk::AttachmentLoadOp::CLEAR
-                    } else {
-                        vk::AttachmentLoadOp::LOAD
+            if resource.name() != self.backbuffer_source {
+                let size = {
+                    match resource.get_attachment_info().size {
+                        SizeClass::SwapchainRelative => self.swapchain_size,
+                        SizeClass::Custom(width, height) => (width, height),
                     }
                 };
 
-                let physical_attachment_info = vk::RenderingAttachmentInfo {
-                    image_view: physical_image_view,
-                    image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
-                    load_op,
-                    store_op: vk::AttachmentStoreOp::STORE,
-                    clear_value: physical_render_pass.clear_color,
-                    ..Default::default()
-                };
-
-                let resource = self.resource.retrieve_resource(color);
-                let size = match resource.get_attachment_info().size {
-                    SizeClass::SwapchainRelative => self.swapchain_size,
-                    SizeClass::Custom(width, height) => (width, height),
-                };
-                let viewport = get_viewport_info(size, false);
-                let scissor = vk::Rect2D::builder()
-                    .offset(vk::Offset2D { x: 0, y: 0 })
-                    .extent(vk::Extent2D {
+                let image_create_info = vk::ImageCreateInfo::builder()
+                    .format(resource.get_attachment_info().format)
+                    .usage(resource.get_image_usage())
+                    .extent(vk::Extent3D {
                         width: size.0,
                         height: size.1,
-                    });
+                        depth: 1,
+                    })
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .array_layers(1)
+                    .mip_levels(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .tiling(vk::ImageTiling::OPTIMAL);
 
-                physical_render_pass.viewport = viewport;
-                physical_render_pass.scissor = *scissor;
-                physical_render_pass
-                    .attachments
-                    .push(physical_attachment_info);
-            }
-            if let Some(depth) = renderpass.depth_attachment {
-                let physical_image = self.physical_images.get(&depth).unwrap();
-                let physical_image_view = self
+                let image = self
                     .device
                     .resource_manager
-                    .get_image(*physical_image)
-                    .unwrap()
-                    .image_view();
-                let physical_attachment_info = vk::RenderingAttachmentInfo {
-                    image_view: physical_image_view,
-                    image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
-                    load_op: vk::AttachmentLoadOp::CLEAR, // TODO : Do this based on past usage
-                    store_op: vk::AttachmentStoreOp::STORE,
-                    clear_value: physical_render_pass.depth_stencil_clear,
-                    ..Default::default()
-                };
+                    .create_image(&image_create_info);
 
-                let resource = self.resource.retrieve_resource(depth);
-                let size = match resource.get_attachment_info().size {
-                    SizeClass::SwapchainRelative => self.swapchain_size,
-                    SizeClass::Custom(width, height) => (width, height),
-                };
-                let viewport = get_viewport_info(size, false);
-                let scissor = vk::Rect2D::builder()
-                    .offset(vk::Offset2D { x: 0, y: 0 })
-                    .extent(vk::Extent2D {
-                        width: size.0,
-                        height: size.1,
-                    });
+                {
+                    let image = self.device.resource_manager.get_image(image).unwrap();
 
-                physical_render_pass.viewport = viewport;
-                physical_render_pass.scissor = *scissor;
-                physical_render_pass.depth_attachment = Some(physical_attachment_info);
+                    self.device
+                        .set_vulkan_debug_name(
+                            image.image().as_raw(),
+                            vk::ObjectType::IMAGE,
+                            resource.name(),
+                        )
+                        .unwrap();
+                }
+
+                self.physical_images.insert(handle, image);
+                info!("Image Created: {}", resource.name());
             }
-
-            self.physical_passes.insert(pass, physical_render_pass);
         }
 
         // for each renderpass, generate barriers
@@ -264,19 +157,26 @@ impl RenderList {
                     }
                 }
 
-                let image = self.physical_images.get(&attachment).unwrap();
+                let image = {
+                    if resource.name() == self.backbuffer_source {
+                        AttachmentHandle::SwapchainImage
+                    } else {
+                        AttachmentHandle::Image(*self.physical_images.get(&attachment).unwrap())
+                    }
+                };
+
                 match last_operation {
                     LastUsage::Write => { // DONT NEED TO BARRIER
                     }
                     LastUsage::Read => {
-                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                        let barrier = ImageBarrier::new(image)
                             .old_usage(vk::ImageUsageFlags::SAMPLED)
                             .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
                         barriers.push(barrier);
                         info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                     LastUsage::None => {
-                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                        let barrier = ImageBarrier::new(image)
                             .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
                         barriers.push(barrier);
                         info!("BARRIER: {},{}", resource.name(), last_operation,);
@@ -371,12 +271,136 @@ impl RenderList {
                 virtual_pass.name,
                 barriers.len()
             );
-            let physical_renderpass = self.physical_passes.get_mut(virtual_pass_handle).unwrap();
-            physical_renderpass.barriers = barriers;
+            self.physical_barriers
+                .insert(*virtual_pass_handle, barriers);
         }
     }
 
-    pub fn reset(&mut self){
+    pub fn setup_attachments(&mut self, swapchain_image: vk::ImageView) {
+        self.physical_passes.clear();
+
+        for &pass in self.order_of_passes.iter() {
+            let mut physical_render_pass = PhysicalRenderPass::default();
+
+            let renderpass = self.passes.retrieve_render_pass(pass);
+
+            physical_render_pass.clear_color = vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: renderpass.clear_colour,
+                },
+            };
+            physical_render_pass.depth_stencil_clear = vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: renderpass.depth_clear,
+                    stencil: renderpass.stencil_clear,
+                },
+            };
+
+            for &color in renderpass.color_attachments.iter() {
+                let resource = self.resource.retrieve_resource(color);
+
+                let physical_image_view = {
+                    let physical_image_view = {
+                        if resource.name() == self.backbuffer_source {
+                            swapchain_image
+                        } else {
+                            let physical_image = self.physical_images.get(&color).unwrap();
+                            self.device
+                                .resource_manager
+                                .get_image(*physical_image)
+                                .unwrap()
+                                .image_view()
+                        }
+                    };
+                    physical_image_view
+                };
+
+                let load_op = {
+                    let virtual_resource = self.resource.retrieve_resource(color);
+                    if virtual_resource.get_write_passes().first().unwrap() == &pass {
+                        vk::AttachmentLoadOp::CLEAR
+                    } else {
+                        vk::AttachmentLoadOp::LOAD
+                    }
+                };
+
+                let physical_attachment_info = vk::RenderingAttachmentInfo {
+                    image_view: physical_image_view,
+                    image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
+                    load_op,
+                    store_op: vk::AttachmentStoreOp::STORE,
+                    clear_value: physical_render_pass.clear_color,
+                    ..Default::default()
+                };
+
+                let size = match resource.get_attachment_info().size {
+                    SizeClass::SwapchainRelative => self.swapchain_size,
+                    SizeClass::Custom(width, height) => (width, height),
+                };
+                let viewport = {
+                    if resource.name() == self.backbuffer_source {
+                        get_viewport_info(size, true)
+                    } else {
+                        get_viewport_info(size, false)
+                    }
+                };
+                let scissor = vk::Rect2D::builder()
+                    .offset(vk::Offset2D { x: 0, y: 0 })
+                    .extent(vk::Extent2D {
+                        width: size.0,
+                        height: size.1,
+                    });
+
+                physical_render_pass.viewport = Some(viewport);
+                physical_render_pass.scissor = *scissor;
+                physical_render_pass
+                    .attachments
+                    .push(physical_attachment_info);
+            }
+            if let Some(depth) = renderpass.depth_attachment {
+                let physical_image = self.physical_images.get(&depth).unwrap();
+                let physical_image_view = self
+                    .device
+                    .resource_manager
+                    .get_image(*physical_image)
+                    .unwrap()
+                    .image_view();
+                let physical_attachment_info = vk::RenderingAttachmentInfo {
+                    image_view: physical_image_view,
+                    image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
+                    load_op: vk::AttachmentLoadOp::CLEAR, // TODO : Do this based on past usage
+                    store_op: vk::AttachmentStoreOp::STORE,
+                    clear_value: physical_render_pass.depth_stencil_clear,
+                    ..Default::default()
+                };
+
+                let resource = self.resource.retrieve_resource(depth);
+                let size = match resource.get_attachment_info().size {
+                    SizeClass::SwapchainRelative => self.swapchain_size,
+                    SizeClass::Custom(width, height) => (width, height),
+                };
+
+                if physical_render_pass.viewport.is_none() {
+                    let viewport = get_viewport_info(size, false);
+                    physical_render_pass.viewport = Some(viewport);
+
+                    let scissor = vk::Rect2D::builder()
+                        .offset(vk::Offset2D { x: 0, y: 0 })
+                        .extent(vk::Extent2D {
+                            width: size.0,
+                            height: size.1,
+                        });
+                    physical_render_pass.scissor = *scissor;
+                }
+
+                physical_render_pass.depth_attachment = Some(physical_attachment_info);
+            }
+
+            self.physical_passes.insert(pass, physical_render_pass);
+        }
+    }
+
+    pub fn reset(&mut self) {
         self.physical_passes.clear();
         for image in self.physical_images.iter() {
             self.device.resource_manager.destroy_image(*image.1);
@@ -392,9 +416,10 @@ impl RenderList {
         // START RENDERPASS
 
         let physical_render_pass = self.get_physical_pass(render_pass);
+        let barriers = self.physical_barriers.get(&render_pass).unwrap();
 
         let mut barrier_builder = ImageBarrierBuilder::default();
-        for barrier in physical_render_pass.barriers.iter() {
+        for barrier in barriers.iter() {
             barrier_builder = barrier_builder.add_image_barrier(barrier.clone());
         }
         barrier_builder
@@ -405,7 +430,7 @@ impl RenderList {
             self.device.vk_device.cmd_set_viewport(
                 self.device.graphics_command_buffer(),
                 0u32,
-                &[physical_render_pass.viewport],
+                &[physical_render_pass.viewport.unwrap()],
             )
         };
         unsafe {
@@ -501,9 +526,8 @@ impl RenderPassLayout {
 struct PhysicalRenderPass {
     attachments: Vec<vk::RenderingAttachmentInfo>,
     depth_attachment: Option<vk::RenderingAttachmentInfo>,
-    viewport: vk::Viewport,
+    viewport: Option<vk::Viewport>,
     scissor: vk::Rect2D,
-    barriers: Vec<ImageBarrier>,
     clear_color: vk::ClearValue,
     depth_stencil_clear: vk::ClearValue,
 }
