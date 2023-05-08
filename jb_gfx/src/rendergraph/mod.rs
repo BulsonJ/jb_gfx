@@ -1,7 +1,9 @@
 use ash::vk;
 use log::info;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
+use ash::vk::Handle;
 
 use crate::rendergraph::attachment::{AttachmentInfo, SizeClass};
 use crate::rendergraph::resource_tracker::{RenderPassTracker, RenderResourceTracker};
@@ -23,10 +25,11 @@ pub struct RenderList {
     order_of_passes: Vec<VirtualRenderPassHandle>,
     physical_passes: HashMap<VirtualRenderPassHandle, PhysicalRenderPass>,
     physical_images: HashMap<VirtualTextureResourceHandle, ImageHandle>,
+    pub swapchain_size: (u32,u32)
 }
 
 impl RenderList {
-    pub fn new(device: Arc<GraphicsDevice>) -> Self {
+    pub fn new(device: Arc<GraphicsDevice>, swapchain_size: (u32,u32)) -> Self {
         Self {
             device,
             passes: RenderPassTracker::default(),
@@ -34,6 +37,7 @@ impl RenderList {
             order_of_passes: Vec::default(),
             physical_passes: HashMap::default(),
             physical_images: HashMap::default(),
+            swapchain_size,
         }
     }
 
@@ -80,7 +84,7 @@ impl RenderList {
             let size = {
                 match resource.get_attachment_info().size {
                     SizeClass::SwapchainRelative => {
-                        (self.device.size().width, self.device.size().height)
+                        self.swapchain_size
                     }
                     SizeClass::Custom(width, height) => (width, height),
                 }
@@ -104,6 +108,14 @@ impl RenderList {
                 .device
                 .resource_manager
                 .create_image(&image_create_info);
+
+            {
+                let image = self
+                    .device
+                    .resource_manager.get_image(image).unwrap();
+
+                self.device.set_vulkan_debug_name(image.image().as_raw(), vk::ObjectType::IMAGE, resource.name()).unwrap();
+            }
 
             self.physical_images.insert(handle, image);
             info!("Image Created: {}", resource.name());
@@ -146,10 +158,10 @@ impl RenderList {
 
                 let resource = self.resource.retrieve_resource(color);
                 let size = match resource.get_attachment_info().size {
-                    SizeClass::SwapchainRelative => (1920, 1080),
+                    SizeClass::SwapchainRelative => self.swapchain_size,
                     SizeClass::Custom(width, height) => (width, height),
                 };
-                let viewport = get_viewport_info(size, true);
+                let viewport = get_viewport_info(size, false);
                 let scissor = vk::Rect2D::builder()
                     .offset(vk::Offset2D { x: 0, y: 0 })
                     .extent(vk::Extent2D {
@@ -182,10 +194,10 @@ impl RenderList {
 
                 let resource = self.resource.retrieve_resource(depth);
                 let size = match resource.get_attachment_info().size {
-                    SizeClass::SwapchainRelative => (1920, 1080),
+                    SizeClass::SwapchainRelative => self.swapchain_size,
                     SizeClass::Custom(width, height) => (width, height),
                 };
-                let viewport = get_viewport_info(size, true);
+                let viewport = get_viewport_info(size, false);
                 let scissor = vk::Rect2D::builder()
                     .offset(vk::Offset2D { x: 0, y: 0 })
                     .extent(vk::Extent2D {
@@ -234,11 +246,13 @@ impl RenderList {
                             .old_usage(vk::ImageUsageFlags::SAMPLED)
                             .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
                         barriers.push(barrier);
+                        info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                     LastUsage::None => {
                         let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
                             .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
                         barriers.push(barrier);
+                        info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                 }
             }
@@ -270,11 +284,13 @@ impl RenderList {
                             .old_usage(vk::ImageUsageFlags::SAMPLED)
                             .new_usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT);
                         barriers.push(barrier);
+                        info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                     LastUsage::None => {
                         let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
                             .new_usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT);
                         barriers.push(barrier);
+                        info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                 }
             }
@@ -310,12 +326,14 @@ impl RenderList {
                             .old_usage(last_usage)
                             .new_usage(vk::ImageUsageFlags::SAMPLED);
                         barriers.push(barrier);
+                        info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                     LastUsage::Read => {}
                     LastUsage::None => {
                         let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
                             .new_usage(vk::ImageUsageFlags::SAMPLED);
                         barriers.push(barrier);
+                        info!("BARRIER: {},{}", resource.name(), last_operation,);
                     }
                 }
             }
@@ -504,4 +522,15 @@ enum LastUsage {
     Write,
     Read,
     None,
+}
+
+impl Display for LastUsage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let display = match self {
+            LastUsage::Write => "WRITE",
+            LastUsage::Read => "READ",
+            LastUsage::None => "NONE",
+        };
+        write!(f, "{}", display)
+    }
 }
