@@ -47,6 +47,9 @@ pub struct VirtualRenderPass {
     pub color_attachments: Vec<VirtualTextureResourceHandle>,
     pub depth_attachment: Option<VirtualTextureResourceHandle>,
     pub texture_inputs: Vec<VirtualTextureResourceHandle>,
+    pub clear_colour: [f32; 4],
+    pub depth_clear: f32,
+    pub stencil_clear: u32,
 }
 
 #[derive(Default)]

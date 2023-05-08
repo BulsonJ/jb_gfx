@@ -25,6 +25,7 @@ use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
 };
+use crate::rendergraph::virtual_resource::VirtualRenderPassHandle;
 use crate::rendergraph::{RenderList, RenderPassLayout};
 use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
 use crate::renderpass::builder::RenderPassBuilder;
@@ -106,6 +107,17 @@ pub struct Renderer {
     pub enable_bloom_pass: bool,
     pub light_texture: Option<ImageHandle>,
     pub clear_colour: Colour,
+
+    list: RenderList,
+
+    shadow: VirtualRenderPassHandle,
+    gbuffer: VirtualRenderPassHandle,
+    deferred_lighting: VirtualRenderPassHandle,
+    bloom_initial: VirtualRenderPassHandle,
+    bloom_horizontal: VirtualRenderPassHandle,
+    bloom_vertical: VirtualRenderPassHandle,
+    combine: VirtualRenderPassHandle,
+    ui: VirtualRenderPassHandle,
 }
 
 impl Renderer {
@@ -890,30 +902,113 @@ impl Renderer {
             (pso, pso_layout)
         };
 
-        {
-            let mut list = RenderList::new(device.clone());
+        let mut list = RenderList::new(device.clone());
 
-            let forward = crate::rendergraph::attachment::AttachmentInfo {
-                format: vk::Format::R8G8B8A8_SRGB,
-                ..Default::default()
-            };
-            let bright = crate::rendergraph::attachment::AttachmentInfo {
-                format: vk::Format::R8G8B8A8_SRGB,
-                ..Default::default()
-            };
-            let depth = crate::rendergraph::attachment::AttachmentInfo {
-                format: vk::Format::D32_SFLOAT,
-                ..Default::default()
-            };
-            let pass_desc = RenderPassLayout::default()
+        let scene_shadow = crate::rendergraph::attachment::AttachmentInfo {
+            format: vk::Format::D32_SFLOAT,
+            ..Default::default()
+        };
+        let shadow = list.add_pass(
+            "shadow",
+            RenderPassLayout::default()
+                .set_depth_stencil_attachment("scene_shadow", &scene_shadow)
+                .set_depth_stencil_clear(1.0, 0),
+        );
+
+        let emissive = crate::rendergraph::attachment::AttachmentInfo {
+            format: DEFERRED_POSITION_FORMAT,
+            ..Default::default()
+        };
+        let normal = crate::rendergraph::attachment::AttachmentInfo {
+            format: DEFERRED_NORMAL_FORMAT,
+            ..Default::default()
+        };
+        let color = crate::rendergraph::attachment::AttachmentInfo {
+            format: DEFERRED_COLOR_FORMAT,
+            ..Default::default()
+        };
+        let depth = crate::rendergraph::attachment::AttachmentInfo {
+            format: vk::Format::D32_SFLOAT,
+            ..Default::default()
+        };
+        let gbuffer = list.add_pass(
+            "gbuffer",
+            RenderPassLayout::default()
+                .add_color_attachment("emissive", &emissive)
+                .add_color_attachment("normal", &normal)
+                .add_color_attachment("color", &color)
+                .set_depth_stencil_attachment("depth", &depth)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0])
+                .set_depth_stencil_clear(1.0, 0),
+        );
+
+        let forward = crate::rendergraph::attachment::AttachmentInfo {
+            format: render_image_format,
+            ..Default::default()
+        };
+        let bright = crate::rendergraph::attachment::AttachmentInfo {
+            format: render_image_format,
+            ..Default::default()
+        };
+
+        let deferred_lighting = list.add_pass(
+            "deferred",
+            RenderPassLayout::default()
+                .add_texture_input("emissive")
+                .add_texture_input("normal")
+                .add_texture_input("color")
+                .add_texture_input("depth")
                 .add_color_attachment("forward", &forward)
                 .add_color_attachment("bright", &bright)
-                .set_depth_stencil_attachment("depth", &depth);
-            let forward_pass = list.add_pass("forward_pass", pass_desc);
-            list.bake();
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
+        );
 
-            list.run_pass(forward_pass, |cmd| {});
-        }
+        let bloom_attachment = crate::rendergraph::attachment::AttachmentInfo {
+            format: render_image_format,
+            ..Default::default()
+        };
+
+        let bloom_initial = list.add_pass(
+            "bloom_initial_pass",
+            RenderPassLayout::default()
+                .add_texture_input("bright")
+                .add_color_attachment("bloom_horizontal", &bloom_attachment)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
+        );
+        let bloom_horizontal = list.add_pass(
+            "bloom_horizontal_pass",
+            RenderPassLayout::default()
+                .add_texture_input("bloom_horizontal")
+                .add_color_attachment("bloom_vertical", &bloom_attachment)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
+        );
+        let bloom_vertical = list.add_pass(
+            "bloom_vertical_pass",
+            RenderPassLayout::default()
+                .add_texture_input("bloom_vertical")
+                .add_color_attachment("bloom_horizontal", &bloom_attachment)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
+        );
+
+        let combine = list.add_pass(
+            "combine",
+            RenderPassLayout::default()
+                .add_color_attachment("output", &forward)
+                .add_texture_input("forward")
+                .add_texture_input("bloom_vertical")
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
+        );
+
+        let ui = list.add_pass(
+            "ui",
+            RenderPassLayout::default()
+                .add_color_attachment("output", &forward)
+                .set_depth_stencil_attachment("depth", &depth)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0])
+                .set_depth_stencil_clear(1.0, 0),
+        );
+
+        list.bake();
 
         info!("Renderer Created");
         let result = Ok(Self {
@@ -961,6 +1056,15 @@ impl Renderer {
             skybox_pso,
             skybox_pso_layout,
             cube_mesh,
+            list,
+            shadow,
+            gbuffer,
+            deferred_lighting,
+            bloom_initial,
+            bloom_horizontal,
+            bloom_vertical,
+            combine,
+            ui,
         });
         result
     }
@@ -1239,168 +1343,106 @@ impl Renderer {
             self.mesh_pool.bind(self.device.graphics_command_buffer());
         }
 
-        // Shadow pass
-        let shadow_pass_start = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
-        {
-            RenderPassBuilder::new((SHADOWMAP_SIZE, SHADOWMAP_SIZE))
-                .set_depth_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(shadow_image),
-                    clear_value: vk::ClearValue {
-                        depth_stencil: ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                    ..Default::default()
-                })
-                .start(
+        self.list.run_pass(self.shadow, |list, cmd| {
+            let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    cmd,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    cmd,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.forward.pso_layout,
+                    0u32,
+                    &[
+                        self.device.bindless_descriptor_set(),
+                        self.descriptor_set[resource_index],
+                    ],
+                    &[],
+                );
+            };
+
+            // Draw commands
+            Self::draw_objects_free(
+                &draw_data,
+                &self.device.vk_device,
+                &cmd,
+                &self.deferred_fill.pso_layout,
+            )
+            .unwrap();
+        });
+        self.list.run_pass(self.gbuffer, |list, cmd| {
+            let pipeline = self.pipeline_manager.get_pipeline(self.deferred_fill.pso);
+
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.deferred_fill.pso_layout,
+                    0u32,
+                    &[
+                        self.device.bindless_descriptor_set(),
+                        self.descriptor_set[resource_index],
+                    ],
+                    &[],
+                );
+            };
+
+            // Draw commands
+
+            Self::draw_objects_free(
+                &draw_data,
+                &self.device.vk_device,
+                &cmd,
+                &self.deferred_fill.pso_layout,
+            )
+            .unwrap();
+
+            if self.skybox.is_some() {
+                let pso = self.pipeline_manager.get_pipeline(self.skybox_pso);
+                unsafe {
+                    self.device.vk_device.cmd_bind_pipeline(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pso,
+                    );
+                    self.device.vk_device.cmd_bind_descriptor_sets(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.skybox_pso_layout,
+                        0u32,
+                        &[
+                            self.device.bindless_descriptor_set(),
+                            self.descriptor_set[resource_index],
+                        ],
+                        &[],
+                    );
+                };
+
+                Self::draw_skybox_free(
                     &self.device,
-                    &mut frame_usage_tracker,
-                    &self.device.graphics_command_buffer(),
-                    |_render_pass| {
-                        profiling::scope!("Shadow Pass");
+                    &self.mesh_pool,
+                    self.cube_mesh,
+                    self.skybox.unwrap(),
+                    &cmd,
+                    &self.skybox_pso_layout,
+                )
+                .unwrap();
+            }
+        });
+        self.list.run_pass(self.deferred_lighting, |list, cmd| {
+            let emissive = list.get_physical_resource("emissive");
+            let normal = list.get_physical_resource("normal");
+            let color = list.get_physical_resource("color");
+            let depth = list.get_physical_resource("depth");
 
-                        let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
-                        unsafe {
-                            self.device.vk_device.cmd_bind_pipeline(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline,
-                            );
-                            self.device.vk_device.cmd_bind_descriptor_sets(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                self.forward.pso_layout,
-                                0u32,
-                                &[
-                                    self.device.bindless_descriptor_set(),
-                                    self.descriptor_set[resource_index],
-                                ],
-                                &[],
-                            );
-                        };
-
-                        // Draw commands
-                        self.draw_objects(&draw_data)?;
-                        Ok(())
-                    },
-                )?;
-        }
-        let shadow_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // Deferred pass
-        {
-            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(deferred_positions),
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    ..Default::default()
-                })
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(deferred_normals),
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    ..Default::default()
-                })
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(deferred_color_specs),
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: {
-                                let colour: Vector3<f32> = self.clear_colour.into();
-                                colour.extend(1f32).into()
-                            },
-                        },
-                    },
-                    ..Default::default()
-                })
-                .set_depth_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(depth_image),
-                    clear_value: vk::ClearValue {
-                        depth_stencil: ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                    ..Default::default()
-                })
-                .start(
-                    &self.device,
-                    &mut frame_usage_tracker,
-                    &self.device.graphics_command_buffer(),
-                    |_render_pass| {
-                        profiling::scope!("Deferred Pass");
-                        let pipeline = self.pipeline_manager.get_pipeline(self.deferred_fill.pso);
-
-                        unsafe {
-                            self.device.vk_device.cmd_bind_pipeline(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline,
-                            );
-                            self.device.vk_device.cmd_bind_descriptor_sets(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                self.deferred_fill.pso_layout,
-                                0u32,
-                                &[
-                                    self.device.bindless_descriptor_set(),
-                                    self.descriptor_set[resource_index],
-                                ],
-                                &[],
-                            );
-                        };
-
-                        // Draw commands
-
-                        self.draw_objects(&draw_data)?;
-
-                        if self.skybox.is_some() {
-                            let pso = self.pipeline_manager.get_pipeline(self.skybox_pso);
-                            unsafe {
-                                self.device.vk_device.cmd_bind_pipeline(
-                                    self.device.graphics_command_buffer(),
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    pso,
-                                );
-                                self.device.vk_device.cmd_bind_descriptor_sets(
-                                    self.device.graphics_command_buffer(),
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    self.skybox_pso_layout,
-                                    0u32,
-                                    &[
-                                        self.device.bindless_descriptor_set(),
-                                        self.descriptor_set[resource_index],
-                                    ],
-                                    &[],
-                                );
-                            };
-                            self.draw_skybox()?;
-                        }
-                        Ok(())
-                    },
-                )?;
-        }
-        let deferred_fill_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // Deferred Lighting Pass
-        {
             let (render_target_set, _) = JBDescriptorBuilder::new(
                 &self.device.resource_manager,
                 &mut self.descriptor_layout_cache,
@@ -1408,28 +1450,28 @@ impl Renderer {
             )
             .bind_image(ImageDescriptorInfo {
                 binding: 0,
-                image: deferred_positions,
+                image: emissive,
                 sampler: self.device.ui_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::FRAGMENT,
             })
             .bind_image(ImageDescriptorInfo {
                 binding: 1,
-                image: deferred_normals,
+                image: normal,
                 sampler: self.device.ui_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::FRAGMENT,
             })
             .bind_image(ImageDescriptorInfo {
                 binding: 2,
-                image: deferred_color_specs,
+                image: color,
                 sampler: self.device.ui_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::FRAGMENT,
             })
             .bind_image(ImageDescriptorInfo {
                 binding: 3,
-                image: depth_image,
+                image: depth,
                 sampler: self.device.ui_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -1437,159 +1479,60 @@ impl Renderer {
             .build()
             .unwrap();
 
-            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .set_texture_input(deferred_positions)
-                .set_texture_input(deferred_normals)
-                .set_texture_input(deferred_color_specs)
-                .set_texture_input(depth_image)
-                .set_texture_input(
-                    self.render_targets
-                        .get(self.directional_light_shadow_image)
-                        .unwrap(),
-                )
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(forward_image),
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    ..Default::default()
-                })
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(bright_extracted_image),
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    ..Default::default()
-                })
-                .start(
-                    &self.device,
-                    &mut frame_usage_tracker,
-                    &self.device.graphics_command_buffer(),
-                    |_render_pass| {
-                        profiling::scope!("Combine Deferred Pass");
+            let pipeline = self
+                .pipeline_manager
+                .get_pipeline(self.deferred_lighting_combine.pso);
 
-                        let pipeline = self
-                            .pipeline_manager
-                            .get_pipeline(self.deferred_lighting_combine.pso);
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.deferred_lighting_combine.pso_layout,
+                    0u32,
+                    &[
+                        self.device.bindless_descriptor_set(),
+                        self.descriptor_set[resource_index],
+                        render_target_set,
+                    ],
+                    &[],
+                );
+            };
 
-                        unsafe {
-                            self.device.vk_device.cmd_bind_pipeline(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline,
-                            );
-                            self.device.vk_device.cmd_bind_descriptor_sets(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                self.deferred_lighting_combine.pso_layout,
-                                0u32,
-                                &[
-                                    self.device.bindless_descriptor_set(),
-                                    self.descriptor_set[resource_index],
-                                    render_target_set,
-                                ],
-                                &[],
-                            );
-                        };
+            // Draw commands
 
-                        // Draw commands
+            unsafe {
+                self.device.vk_device.cmd_draw(
+                    self.device.graphics_command_buffer(),
+                    6u32,
+                    1u32,
+                    0u32,
+                    0u32,
+                );
+            };
+        });
 
-                        unsafe {
-                            self.device.vk_device.cmd_draw(
-                                self.device.graphics_command_buffer(),
-                                6u32,
-                                1u32,
-                                0u32,
-                                0u32,
-                            );
-                        };
+        let mut horizontal = true;
 
-                        Ok(())
-                    },
-                )?;
-        }
+        for i in 0..10 {
+            let pass = {
+                if i == 0 {
+                    self.bloom_initial
+                } else if horizontal {
+                    self.bloom_horizontal
+                } else {
+                    self.bloom_vertical
+                }
+            };
+            self.list.run_pass(pass, |list, cmd| {
+                let bright = list.get_physical_resource("bright");
+                let horizontal_image = list.get_physical_resource("bloom_horizontal");
+                let vertical_image = list.get_physical_resource("bloom_vertical");
 
-        let deferred_lighting_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-        // Normal Pass
-        //{
-        //    let clear_colour: Vector3<f32> = self.clear_colour.into();
-        //    RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-        //        .add_colour_attachment(AttachmentInfo {
-        //            target: AttachmentHandle::Image(forward_image),
-        //            clear_value: vk::ClearValue {
-        //                color: vk::ClearColorValue {
-        //                    float32: clear_colour.extend(0f32).into(),
-        //                },
-        //            },
-        //            ..Default::default()
-        //        })
-        //        .add_colour_attachment(AttachmentInfo {
-        //            target: AttachmentHandle::Image(bright_extracted_image),
-        //            clear_value: vk::ClearValue {
-        //                color: vk::ClearColorValue {
-        //                    float32: [0.0, 0.0, 0.0, 1.0],
-        //                },
-        //            },
-        //            ..Default::default()
-        //        })
-        //        .set_depth_attachment(AttachmentInfo {
-        //            target: AttachmentHandle::Image(depth_image),
-        //            clear_value: vk::ClearValue {
-        //                depth_stencil: ClearDepthStencilValue {
-        //                    depth: 1.0,
-        //                    stencil: 0,
-        //                },
-        //            },
-        //            ..Default::default()
-        //        })
-        //        .start(
-        //            &self.device,
-        //            &self.device.graphics_command_buffer(),
-        //            |_render_pass| {
-        //                profiling::scope!("Forward Pass");
-        //                let pipeline = self.pipeline_manager.get_pipeline(self.pso);
-        //
-        //                unsafe {
-        //                    self.device.vk_device.cmd_bind_pipeline(
-        //                        self.device.graphics_command_buffer(),
-        //                        vk::PipelineBindPoint::GRAPHICS,
-        //                        pipeline,
-        //                    );
-        //                    self.device.vk_device.cmd_bind_descriptor_sets(
-        //                        self.device.graphics_command_buffer(),
-        //                        vk::PipelineBindPoint::GRAPHICS,
-        //                        self.pso_layout,
-        //                        0u32,
-        //                        &[
-        //                            self.device.bindless_descriptor_set(),
-        //                            self.descriptor_set[resource_index],
-        //                        ],
-        //                        &[],
-        //                    );
-        //                };
-        //
-        //                // Draw commands
-        //
-        //                self.draw_objects(&draw_data)?;
-        //                Ok(())
-        //            },
-        //        )?;
-        //}
-        let forward_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // Bloom pass
-        {
-            if self.enable_bloom_pass {
                 let (first_bloom_set, _) = JBDescriptorBuilder::new(
                     &self.device.resource_manager,
                     &mut self.descriptor_layout_cache,
@@ -1597,7 +1540,7 @@ impl Renderer {
                 )
                 .bind_image(ImageDescriptorInfo {
                     binding: 0,
-                    image: bright_extracted_image,
+                    image: bright,
                     sampler: self.device.ui_sampler(),
                     desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
@@ -1611,7 +1554,7 @@ impl Renderer {
                 )
                 .bind_image(ImageDescriptorInfo {
                     binding: 0,
-                    image: bloom_image[0],
+                    image: vertical_image,
                     sampler: self.device.ui_sampler(),
                     desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
@@ -1625,7 +1568,7 @@ impl Renderer {
                 )
                 .bind_image(ImageDescriptorInfo {
                     binding: 0,
-                    image: bloom_image[1],
+                    image: horizontal_image,
                     sampler: self.device.ui_sampler(),
                     desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
@@ -1634,117 +1577,58 @@ impl Renderer {
                 .unwrap();
                 let bloom_sets = [bloom_set, bloom_set_two];
 
-                let mut horizontal = true;
-                for i in 0..10 {
+                let pipeline = self
+                    .pipeline_manager
+                    .get_pipeline(self.bloom_pass.bloom_pso);
+
+                let set = {
                     if i == 0 {
-                        // TODO : Special case for texture input as only happens on first run
-                        ImageBarrierBuilder::default()
-                            .add_image_barrier(
-                                ImageBarrier::new(AttachmentHandle::Image(bright_extracted_image))
-                                    .old_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-                                    .new_usage(vk::ImageUsageFlags::SAMPLED),
-                            )
-                            .build(&self.device, &self.device.graphics_command_buffer())?;
+                        first_bloom_set
+                    } else {
+                        bloom_sets[!horizontal as usize]
                     }
+                };
+                unsafe {
+                    self.device.vk_device.cmd_bind_pipeline(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline,
+                    );
+                    self.device.vk_device.cmd_bind_descriptor_sets(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.bloom_pass.bloom_pso_layout,
+                        0u32,
+                        &[set],
+                        &[],
+                    );
+                };
 
-                    RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                        .set_texture_input(bloom_image[!horizontal as usize])
-                        .add_colour_attachment(AttachmentInfo {
-                            target: AttachmentHandle::Image(bloom_image[horizontal as usize]),
-                            clear_value: vk::ClearValue {
-                                color: vk::ClearColorValue {
-                                    float32: [0.0, 0.0, 0.0, 1.0],
-                                },
-                            },
-                            ..Default::default()
-                        })
-                        .start(
-                            &self.device,
-                            &mut frame_usage_tracker,
-                            &self.device.graphics_command_buffer(),
-                            |_render_pass| {
-                                profiling::scope!("Bloom Pass");
+                // Draw commands
 
-                                let pipeline = self
-                                    .pipeline_manager
-                                    .get_pipeline(self.bloom_pass.bloom_pso);
-
-                                let set = {
-                                    if i == 0 {
-                                        first_bloom_set
-                                    } else {
-                                        bloom_sets[!horizontal as usize]
-                                    }
-                                };
-                                unsafe {
-                                    self.device.vk_device.cmd_bind_pipeline(
-                                        self.device.graphics_command_buffer(),
-                                        vk::PipelineBindPoint::GRAPHICS,
-                                        pipeline,
-                                    );
-                                    self.device.vk_device.cmd_bind_descriptor_sets(
-                                        self.device.graphics_command_buffer(),
-                                        vk::PipelineBindPoint::GRAPHICS,
-                                        self.bloom_pass.bloom_pso_layout,
-                                        0u32,
-                                        &[set],
-                                        &[],
-                                    );
-                                };
-
-                                // Draw commands
-
-                                unsafe {
-                                    self.device.vk_device.cmd_push_constants(
-                                        self.device.graphics_command_buffer(),
-                                        self.bloom_pass.bloom_pso_layout,
-                                        vk::ShaderStageFlags::FRAGMENT,
-                                        0u32,
-                                        bytemuck::cast_slice(&[horizontal as i32]),
-                                    );
-                                    self.device.vk_device.cmd_draw(
-                                        self.device.graphics_command_buffer(),
-                                        6u32,
-                                        1u32,
-                                        0u32,
-                                        0u32,
-                                    );
-                                };
-
-                                Ok(())
-                            },
-                        )?;
-                    horizontal = !horizontal;
-                }
-            } else {
-                RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                    .add_colour_attachment(AttachmentInfo {
-                        target: AttachmentHandle::Image(bloom_image[0]),
-                        clear_value: vk::ClearValue {
-                            color: vk::ClearColorValue {
-                                float32: [0.0, 0.0, 0.0, 1.0],
-                            },
-                        },
-                        ..Default::default()
-                    })
-                    .start(
-                        &self.device,
-                        &mut frame_usage_tracker,
-                        &self.device.graphics_command_buffer(),
-                        |_render_pass| {
-                            profiling::scope!("Bloom Pass");
-                            Ok(())
-                        },
-                    )?;
-            }
+                unsafe {
+                    self.device.vk_device.cmd_push_constants(
+                        self.device.graphics_command_buffer(),
+                        self.bloom_pass.bloom_pso_layout,
+                        vk::ShaderStageFlags::FRAGMENT,
+                        0u32,
+                        bytemuck::cast_slice(&[horizontal as i32]),
+                    );
+                    self.device.vk_device.cmd_draw(
+                        self.device.graphics_command_buffer(),
+                        6u32,
+                        1u32,
+                        0u32,
+                        0u32,
+                    );
+                };
+            });
+            horizontal = !horizontal;
         }
-        let bloom_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
+        self.list.run_pass(self.combine, |list, cmd| {
+            let forward = list.get_physical_resource("forward");
+            let bloom_result = list.get_physical_resource("bloom_vertical");
 
-        // Combine Pass
-        {
             let (combine_set, _) = JBDescriptorBuilder::new(
                 &self.device.resource_manager,
                 &mut self.descriptor_layout_cache,
@@ -1752,14 +1636,14 @@ impl Renderer {
             )
             .bind_image(ImageDescriptorInfo {
                 binding: 0,
-                image: forward_image,
+                image: forward,
                 sampler: self.device.ui_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
             })
             .bind_image(ImageDescriptorInfo {
                 binding: 1,
-                image: bloom_image[0],
+                image: bloom_result,
                 sampler: self.device.ui_sampler(),
                 desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
@@ -1767,184 +1651,161 @@ impl Renderer {
             .build()
             .unwrap();
 
-            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .set_texture_input(forward_image)
-                .set_texture_input(bloom_image[0])
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::SwapchainImage,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    ..Default::default()
-                })
-                .start(
-                    &self.device,
-                    &mut frame_usage_tracker,
-                    &self.device.graphics_command_buffer(),
-                    |_render_pass| {
-                        profiling::scope!("Combine Pass");
+            let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
 
-                        let pipeline = self.pipeline_manager.get_pipeline(self.combine_pso);
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.combine_pso_layout,
+                    0u32,
+                    &[combine_set],
+                    &[],
+                );
+            };
 
-                        unsafe {
-                            self.device.vk_device.cmd_bind_pipeline(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline,
-                            );
-                            self.device.vk_device.cmd_bind_descriptor_sets(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                self.combine_pso_layout,
-                                0u32,
-                                &[combine_set],
-                                &[],
-                            );
-                        };
+            // Draw commands
 
-                        // Draw commands
+            unsafe {
+                self.device.vk_device.cmd_draw(
+                    self.device.graphics_command_buffer(),
+                    6u32,
+                    1u32,
+                    0u32,
+                    0u32,
+                );
+            };
+        });
+        self.list.run_pass(self.ui, |list, cmd| {
+            if self.draw_debug_ui {
+                let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
 
-                        unsafe {
-                            self.device.vk_device.cmd_draw(
-                                self.device.graphics_command_buffer(),
-                                6u32,
-                                1u32,
-                                0u32,
-                                0u32,
-                            );
-                        };
+                unsafe {
+                    self.device.vk_device.cmd_bind_pipeline(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline,
+                    );
+                    self.device.vk_device.cmd_bind_descriptor_sets(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.world_debug_pso_layout,
+                        0u32,
+                        &[
+                            self.device.bindless_descriptor_set(),
+                            self.world_debug_desc_set[resource_index],
+                        ],
+                        &[],
+                    );
+                };
 
-                        Ok(())
-                    },
-                )?;
-        }
-        let combine_pass_end = self.device.write_timestamp(
+                unsafe {
+                    self.device.vk_device.cmd_draw(
+                        self.device.graphics_command_buffer(),
+                        6u32 * debug_ui_draw_amount as u32,
+                        1u32,
+                        0u32,
+                        0u32,
+                    );
+                };
+            }
+
+            let pipeline = self.pipeline_manager.get_pipeline(self.ui_pass.pso);
+
+            unsafe {
+                self.device.vk_device.cmd_bind_pipeline(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline,
+                );
+                self.device.vk_device.cmd_bind_descriptor_sets(
+                    self.device.graphics_command_buffer(),
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.ui_pass.pso_layout,
+                    0u32,
+                    &[
+                        self.device.bindless_descriptor_set(),
+                        self.ui_pass.desc_set[resource_index],
+                    ],
+                    &[],
+                );
+            };
+
+            let index_buffer = self
+                .device
+                .resource_manager
+                .get_buffer(self.ui_pass.index_buffer[resource_index])
+                .unwrap();
+
+            unsafe {
+                self.device.vk_device.cmd_bind_index_buffer(
+                    self.device.graphics_command_buffer(),
+                    index_buffer.buffer(),
+                    0u64,
+                    vk::IndexType::UINT32,
+                );
+            }
+
+            for draw in ui_draw_calls.iter() {
+                let max = [
+                    draw.scissor.1[0] - draw.scissor.0[0],
+                    draw.scissor.1[1] - draw.scissor.0[1],
+                ];
+                //render_pass.set_scissor(draw.scissor.0, max);
+                // Draw commands
+                unsafe {
+                    self.device.vk_device.cmd_draw_indexed(
+                        self.device.graphics_command_buffer(),
+                        draw.amount as u32,
+                        1u32,
+                        draw.index_offset as u32,
+                        draw.vertex_offset as i32,
+                        0u32,
+                    );
+                };
+            }
+        });
+
+        // Shadow pass
+        let shadow_pass_start = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
+        let shadow_pass_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
         );
 
-        // UI Pass
-        {
-            RenderPassBuilder::new((self.device.size().width, self.device.size().height))
-                .add_colour_attachment(AttachmentInfo {
-                    target: AttachmentHandle::SwapchainImage,
-                    clear_value: vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 0.0],
-                        },
-                    },
-                    ..Default::default()
-                })
-                .set_depth_attachment(AttachmentInfo {
-                    target: AttachmentHandle::Image(depth_image),
-                    clear_value: vk::ClearValue {
-                        depth_stencil: ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                    ..Default::default()
-                })
-                .start(
-                    &self.device,
-                    &mut frame_usage_tracker,
-                    &self.device.graphics_command_buffer(),
-                    |render_pass| {
-                        profiling::scope!("UI Pass");
+        // Deferred pass
+        let deferred_fill_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
-                        if self.draw_debug_ui {
-                            let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
+        // Deferred Lighting Pass
+        let deferred_lighting_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
+        let forward_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
-                            unsafe {
-                                self.device.vk_device.cmd_bind_pipeline(
-                                    self.device.graphics_command_buffer(),
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    pipeline,
-                                );
-                                self.device.vk_device.cmd_bind_descriptor_sets(
-                                    self.device.graphics_command_buffer(),
-                                    vk::PipelineBindPoint::GRAPHICS,
-                                    self.world_debug_pso_layout,
-                                    0u32,
-                                    &[
-                                        self.device.bindless_descriptor_set(),
-                                        self.world_debug_desc_set[resource_index],
-                                    ],
-                                    &[],
-                                );
-                            };
-
-                            unsafe {
-                                self.device.vk_device.cmd_draw(
-                                    self.device.graphics_command_buffer(),
-                                    6u32 * debug_ui_draw_amount as u32,
-                                    1u32,
-                                    0u32,
-                                    0u32,
-                                );
-                            };
-                        }
-
-                        let pipeline = self.pipeline_manager.get_pipeline(self.ui_pass.pso);
-
-                        unsafe {
-                            self.device.vk_device.cmd_bind_pipeline(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                pipeline,
-                            );
-                            self.device.vk_device.cmd_bind_descriptor_sets(
-                                self.device.graphics_command_buffer(),
-                                vk::PipelineBindPoint::GRAPHICS,
-                                self.ui_pass.pso_layout,
-                                0u32,
-                                &[
-                                    self.device.bindless_descriptor_set(),
-                                    self.ui_pass.desc_set[resource_index],
-                                ],
-                                &[],
-                            );
-                        };
-
-                        let index_buffer = self
-                            .device
-                            .resource_manager
-                            .get_buffer(self.ui_pass.index_buffer[resource_index])
-                            .unwrap();
-
-                        unsafe {
-                            self.device.vk_device.cmd_bind_index_buffer(
-                                self.device.graphics_command_buffer(),
-                                index_buffer.buffer(),
-                                0u64,
-                                vk::IndexType::UINT32,
-                            );
-                        }
-
-                        for draw in ui_draw_calls.iter() {
-                            let max = [
-                                draw.scissor.1[0] - draw.scissor.0[0],
-                                draw.scissor.1[1] - draw.scissor.0[1],
-                            ];
-                            render_pass.set_scissor(draw.scissor.0, max);
-                            // Draw commands
-                            unsafe {
-                                self.device.vk_device.cmd_draw_indexed(
-                                    self.device.graphics_command_buffer(),
-                                    draw.amount as u32,
-                                    1u32,
-                                    draw.index_offset as u32,
-                                    draw.vertex_offset as i32,
-                                    0u32,
-                                );
-                            };
-                        }
-                        Ok(())
-                    },
-                )?;
-        }
+        // Bloom pass
+        let bloom_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
+        let combine_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
         let ui_pass_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
@@ -2059,6 +1920,53 @@ impl Renderer {
         Ok(())
     }
 
+    fn draw_objects_free(
+        draws: &[DrawData],
+        device: &ash::Device,
+        command_buffer: &vk::CommandBuffer,
+        psolayout: &vk::PipelineLayout,
+    ) -> Result<()> {
+        for draw in draws.iter() {
+            let push_constants = PushConstants {
+                handles: [
+                    draw.transform_index as i32,
+                    draw.material_index as i32,
+                    0,
+                    0,
+                ],
+            };
+            unsafe {
+                device.cmd_push_constants(
+                    *command_buffer,
+                    *psolayout,
+                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                    0u32,
+                    bytemuck::cast_slice(&[push_constants]),
+                )
+            };
+
+            let index_count = {
+                if draw.index_count == 0 {
+                    draw.vertex_count
+                } else {
+                    draw.index_count
+                }
+            };
+
+            unsafe {
+                device.cmd_draw_indexed(
+                    *command_buffer,
+                    index_count as u32,
+                    1u32,
+                    draw.index_offset as u32,
+                    draw.vertex_offset as i32,
+                    0u32,
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn draw_skybox(&self) -> Result<()> {
         let push_constants = self
             .device
@@ -2086,6 +1994,48 @@ impl Renderer {
         unsafe {
             self.device.vk_device.cmd_draw_indexed(
                 self.device.graphics_command_buffer(),
+                index_count as u32,
+                1u32,
+                mesh.index_offset as u32,
+                mesh.vertex_offset as i32,
+                0u32,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn draw_skybox_free(
+        device: &GraphicsDevice,
+        mesh_pool: &MeshPool,
+        cube_mesh: MeshHandle,
+        skybox_texture: ImageHandle,
+        command_buffer: &vk::CommandBuffer,
+        psolayout: &vk::PipelineLayout,
+    ) -> Result<()> {
+        let push_constants = device.get_descriptor_index(&skybox_texture).unwrap() as i32;
+        unsafe {
+            device.vk_device.cmd_push_constants(
+                *command_buffer,
+                *psolayout,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                0u32,
+                bytemuck::cast_slice(&[push_constants]),
+            )
+        };
+
+        let mesh = mesh_pool.get(cube_mesh).unwrap();
+        let index_count = {
+            if mesh.index_count == 0 {
+                mesh.vertex_count as u32
+            } else {
+                mesh.index_count as u32
+            }
+        };
+
+        unsafe {
+            device.vk_device.cmd_draw_indexed(
+                *command_buffer,
                 index_count as u32,
                 1u32,
                 mesh.index_offset as u32,

@@ -5,8 +5,11 @@ use std::sync::Arc;
 
 use crate::rendergraph::attachment::{AttachmentInfo, SizeClass};
 use crate::rendergraph::resource_tracker::{RenderPassTracker, RenderResourceTracker};
-use crate::rendergraph::virtual_resource::{VirtualRenderPassHandle, VirtualResource};
-use crate::GraphicsDevice;
+use crate::rendergraph::virtual_resource::{
+    VirtualRenderPassHandle, VirtualResource, VirtualTextureResourceHandle,
+};
+use crate::renderpass::barrier::{ImageBarrier, ImageBarrierBuilder};
+use crate::{AttachmentHandle, GraphicsDevice, ImageHandle};
 
 pub mod attachment;
 pub mod physical_resource;
@@ -19,6 +22,7 @@ pub struct RenderList {
     resource: RenderResourceTracker,
     order_of_passes: Vec<VirtualRenderPassHandle>,
     physical_passes: HashMap<VirtualRenderPassHandle, PhysicalRenderPass>,
+    physical_images: HashMap<VirtualTextureResourceHandle, ImageHandle>,
 }
 
 impl RenderList {
@@ -29,6 +33,7 @@ impl RenderList {
             resource: RenderResourceTracker::default(),
             order_of_passes: Vec::default(),
             physical_passes: HashMap::default(),
+            physical_images: HashMap::default(),
         }
     }
 
@@ -55,10 +60,14 @@ impl RenderList {
         }
         for input in pass_layout.texture_inputs {
             let (resource_handle, resource) = self.resource.get_texture_resource(&input);
-            resource.set_image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
+            resource.set_image_usage(vk::ImageUsageFlags::SAMPLED);
             resource.read_in_pass(pass_handle);
             render_pass.texture_inputs.push(resource_handle);
         }
+
+        render_pass.clear_colour = pass_layout.clear_colour;
+        render_pass.depth_clear = pass_layout.depth_clear;
+        render_pass.stencil_clear = pass_layout.stencil_clear;
 
         self.order_of_passes.push(pass_handle);
 
@@ -67,7 +76,6 @@ impl RenderList {
 
     pub fn bake(&mut self) {
         // Create physical images
-        let mut images = HashMap::new();
         for (handle, resource) in self.resource.get_resources() {
             let size = {
                 match resource.get_attachment_info().size {
@@ -97,7 +105,7 @@ impl RenderList {
                 .resource_manager
                 .create_image(&image_create_info);
 
-            images.insert(handle, image);
+            self.physical_images.insert(handle, image);
             info!("Image Created: {}", resource.name());
         }
 
@@ -106,8 +114,20 @@ impl RenderList {
 
             let renderpass = self.passes.retrieve_render_pass(pass);
 
+            physical_render_pass.clear_color = vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: renderpass.clear_colour,
+                },
+            };
+            physical_render_pass.depth_stencil_clear = vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: renderpass.depth_clear,
+                    stencil: renderpass.stencil_clear,
+                },
+            };
+
             for &color in renderpass.color_attachments.iter() {
-                let physical_image = images.get(&color).unwrap();
+                let physical_image = self.physical_images.get(&color).unwrap();
                 let physical_image_view = self
                     .device
                     .resource_manager
@@ -120,7 +140,7 @@ impl RenderList {
                     image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
                     load_op: vk::AttachmentLoadOp::CLEAR, // TODO : Do this based on past usage
                     store_op: vk::AttachmentStoreOp::STORE,
-                    clear_value: Default::default(),
+                    clear_value: physical_render_pass.clear_color,
                     ..Default::default()
                 };
 
@@ -144,7 +164,7 @@ impl RenderList {
                     .push(physical_attachment_info);
             }
             if let Some(depth) = renderpass.depth_attachment {
-                let physical_image = images.get(&depth).unwrap();
+                let physical_image = self.physical_images.get(&depth).unwrap();
                 let physical_image_view = self
                     .device
                     .resource_manager
@@ -156,7 +176,7 @@ impl RenderList {
                     image_layout: vk::ImageLayout::ATTACHMENT_OPTIMAL,
                     load_op: vk::AttachmentLoadOp::CLEAR, // TODO : Do this based on past usage
                     store_op: vk::AttachmentStoreOp::STORE,
-                    clear_value: Default::default(),
+                    clear_value: physical_render_pass.depth_stencil_clear,
                     ..Default::default()
                 };
 
@@ -180,16 +200,153 @@ impl RenderList {
 
             self.physical_passes.insert(pass, physical_render_pass);
         }
+
+        // for each renderpass, generate barriers
+        for (i, virtual_pass_handle) in self.order_of_passes.iter().enumerate() {
+            let renderpass = self.passes.retrieve_render_pass(*virtual_pass_handle);
+
+            let mut barriers = Vec::new();
+            for attachment in renderpass.color_attachments.iter() {
+                let resource = self.resource.retrieve_resource(*attachment);
+
+                let read_passes = resource.get_read_passes();
+                let write_passes = resource.get_write_passes();
+
+                // Get last operation that occured
+                let mut last_operation = LastUsage::None;
+                for j in 0..i {
+                    let previous_pass = self.order_of_passes[j];
+                    // Should not be able to be both write and read in same pass(for now)
+                    if read_passes.contains(&previous_pass) {
+                        last_operation = LastUsage::Read;
+                    }
+                    if write_passes.contains(&previous_pass) {
+                        last_operation = LastUsage::Write;
+                    }
+                }
+
+                let image = self.physical_images.get(&attachment).unwrap();
+                match last_operation {
+                    LastUsage::Write => { // DONT NEED TO BARRIER
+                    }
+                    LastUsage::Read => {
+                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                            .old_usage(vk::ImageUsageFlags::SAMPLED)
+                            .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
+                        barriers.push(barrier);
+                    }
+                    LastUsage::None => {
+                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                            .new_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
+                        barriers.push(barrier);
+                    }
+                }
+            }
+            if let Some(attachment) = renderpass.depth_attachment {
+                let resource = self.resource.retrieve_resource(attachment);
+
+                let read_passes = resource.get_read_passes();
+                let write_passes = resource.get_write_passes();
+
+                // Get last operation that occured
+                let mut last_operation = LastUsage::None;
+                for j in 0..i {
+                    let previous_pass = self.order_of_passes[j];
+                    // Should not be able to be both write and read in same pass(for now)
+                    if read_passes.contains(&previous_pass) {
+                        last_operation = LastUsage::Read;
+                    }
+                    if write_passes.contains(&previous_pass) {
+                        last_operation = LastUsage::Write;
+                    }
+                }
+
+                let image = self.physical_images.get(&attachment).unwrap();
+                match last_operation {
+                    LastUsage::Write => { // DONT NEED TO BARRIER
+                    }
+                    LastUsage::Read => {
+                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                            .old_usage(vk::ImageUsageFlags::SAMPLED)
+                            .new_usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT);
+                        barriers.push(barrier);
+                    }
+                    LastUsage::None => {
+                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                            .new_usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT);
+                        barriers.push(barrier);
+                    }
+                }
+            }
+            for input in renderpass.texture_inputs.iter() {
+                let resource = self.resource.retrieve_resource(*input);
+
+                let read_passes = resource.get_read_passes();
+                let write_passes = resource.get_write_passes();
+
+                // Get last operation that occured
+                let mut last_operation = LastUsage::None;
+                let mut last_usage = vk::ImageUsageFlags::empty();
+                for j in 0..i {
+                    let previous_pass = self.order_of_passes[j];
+                    let previous_virtual_pass = self.passes.retrieve_render_pass(previous_pass);
+
+                    if previous_virtual_pass.color_attachments.contains(input) {
+                        last_operation = LastUsage::Write;
+                        last_usage = vk::ImageUsageFlags::COLOR_ATTACHMENT;
+                    } else if previous_virtual_pass.depth_attachment == Some(*input) {
+                        last_operation = LastUsage::Write;
+                        last_usage = vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT;
+                    } else if previous_virtual_pass.texture_inputs.contains(input) {
+                        last_operation = LastUsage::Read;
+                        last_usage = vk::ImageUsageFlags::SAMPLED;
+                    }
+                }
+
+                let image = self.physical_images.get(&input).unwrap();
+                match last_operation {
+                    LastUsage::Write => {
+                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                            .old_usage(last_usage)
+                            .new_usage(vk::ImageUsageFlags::SAMPLED);
+                        barriers.push(barrier);
+                    }
+                    LastUsage::Read => {}
+                    LastUsage::None => {
+                        let barrier = ImageBarrier::new(AttachmentHandle::Image(*image))
+                            .new_usage(vk::ImageUsageFlags::SAMPLED);
+                        barriers.push(barrier);
+                    }
+                }
+            }
+
+            let virtual_pass = self.passes.retrieve_render_pass(*virtual_pass_handle);
+            info!(
+                "Barriers for Renderpass: {},{}",
+                virtual_pass.name,
+                barriers.len()
+            );
+            let physical_renderpass = self.physical_passes.get_mut(virtual_pass_handle).unwrap();
+            physical_renderpass.barriers = barriers;
+        }
     }
 
-    pub fn run_pass<F>(&self, render_pass: VirtualRenderPassHandle, commands: F)
+    pub fn run_pass<F>(&mut self, render_pass: VirtualRenderPassHandle, commands: F)
     where
-        F: Fn(vk::CommandBuffer),
+        F: FnOnce(&mut Self, vk::CommandBuffer),
     {
         // DO IMAGE BARRIERS NEEDED
         // START RENDERPASS
 
         let physical_render_pass = self.get_physical_pass(render_pass);
+
+        let mut barrier_builder = ImageBarrierBuilder::default();
+        for barrier in physical_render_pass.barriers.iter() {
+            barrier_builder = barrier_builder.add_image_barrier(barrier.clone());
+        }
+        barrier_builder
+            .build(&self.device, &self.device.graphics_command_buffer())
+            .unwrap();
 
         unsafe {
             self.device.vk_device.cmd_set_viewport(
@@ -228,7 +385,7 @@ impl RenderList {
                 .cmd_begin_rendering(self.device.graphics_command_buffer(), &render_info)
         };
 
-        commands(self.device.graphics_command_buffer());
+        commands(self, self.device.graphics_command_buffer());
 
         unsafe {
             self.device
@@ -240,6 +397,11 @@ impl RenderList {
     fn get_physical_pass(&self, handle: VirtualRenderPassHandle) -> &PhysicalRenderPass {
         self.physical_passes.get(&handle).unwrap()
     }
+
+    pub fn get_physical_resource(&mut self, name: &str) -> ImageHandle {
+        let (handle, _) = self.resource.get_texture_resource(name);
+        *self.physical_images.get(&handle).unwrap()
+    }
 }
 
 /// Public API for creating render pass
@@ -248,6 +410,9 @@ pub struct RenderPassLayout {
     pub color_attachments: Vec<(String, AttachmentInfo)>,
     pub depth_attachment: Option<(String, AttachmentInfo)>,
     pub texture_inputs: Vec<String>,
+    clear_colour: [f32; 4],
+    depth_clear: f32,
+    stencil_clear: u32,
 }
 
 impl RenderPassLayout {
@@ -266,6 +431,17 @@ impl RenderPassLayout {
         self.texture_inputs.push(name.to_string());
         self
     }
+
+    pub fn set_clear_colour(mut self, colour: [f32; 4]) -> Self {
+        self.clear_colour = colour;
+        self
+    }
+
+    pub fn set_depth_stencil_clear(mut self, depth: f32, stencil: u32) -> Self {
+        self.depth_clear = depth;
+        self.stencil_clear = stencil;
+        self
+    }
 }
 
 #[derive(Default)]
@@ -274,6 +450,9 @@ struct PhysicalRenderPass {
     depth_attachment: Option<vk::RenderingAttachmentInfo>,
     viewport: vk::Viewport,
     scissor: vk::Rect2D,
+    barriers: Vec<ImageBarrier>,
+    clear_color: vk::ClearValue,
+    depth_stencil_clear: vk::ClearValue,
 }
 
 /*NOTES:
@@ -319,4 +498,10 @@ fn get_viewport_info(size: (u32, u32), flipped: bool) -> vk::Viewport {
             .max_depth(1.0f32)
             .build()
     }
+}
+
+enum LastUsage {
+    Write,
+    Read,
+    None,
 }
