@@ -535,29 +535,6 @@ struct PhysicalRenderPass {
     depth_stencil_clear: vk::ClearValue,
 }
 
-/*NOTES:
-
-Builds up VirtualRenderPasses which consist of VirtualTextureResources.
-Once all render passes have been added, will generate images for all of the virtual texture resources.
-Once all physical images have been created, will create physical renderpasses & barriers.
-Barriers will be stored with the renderpass where they are needed.
-Then, when starting the specified renderpass will also use those barriers.
-
-EXPECTED API:
-let mut list = RenderList::new(device);
-
-let forward = AttachmentInfo...
-let bright = AttachmentInfo...
-
-let forward_pass = list.add(RenderPass::new()
-                 .add_colour_attachment("forward", forward)
-                 .add_colour_attachment("bright", bright)
-
-list.bake();
-
-list.run_pass(forward_pass, |cmd| {});
-*/
-
 fn get_viewport_info(size: (u32, u32), flipped: bool) -> vk::Viewport {
     if flipped {
         vk::Viewport::builder()
