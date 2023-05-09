@@ -316,6 +316,9 @@ impl TurretGame {
         if self.input.is_just_pressed(VirtualKeyCode::F1) {
             self.draw_debug_ui = !self.draw_debug_ui
         }
+        if self.input.is_just_pressed(VirtualKeyCode::F2) {
+            self.renderer.reload_shaders().unwrap();
+        }
         self.handle_player_input();
 
         let plane_movement_speed = 50.0f32;
