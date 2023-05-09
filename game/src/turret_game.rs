@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use cgmath::{
-    Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Quaternion, Rotation, Rotation3, Vector3,
-    Vector4, Zero,
+    Array, Deg, EuclideanSpace, Euler, InnerSpace, Matrix4, Quaternion, Rotation, Rotation3,
+    Vector3, Vector4, Zero,
 };
 use egui_winit::EventResponse;
 use kira::manager::backend::cpal::CpalBackend;
@@ -281,20 +281,10 @@ impl TurretGame {
         let egui = EguiContext::new(event_loop);
         let draw_ui = true;
 
-        let player = Player {
-            camera: Camera {
-                position: (0.0, 0.0, 0.0).into(),
-                direction: (1.0, 0.0, 0.0).into(),
-                aspect: window.inner_size().width as f32 / window.inner_size().height as f32,
-                fovy: 90.0,
-                znear: 0.1,
-                zfar: 4000.0,
-            },
-            rate_of_fire: 8f32,
-            time_since_fired: 100f32,
-            tracer_bullet_rate: 3i32,
-            bullets_since_last_tracer: 0i32,
-        };
+        let player = Player::new((
+            window.inner_size().width as f32,
+            window.inner_size().height as f32,
+        ));
 
         Self {
             window,
@@ -428,11 +418,16 @@ impl TurretGame {
             let spread = 0.05f32;
             let y_direction = thread_rng().gen_range(-spread..spread);
             let z_direction = thread_rng().gen_range(-spread..spread);
-            let offset = Vector3::new(0.0f32, y_direction, z_direction);
+            //let offset = Vector3::new(0.0f32, y_direction, z_direction);
+            let euler = Euler {
+                x: Deg(self.player.camera.rotation.x),
+                y: Deg(-self.player.camera.rotation.y - 90.0),
+                z: Deg(self.player.camera.rotation.z),
+            };
 
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -1f32, 0f32),
-                self.player.camera.direction + offset,
+                self.player.camera.rotation, // Fix rotation
                 500f32,
                 tracer,
             );
