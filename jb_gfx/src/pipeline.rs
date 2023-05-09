@@ -137,6 +137,7 @@ impl PipelineManager {
         // Set ones that reloaded successfully
         for (i, (_, pipeline)) in self.pipelines.iter_mut().enumerate() {
             if let Ok(new_pipeline) = new_pipelines.get(i).unwrap() {
+                self.old_pipelines.push(pipeline.pso);
                 pipeline.pso = *new_pipeline;
             } else {
                 error!(
