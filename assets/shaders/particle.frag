@@ -30,7 +30,7 @@ void main()
 
 	vec4 colour = self.colour;
 	if (self.textureIndex > 0) {
-		colour = SampleBindlessTexture(0, self.textureIndex, inTexCoords);
+		colour *= SampleBindlessTexture(0, self.textureIndex, inTexCoords);
 	}
 
 	outFragColor = colour;

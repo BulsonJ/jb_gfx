@@ -295,23 +295,25 @@ impl TurretGame {
             )
             .unwrap();
 
-        let mut particle_system = ParticleSystem::new(128);
+        let mut particle_system = ParticleSystem::new(1000);
         particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(-2.5, -2.0, 3.0);
+        particle_system.spawn_position = Vector3::new(-2.5, -2.0, 5.0);
         particle_system.velocity = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.spawn_rate = 0.1;
-        //particle_system.initial_colour = [0.2, 0.2, 0.2, 0.3].into();
+        particle_system.spawn_rate = 0.01;
+        particle_system.initial_colour = [0.8,0.8,0.8,0.8].into();
         particle_system.texture = Some(smoke_texture);
+        particle_system.scale = 0.25;
 
         renderer.add_particle_system(particle_system);
 
-        let mut particle_system = ParticleSystem::new(128);
+        let mut particle_system = ParticleSystem::new(1000);
         particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(-2.5, -2.0, -3.0);
+        particle_system.spawn_position = Vector3::new(-2.5, -2.0, -5.0);
         particle_system.velocity = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.spawn_rate = 0.1;
-        //particle_system.initial_colour = [0.2, 0.2, 0.2, 0.3].into();
+        particle_system.spawn_rate = 0.01;
+        particle_system.initial_colour = [0.8,0.8,0.8,0.8].into();
         particle_system.texture = Some(smoke_texture);
+        particle_system.scale = 0.25;
 
         renderer.add_particle_system(particle_system);
 

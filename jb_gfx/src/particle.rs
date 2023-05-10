@@ -12,6 +12,7 @@ pub struct ParticleSystem {
     pub velocity: Vector3<f32>,
     pub initial_colour: Vector4<f32>,
     pub texture: Option<ImageHandle>,
+    pub scale: f32,
 }
 
 impl ParticleSystem {
@@ -73,6 +74,7 @@ impl ParticleSystem {
         particle.life = 5.0;
         particle.colour = self.initial_colour;
         particle.texture_index = self.texture;
+        particle.size = self.scale;
     }
 }
 
@@ -90,6 +92,7 @@ impl Default for ParticleSystem {
             state: ParticleSystemState::Stopped,
             initial_colour: Vector4::from_value(1.0),
             texture: None,
+            scale: 1.0,
         }
     }
 }

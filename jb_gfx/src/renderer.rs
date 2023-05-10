@@ -49,7 +49,7 @@ const MAX_DEBUG_UI: u64 = 100u64;
 
 const MAX_MATERIAL_INSTANCES: usize = 128;
 const MAX_LIGHTS: usize = 64;
-const MAX_PARTICLES: usize = 512;
+const MAX_PARTICLES: usize = 10000;
 
 const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const DEFERRED_NORMAL_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
@@ -1054,7 +1054,7 @@ impl Renderer {
                         PipelineColorAttachment {
                             format: render_image_format,
                             blend: true,
-                            src_blend_factor_color: vk::BlendFactor::ONE,
+                            src_blend_factor_color: vk::BlendFactor::SRC_ALPHA,
                             dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                             src_blend_factor_alpha: vk::BlendFactor::ONE,
                             dst_blend_factor_alpha: vk::BlendFactor::ONE,
@@ -1063,7 +1063,7 @@ impl Renderer {
                         PipelineColorAttachment {
                             format: render_image_format,
                             blend: true,
-                            src_blend_factor_color: vk::BlendFactor::ONE,
+                            src_blend_factor_color: vk::BlendFactor::SRC_ALPHA,
                             dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                             src_blend_factor_alpha: vk::BlendFactor::ONE,
                             dst_blend_factor_alpha: vk::BlendFactor::ONE,
