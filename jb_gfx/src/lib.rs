@@ -6,11 +6,11 @@ pub mod core;
 pub mod gpu_structs;
 pub mod light;
 pub mod mesh;
+pub mod particle;
 pub mod pipeline;
 pub mod prelude;
 pub mod renderer;
+pub mod rendergraph;
 pub mod renderpass;
 pub mod resource;
-
-pub mod rendergraph;
 pub mod util;

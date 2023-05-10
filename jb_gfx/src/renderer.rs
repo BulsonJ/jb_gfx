@@ -21,6 +21,7 @@ use crate::gpu_structs::{
     UIUniformData, UIVertexData, WorldDebugUIDrawData,
 };
 use crate::mesh::Index;
+use crate::particle::{ParticleSystem, ParticleSystemState};
 use crate::pipeline::{
     PipelineColorAttachment, PipelineCreateInfo, PipelineHandle, PipelineLayoutCache,
     PipelineManager, VertexInputDescription,
@@ -48,7 +49,7 @@ const MAX_DEBUG_UI: u64 = 100u64;
 
 const MAX_MATERIAL_INSTANCES: usize = 128;
 const MAX_LIGHTS: usize = 64;
-const MAX_PARTICLES: usize = 64;
+const MAX_PARTICLES: usize = 512;
 
 const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const DEFERRED_NORMAL_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
@@ -121,6 +122,7 @@ pub struct Renderer {
 
     particle_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     particle_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
+    particle_system: ParticleSystem,
 }
 
 impl Renderer {
@@ -1078,6 +1080,12 @@ impl Renderer {
             (pso, pso_layout)
         };
 
+        let mut particle_system = ParticleSystem::new(MAX_PARTICLES);
+        particle_system.set_state(ParticleSystemState::Running);
+        particle_system.spawn_position = Vector3::new(5.0, 0.0, 0.0);
+        particle_system.velocity = Vector3::new(0.0, 20.0, 0.0);
+        particle_system.spawn_rate = 0.25;
+
         info!("Renderer Created");
         let result = Ok(Self {
             device,
@@ -1134,6 +1142,7 @@ impl Renderer {
             particle_buffer,
             particle_pipeline,
             particle_set,
+            particle_system,
         });
         result
     }
@@ -1274,32 +1283,31 @@ impl Renderer {
 
         // Copy particles
         {
-            let mut particles = Vec::new();
-            particles.resize(
-                MAX_PARTICLES,
-                ParticleDrawData {
-                    position: [0.0, 0.0, 0.0],
-                    texture_index: 0,
-                    colour: [1.0, 1.0, 1.0],
-                    size: 0.25,
-                },
-            );
-
-            let square_root = (MAX_PARTICLES as f32).sqrt() as usize;
-            for x in 0..square_root {
-                for y in 0..square_root {
-                    let index = (y * square_root) + x;
-                    particles[index].position = [5.0f32, y as f32, x as f32];
-                }
-            }
+            let particle_data: Vec<ParticleDrawData> = self
+                .particle_system
+                .particles()
+                .iter()
+                .map(|particle| ParticleDrawData {
+                    position: particle.position.into(),
+                    texture_index: {
+                        if let Some(tex) = particle.texture_index {
+                            self.device.get_descriptor_index(&tex).unwrap() as i32
+                        } else {
+                            0
+                        }
+                    },
+                    colour: particle.colour.into(),
+                    size: particle.size,
+                })
+                .collect();
 
             self.device
                 .resource_manager
                 .get_buffer(self.particle_buffer[resource_index])
                 .unwrap()
-                .view()
+                .view_custom(0, particle_data.len())?
                 .mapped_slice()?
-                .copy_from_slice(&particles);
+                .copy_from_slice(&particle_data);
         }
 
         // Copy debug UI
@@ -1619,7 +1627,7 @@ impl Renderer {
                     self.device.vk_device.cmd_draw(
                         self.device.graphics_command_buffer(),
                         6u32,
-                        MAX_PARTICLES as u32,
+                        self.particle_system.particles().len() as u32,
                         0u32,
                         0u32,
                     );
@@ -2490,6 +2498,10 @@ impl Renderer {
             return Ok(());
         }
         Err(anyhow!("No material exists exists"))
+    }
+
+    pub fn tick_particle_systems(&mut self, delta_time: f32) {
+        self.particle_system.tick(delta_time);
     }
 }
 
