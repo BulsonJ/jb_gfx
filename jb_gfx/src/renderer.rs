@@ -67,6 +67,8 @@ pub struct Renderer {
     mesh_pool: MeshPool,
     timestamps: TimeStamp,
 
+    stored_particle_systems: SlotMap<ParticleSystemHandle, ParticleSystem>,
+
     shadow_pso: PipelineHandle,
 
     forward_pass: ForwardPass,
@@ -122,7 +124,6 @@ pub struct Renderer {
 
     particle_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     particle_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
-    particle_system: ParticleSystem,
 }
 
 impl Renderer {
@@ -1080,12 +1081,6 @@ impl Renderer {
             (pso, pso_layout)
         };
 
-        let mut particle_system = ParticleSystem::new(MAX_PARTICLES);
-        particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.velocity = Vector3::new(0.0, 20.0, 0.0);
-        particle_system.spawn_rate = 0.25;
-
         info!("Renderer Created");
         let result = Ok(Self {
             device,
@@ -1142,7 +1137,7 @@ impl Renderer {
             particle_buffer,
             particle_pipeline,
             particle_set,
-            particle_system,
+            stored_particle_systems: SlotMap::default(),
         });
         result
     }
@@ -1282,33 +1277,38 @@ impl Renderer {
         };
 
         // Copy particles
-        {
-            let particle_data: Vec<ParticleDrawData> = self
-                .particle_system
-                .particles()
-                .iter()
-                .map(|particle| ParticleDrawData {
-                    position: particle.position.into(),
-                    texture_index: {
-                        if let Some(tex) = particle.texture_index {
-                            self.device.get_descriptor_index(&tex).unwrap() as i32
-                        } else {
-                            0
-                        }
-                    },
-                    colour: particle.colour.into(),
-                    size: particle.size,
-                })
-                .collect();
+        let particle_draw_data_length = {
+            let mut last_size = 0;
+            for (_, system) in self.stored_particle_systems.iter() {
+                let particle_data: Vec<ParticleDrawData> = system
+                    .particles()
+                    .iter()
+                    .map(|particle| ParticleDrawData {
+                        position: particle.position.into(),
+                        texture_index: {
+                            if let Some(tex) = particle.texture_index {
+                                self.device.get_descriptor_index(&tex).unwrap() as i32
+                            } else {
+                                0
+                            }
+                        },
+                        colour: particle.colour.into(),
+                        size: particle.size,
+                    })
+                    .collect();
 
-            self.device
-                .resource_manager
-                .get_buffer(self.particle_buffer[resource_index])
-                .unwrap()
-                .view_custom(0, particle_data.len())?
-                .mapped_slice()?
-                .copy_from_slice(&particle_data);
-        }
+                self.device
+                    .resource_manager
+                    .get_buffer(self.particle_buffer[resource_index])
+                    .unwrap()
+                    .view_custom(last_size, particle_data.len())?
+                    .mapped_slice()?
+                    .copy_from_slice(&particle_data);
+
+                last_size += particle_data.len();
+            }
+            last_size
+        };
 
         // Copy debug UI
         let debug_ui_draw_amount = {
@@ -1627,7 +1627,7 @@ impl Renderer {
                     self.device.vk_device.cmd_draw(
                         self.device.graphics_command_buffer(),
                         6u32,
-                        self.particle_system.particles().len() as u32,
+                        particle_draw_data_length as u32,
                         0u32,
                         0u32,
                     );
@@ -2500,8 +2500,25 @@ impl Renderer {
         Err(anyhow!("No material exists exists"))
     }
 
+    pub fn add_particle_system(&mut self, system: ParticleSystem) -> ParticleSystemHandle {
+        self.stored_particle_systems.insert(system)
+    }
+
+    pub fn get_particle_system(
+        &mut self,
+        system: ParticleSystemHandle,
+    ) -> Option<&mut ParticleSystem> {
+        if let Some(particle_system) = self.stored_particle_systems.get_mut(system) {
+            Some(particle_system)
+        } else {
+            None
+        }
+    }
+
     pub fn tick_particle_systems(&mut self, delta_time: f32) {
-        self.particle_system.tick(delta_time);
+        for (_, system) in self.stored_particle_systems.iter_mut() {
+            system.tick(delta_time)
+        }
     }
 }
 
@@ -2572,7 +2589,13 @@ impl Vertex {
     }
 }
 
-new_key_type! {pub struct RenderModelHandle; pub struct LightHandle; pub struct CameraHandle; pub struct MaterialInstanceHandle;}
+new_key_type! {
+    pub struct RenderModelHandle;
+    pub struct LightHandle;
+    pub struct CameraHandle;
+    pub struct MaterialInstanceHandle;
+    pub struct ParticleSystemHandle;
+}
 
 fn from_transforms(
     position: Vector3<f32>,

@@ -9,6 +9,7 @@ pub struct ParticleSystem {
     pub spawn_rate: f32,
     pub spawn_position: Vector3<f32>,
     pub velocity: Vector3<f32>,
+    pub initial_colour: Vector3<f32>,
 }
 
 impl ParticleSystem {
@@ -67,6 +68,7 @@ impl ParticleSystem {
         particle.position = self.spawn_position;
         particle.velocity = self.velocity;
         particle.life = 5.0;
+        particle.colour = self.initial_colour;
     }
 }
 
@@ -82,6 +84,7 @@ impl Default for ParticleSystem {
             spawn_position: Vector3::zero(),
             velocity: Vector3::new(0.0, 1.0, 0.0),
             state: ParticleSystemState::Stopped,
+            initial_colour: Vector3::from_value(1.0),
         }
     }
 }

@@ -17,6 +17,7 @@ use winit::event_loop::EventLoop;
 use winit::window::Window;
 
 use engine::prelude::*;
+use jb_gfx::particle::{ParticleSystem, ParticleSystemState};
 use jb_gfx::prelude::*;
 use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
 
@@ -285,6 +286,23 @@ impl TurretGame {
             window.inner_size().width as f32,
             window.inner_size().height as f32,
         ));
+
+        let mut particle_system = ParticleSystem::new(64);
+        particle_system.set_state(ParticleSystemState::Running);
+        particle_system.spawn_position = Vector3::new(5.0, 0.0, 0.0);
+        particle_system.velocity = Vector3::new(0.0, 20.0, 0.0);
+        particle_system.spawn_rate = 0.25;
+
+        renderer.add_particle_system(particle_system);
+
+        let mut particle_system = ParticleSystem::new(64);
+        particle_system.set_state(ParticleSystemState::Running);
+        particle_system.spawn_position = Vector3::new(5.0, 0.0, 0.0);
+        particle_system.velocity = Vector3::new(2.5, 0.0, 2.5);
+        particle_system.spawn_rate = 0.1;
+        particle_system.initial_colour = [0.0, 1.0,0.0].into();
+
+        renderer.add_particle_system(particle_system);
 
         Self {
             window,
