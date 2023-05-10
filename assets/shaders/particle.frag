@@ -13,8 +13,11 @@ layout (location = 1) out vec4 outBrightColor;
 struct Particle{
 	vec3 position;
 	int textureIndex;
-	vec3 colour;
+	vec4 colour;
 	float size;
+	float padding;
+	float padding_two;
+	float padding_three;
 };
 
 layout(std140,set = 2, binding = 0) readonly buffer ParticleBuffer{
@@ -25,12 +28,12 @@ void main()
 {
 	Particle self = particleData.particles[inParticleInstance];
 
-	vec3 colour = self.colour;
+	vec4 colour = self.colour;
 	if (self.textureIndex > 0) {
-		colour = SampleBindlessTexture(0, self.textureIndex, inTexCoords).rgb;
+		colour = SampleBindlessTexture(0, self.textureIndex, inTexCoords);
 	}
 
-	outFragColor = vec4(colour, 1.0f);
+	outFragColor = colour;
 
 	// Bright Colours
 	float brightness = dot(outFragColor.rgb, vec3(0.2126, 0.7152, 0.0722));

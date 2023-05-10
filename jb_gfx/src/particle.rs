@@ -1,6 +1,7 @@
 use crate::ImageHandle;
-use cgmath::{Array, Vector3, Zero};
+use cgmath::{Array, Vector3, Vector4, Zero};
 use log::info;
+use profiling::scope;
 
 pub struct ParticleSystem {
     particles: Vec<Particle>,
@@ -9,7 +10,8 @@ pub struct ParticleSystem {
     pub spawn_rate: f32,
     pub spawn_position: Vector3<f32>,
     pub velocity: Vector3<f32>,
-    pub initial_colour: Vector3<f32>,
+    pub initial_colour: Vector4<f32>,
+    pub texture: Option<ImageHandle>,
 }
 
 impl ParticleSystem {
@@ -27,22 +29,23 @@ impl ParticleSystem {
     }
 
     pub fn tick(&mut self, delta_time: f32) {
-        self.time_since_last_spawn += delta_time;
-        // Loop incase fallen behind
-        for x in 0..10 {
+        {
+            scope!("Particle:Spawn");
+            self.time_since_last_spawn += delta_time;
             if self.time_since_last_spawn >= self.spawn_rate {
                 let unused_particle_index = self.first_unused_particle();
                 self.spawn_particle(unused_particle_index);
                 self.time_since_last_spawn -= self.spawn_rate;
-            } else {
-                break;
             }
         }
 
-        for particle in self.particles.iter_mut() {
-            particle.life -= delta_time;
-            if particle.life >= 0.0 {
-                particle.position += particle.velocity * delta_time;
+        {
+            scope!("Particle:Tick");
+            for particle in self.particles.iter_mut() {
+                particle.life -= delta_time;
+                if particle.life >= 0.0 {
+                    particle.position += particle.velocity * delta_time;
+                }
             }
         }
     }
@@ -69,6 +72,7 @@ impl ParticleSystem {
         particle.velocity = self.velocity;
         particle.life = 5.0;
         particle.colour = self.initial_colour;
+        particle.texture_index = self.texture;
     }
 }
 
@@ -84,7 +88,8 @@ impl Default for ParticleSystem {
             spawn_position: Vector3::zero(),
             velocity: Vector3::new(0.0, 1.0, 0.0),
             state: ParticleSystemState::Stopped,
-            initial_colour: Vector3::from_value(1.0),
+            initial_colour: Vector4::from_value(1.0),
+            texture: None,
         }
     }
 }
@@ -100,7 +105,7 @@ pub struct Particle {
     pub position: Vector3<f32>,
     pub velocity: Vector3<f32>,
     pub texture_index: Option<ImageHandle>,
-    pub colour: Vector3<f32>,
+    pub colour: Vector4<f32>,
     pub size: f32,
 }
 
@@ -111,7 +116,7 @@ impl Default for Particle {
             position: Vector3::zero(),
             velocity: Vector3::zero(),
             texture_index: None,
-            colour: Vector3::from_value(1f32),
+            colour: Vector4::from_value(1f32),
             size: 0.25,
         }
     }

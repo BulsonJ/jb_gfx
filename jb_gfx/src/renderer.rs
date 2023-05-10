@@ -1057,7 +1057,7 @@ impl Renderer {
                             src_blend_factor_color: vk::BlendFactor::ONE,
                             dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                             src_blend_factor_alpha: vk::BlendFactor::ONE,
-                            dst_blend_factor_alpha: vk::BlendFactor::ZERO,
+                            dst_blend_factor_alpha: vk::BlendFactor::ONE,
                             ..Default::default()
                         },
                         PipelineColorAttachment {
@@ -1066,7 +1066,7 @@ impl Renderer {
                             src_blend_factor_color: vk::BlendFactor::ONE,
                             dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
                             src_blend_factor_alpha: vk::BlendFactor::ONE,
-                            dst_blend_factor_alpha: vk::BlendFactor::ZERO,
+                            dst_blend_factor_alpha: vk::BlendFactor::ONE,
                             ..Default::default()
                         },
                     ],
@@ -1278,9 +1278,9 @@ impl Renderer {
 
         // Copy particles
         let particle_draw_data_length = {
-            let mut last_size = 0;
+            let mut all_particle_data = Vec::default();
             for (_, system) in self.stored_particle_systems.iter() {
-                let particle_data: Vec<ParticleDrawData> = system
+                let mut particle_data: Vec<ParticleDrawData> = system
                     .particles()
                     .iter()
                     .map(|particle| ParticleDrawData {
@@ -1294,20 +1294,24 @@ impl Renderer {
                         },
                         colour: particle.colour.into(),
                         size: particle.size,
+                        padding: 0.0,
+                        padding_two: 0.0,
+                        padding_one: 0.0,
                     })
                     .collect();
 
-                self.device
-                    .resource_manager
-                    .get_buffer(self.particle_buffer[resource_index])
-                    .unwrap()
-                    .view_custom(last_size, particle_data.len())?
-                    .mapped_slice()?
-                    .copy_from_slice(&particle_data);
-
-                last_size += particle_data.len();
+                all_particle_data.append(&mut particle_data);
             }
-            last_size
+
+            self.device
+                .resource_manager
+                .get_buffer(self.particle_buffer[resource_index])
+                .unwrap()
+                .view_custom(0, all_particle_data.len())?
+                .mapped_slice()?
+                .copy_from_slice(&all_particle_data);
+
+            all_particle_data.len()
         };
 
         // Copy debug UI
@@ -1622,7 +1626,6 @@ impl Renderer {
                 };
 
                 //// Draw commands
-
                 unsafe {
                     self.device.vk_device.cmd_draw(
                         self.device.graphics_command_buffer(),

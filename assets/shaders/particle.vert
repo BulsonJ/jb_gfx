@@ -9,8 +9,11 @@ layout (location = 1) out int outParticleInstance;
 struct Particle{
 	vec3 position;
 	int textureIndex;
-	vec3 colour;
+	vec4 colour;
 	float size;
+	float padding;
+	float padding_two;
+	float padding_three;
 };
 
 layout(std140,set = 2, binding = 0) readonly buffer ParticleBuffer{

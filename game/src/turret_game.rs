@@ -287,20 +287,31 @@ impl TurretGame {
             window.inner_size().height as f32,
         ));
 
-        let mut particle_system = ParticleSystem::new(64);
+        let smoke_texture = asset_manager
+            .load_texture(
+                &mut renderer,
+                "assets/textures/smoke.png",
+                &ImageFormatType::Default,
+            )
+            .unwrap();
+
+        let mut particle_system = ParticleSystem::new(128);
         particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.velocity = Vector3::new(0.0, 20.0, 0.0);
-        particle_system.spawn_rate = 0.25;
+        particle_system.spawn_position = Vector3::new(-2.5, -2.0, 3.0);
+        particle_system.velocity = Vector3::new(5.0, 0.0, 0.0);
+        particle_system.spawn_rate = 0.1;
+        //particle_system.initial_colour = [0.2, 0.2, 0.2, 0.3].into();
+        particle_system.texture = Some(smoke_texture);
 
         renderer.add_particle_system(particle_system);
 
-        let mut particle_system = ParticleSystem::new(64);
+        let mut particle_system = ParticleSystem::new(128);
         particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.velocity = Vector3::new(2.5, 0.0, 2.5);
+        particle_system.spawn_position = Vector3::new(-2.5, -2.0, -3.0);
+        particle_system.velocity = Vector3::new(5.0, 0.0, 0.0);
         particle_system.spawn_rate = 0.1;
-        particle_system.initial_colour = [0.0, 1.0,0.0].into();
+        //particle_system.initial_colour = [0.2, 0.2, 0.2, 0.3].into();
+        particle_system.texture = Some(smoke_texture);
 
         renderer.add_particle_system(particle_system);
 
