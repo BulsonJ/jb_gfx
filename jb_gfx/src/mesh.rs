@@ -15,6 +15,46 @@ pub struct MeshData {
 }
 
 impl MeshData {
+    pub fn quad() -> MeshData {
+        let vertices_simple: [([f32; 3], [f32; 2]); 6] = [
+            ([0.0f32, 0.0f32, 0.0f32], [0.0f32, 0.0f32]),
+            ([0.0f32, 1.0f32, 0.0f32], [0.0f32, 1.0f32]),
+            ([1.0f32, 1.0f32, 0.0f32], [1.0f32, 1.0f32]),
+            ([0.0f32, 0.0f32, 0.0f32], [0.0f32, 0.0f32]),
+            ([1.0f32, 1.0f32, 0.0f32], [1.0f32, 1.0f32]),
+            ([1.0f32, 0.0f32, 0.0f32], [1.0f32, 0.0f32]),
+        ];
+        let vertices = vertices_simple
+            .iter()
+            .map(|(position, tex_coords)| Vertex {
+                position: position.clone(),
+                tex_coords: tex_coords.clone(),
+                normal: [0.0, 0.0, 0.0],
+                color: [0.0, 0.0, 0.0],
+                tangent: [0.0, 0.0, 0.0, 0.0],
+            })
+            .collect();
+
+        let indices = {
+            let mut indices = Vec::new();
+            for i in 0..6 {
+                let vert_index = (i * 4) as Index;
+                indices.push(vert_index + 0);
+                indices.push(vert_index + 1);
+                indices.push(vert_index + 2);
+                indices.push(vert_index + 1);
+                indices.push(vert_index + 3);
+                indices.push(vert_index + 2);
+            }
+            indices
+        };
+        MeshData {
+            vertices,
+            indices: Some(indices),
+            faces: vec![],
+        }
+    }
+
     pub fn cube() -> MeshData {
         let vertices_simple: [([f32; 3], [f32; 2]); 24] = [
             ([-1.0f32, 1.0f32, -1.0f32], [0.0f32, 0.0f32]),

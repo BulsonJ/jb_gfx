@@ -6,7 +6,7 @@ use ash::vk;
 use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, Handle, ImageLayout, ObjectType, PipelineStageFlags2,
 };
-use bytemuck::offset_of;
+use bytemuck::{offset_of, Zeroable};
 use cgmath::{
     Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
 };
@@ -17,8 +17,8 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::camera::DefaultCamera;
 use crate::gpu_structs::{
-    CameraUniform, LightUniform, MaterialParamSSBO, PushConstants, TransformSSBO, UIUniformData,
-    UIVertexData, WorldDebugUIDrawData,
+    CameraUniform, LightUniform, MaterialParamSSBO, ParticleDrawData, PushConstants, TransformSSBO,
+    UIUniformData, UIVertexData, WorldDebugUIDrawData,
 };
 use crate::mesh::Index;
 use crate::pipeline::{
@@ -48,6 +48,7 @@ const MAX_DEBUG_UI: u64 = 100u64;
 
 const MAX_MATERIAL_INSTANCES: usize = 128;
 const MAX_LIGHTS: usize = 64;
+const MAX_PARTICLES: usize = 64;
 
 const DEFERRED_POSITION_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const DEFERRED_NORMAL_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
@@ -67,9 +68,10 @@ pub struct Renderer {
 
     shadow_pso: PipelineHandle,
 
-    forward: ForwardPass,
+    forward_pass: ForwardPass,
     deferred_fill: DeferredPass,
     deferred_lighting_combine: DeferredLightingCombinePass,
+    particle_pipeline: (PipelineHandle, vk::PipelineLayout),
 
     bloom_pass: BloomPass,
     combine_pso: PipelineHandle,
@@ -109,12 +111,16 @@ pub struct Renderer {
     shadow: VirtualRenderPassHandle,
     gbuffer: VirtualRenderPassHandle,
     deferred_lighting: VirtualRenderPassHandle,
+    forward: VirtualRenderPassHandle,
     bloom_initial: VirtualRenderPassHandle,
     bloom_horizontal: VirtualRenderPassHandle,
     bloom_vertical: VirtualRenderPassHandle,
     combine: VirtualRenderPassHandle,
     ui: VirtualRenderPassHandle,
-    pub bloom_final: VirtualRenderPassHandle,
+    bloom_final: VirtualRenderPassHandle,
+
+    particle_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    particle_set: [vk::DescriptorSet; FRAMES_IN_FLIGHT],
 }
 
 impl Renderer {
@@ -175,7 +181,7 @@ impl Renderer {
                 .set_depth_stencil_clear(1.0, 0),
         );
 
-        let forward = crate::rendergraph::attachment::AttachmentInfo {
+        let default_attachment = crate::rendergraph::attachment::AttachmentInfo {
             format: render_image_format,
             ..Default::default()
         };
@@ -187,7 +193,7 @@ impl Renderer {
         let deferred_lighting = list.add_pass(
             "deferred",
             RenderPassLayout::default()
-                .add_color_attachment("forward", &forward)
+                .add_color_attachment("forward", &default_attachment)
                 .add_color_attachment("bright", &bright)
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0])
                 .add_texture_input("emissive")
@@ -195,6 +201,16 @@ impl Renderer {
                 .add_texture_input("color")
                 .add_texture_input("depth")
                 .add_texture_input("scene_shadow"),
+        );
+
+        let forward = list.add_pass(
+            "forward",
+            RenderPassLayout::default()
+                .add_color_attachment("forward", &default_attachment)
+                .add_color_attachment("bright", &bright)
+                .set_clear_colour([0.0, 0.0, 0.0, 1.0])
+                .set_depth_stencil_attachment("depth", &depth)
+                .set_depth_stencil_clear(1.0, 0),
         );
 
         let bloom_attachment = crate::rendergraph::attachment::AttachmentInfo {
@@ -235,7 +251,7 @@ impl Renderer {
         let combine = list.add_pass(
             "combine",
             RenderPassLayout::default()
-                .add_color_attachment("output", &forward)
+                .add_color_attachment("output", &default_attachment)
                 .add_texture_input("forward")
                 .add_texture_input("bloom_vertical")
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
@@ -244,21 +260,30 @@ impl Renderer {
         let ui = list.add_pass(
             "ui",
             RenderPassLayout::default()
-                .add_color_attachment("output", &forward)
+                .add_color_attachment("output", &default_attachment)
                 .set_depth_stencil_attachment("depth", &depth)
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0])
                 .set_depth_stencil_clear(1.0, 0),
         );
 
         list.set_backbuffer("output");
-        list.set_pass_order(&[shadow, gbuffer, deferred_lighting, bloom_initial, bloom_vertical, bloom_horizontal, bloom_final, combine, ui]);
+        list.set_pass_order(&[
+            shadow,
+            gbuffer,
+            deferred_lighting,
+            forward,
+            bloom_initial,
+            bloom_vertical,
+            bloom_horizontal,
+            bloom_final,
+            combine,
+            ui,
+        ]);
 
         list.bake();
 
         let swapchain_image_format = vk::Format::B8G8R8A8_SRGB;
         let depth_image_format = vk::Format::D32_SFLOAT;
-
-
 
         let bloom_pass = {
             let bloom_set_layout = DescriptorLayoutBuilder::new(&mut descriptor_layout_cache)
@@ -569,13 +594,7 @@ impl Renderer {
                 pipeline_manager.create_pipeline(&pso_build_info)?
             };
 
-            (
-                ForwardPass {
-                    pso_layout,
-                    pso,
-                },
-                shadow_pso,
-            )
+            (ForwardPass { pso_layout, pso }, shadow_pso)
         };
 
         let ui_pass = {
@@ -676,6 +695,7 @@ impl Renderer {
                         blend: true,
                         src_blend_factor_color: vk::BlendFactor::ONE,
                         dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                        ..Default::default()
                     }],
                     depth_attachment_format: Some(depth_image_format),
                     depth_stencil_state: *depth_stencil_state,
@@ -767,6 +787,7 @@ impl Renderer {
                     blend: true,
                     src_blend_factor_color: vk::BlendFactor::ONE,
                     dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                    ..Default::default()
                 }],
                 depth_attachment_format: Some(depth_image_format),
                 depth_stencil_state: *depth_stencil_state,
@@ -831,10 +852,7 @@ impl Renderer {
                 pipeline_manager.create_pipeline(&pso_build_info)?
             };
 
-            DeferredPass {
-                pso,
-                pso_layout,
-            }
+            DeferredPass { pso, pso_layout }
         };
 
         let deferred_lighting_combine = {
@@ -967,6 +985,99 @@ impl Renderer {
             (pso, pso_layout)
         };
 
+        let particle_buffer = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<ParticleDrawData>() * MAX_PARTICLES,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                storage_type: BufferStorageType::HostLocal,
+            };
+
+            [
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+            ]
+        };
+
+        let (particle_set, particle_descriptor_set_layout) = {
+            let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
+            let mut layout = None;
+            for i in 0..FRAMES_IN_FLIGHT {
+                let (set, set_layout) = JBDescriptorBuilder::new(
+                    &device.resource_manager,
+                    &mut descriptor_layout_cache,
+                    &mut descriptor_allocator,
+                )
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 0,
+                    buffer: particle_buffer[i],
+                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
+                .build()
+                .unwrap();
+
+                sets[i] = set;
+                layout = Some(set_layout);
+            }
+            (sets, layout.unwrap())
+        };
+
+        let particle_pipeline = {
+            let pso_layout = pipeline_layout_cache.create_pipeline_layout(
+                &[
+                    device.bindless_descriptor_set_layout(),
+                    descriptor_set_layout,
+                    particle_descriptor_set_layout,
+                ],
+                &[],
+            )?;
+
+            let pso = {
+                let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+                    .depth_test_enable(true)
+                    .depth_write_enable(false)
+                    .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                    .depth_bounds_test_enable(false)
+                    .stencil_test_enable(false)
+                    .min_depth_bounds(0.0f32)
+                    .max_depth_bounds(1.0f32);
+
+                let pso_build_info = PipelineCreateInfo {
+                    pipeline_layout: pso_layout,
+                    vertex_shader: "assets/shaders/particle.vert".to_string(),
+                    fragment_shader: "assets/shaders/particle.frag".to_string(),
+                    vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                    color_attachment_formats: vec![
+                        PipelineColorAttachment {
+                            format: render_image_format,
+                            blend: true,
+                            src_blend_factor_color: vk::BlendFactor::ONE,
+                            dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                            src_blend_factor_alpha: vk::BlendFactor::ONE,
+                            dst_blend_factor_alpha: vk::BlendFactor::ZERO,
+                            ..Default::default()
+                        },
+                        PipelineColorAttachment {
+                            format: render_image_format,
+                            blend: true,
+                            src_blend_factor_color: vk::BlendFactor::ONE,
+                            dst_blend_factor_color: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                            src_blend_factor_alpha: vk::BlendFactor::ONE,
+                            dst_blend_factor_alpha: vk::BlendFactor::ZERO,
+                            ..Default::default()
+                        },
+                    ],
+                    depth_attachment_format: Some(depth_image_format),
+                    depth_stencil_state: *depth_stencil_state,
+                    cull_mode: vk::CullModeFlags::NONE,
+                };
+
+                pipeline_manager.create_pipeline(&pso_build_info)?
+            };
+
+            (pso, pso_layout)
+        };
+
         info!("Renderer Created");
         let result = Ok(Self {
             device,
@@ -1001,7 +1112,7 @@ impl Renderer {
             world_debug_draw_data,
             debug_ui_size: 2.5f32,
             mesh_pool,
-            forward: forward_pass,
+            forward_pass,
             deferred_fill,
             deferred_lighting_combine,
             material_instances: SlotMap::default(),
@@ -1013,12 +1124,16 @@ impl Renderer {
             shadow,
             gbuffer,
             deferred_lighting,
+            forward,
             bloom_initial,
             bloom_horizontal,
             bloom_vertical,
             bloom_final,
             combine,
             ui,
+            particle_buffer,
+            particle_pipeline,
+            particle_set,
         });
         result
     }
@@ -1157,6 +1272,36 @@ impl Renderer {
             draw_data
         };
 
+        // Copy particles
+        {
+            let mut particles = Vec::new();
+            particles.resize(
+                MAX_PARTICLES,
+                ParticleDrawData {
+                    position: [0.0, 0.0, 0.0],
+                    texture_index: 0,
+                    colour: [1.0, 1.0, 1.0],
+                    size: 0.25,
+                },
+            );
+
+            let square_root = (MAX_PARTICLES as f32).sqrt() as usize;
+            for x in 0..square_root {
+                for y in 0..square_root {
+                    let index = (y * square_root) + x;
+                    particles[index].position = [5.0f32, y as f32, x as f32];
+                }
+            }
+
+            self.device
+                .resource_manager
+                .get_buffer(self.particle_buffer[resource_index])
+                .unwrap()
+                .view()
+                .mapped_slice()?
+                .copy_from_slice(&particles);
+        }
+
         // Copy debug UI
         let debug_ui_draw_amount = {
             if self.draw_debug_ui {
@@ -1280,7 +1425,7 @@ impl Renderer {
                 self.device.vk_device.cmd_bind_descriptor_sets(
                     cmd,
                     vk::PipelineBindPoint::GRAPHICS,
-                    self.forward.pso_layout,
+                    self.forward_pass.pso_layout,
                     0u32,
                     &[
                         self.device.bindless_descriptor_set(),
@@ -1441,6 +1586,45 @@ impl Renderer {
                     0u32,
                 );
             };
+        });
+
+        self.list.run_pass(self.forward, |list, cmd| {
+            // Draw particles
+            {
+                let pipeline = self.pipeline_manager.get_pipeline(self.particle_pipeline.0);
+
+                unsafe {
+                    self.device.vk_device.cmd_bind_pipeline(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline,
+                    );
+                    self.device.vk_device.cmd_bind_descriptor_sets(
+                        self.device.graphics_command_buffer(),
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.particle_pipeline.1,
+                        0u32,
+                        &[
+                            self.device.bindless_descriptor_set(),
+                            self.descriptor_set[resource_index],
+                            self.particle_set[resource_index],
+                        ],
+                        &[],
+                    );
+                };
+
+                //// Draw commands
+
+                unsafe {
+                    self.device.vk_device.cmd_draw(
+                        self.device.graphics_command_buffer(),
+                        6u32,
+                        MAX_PARTICLES as u32,
+                        0u32,
+                        0u32,
+                    );
+                };
+            }
         });
 
         let mut horizontal = true;
@@ -1695,8 +1879,7 @@ impl Renderer {
                 let scissor = vk::Rect2D::builder()
                     .offset(vk::Offset2D {
                         x: draw.scissor.0[0] as i32,
-                        y: draw.scissor.0[1] as i32
-                        //y: height - (draw.scissor.0[1] as i32 + max[1] as i32),
+                        y: draw.scissor.0[1] as i32, //y: height - (draw.scissor.0[1] as i32 + max[1] as i32),
                     })
                     .extent(vk::Extent2D {
                         width: max[0] as u32,
