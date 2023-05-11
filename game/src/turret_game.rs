@@ -4,6 +4,7 @@ use cgmath::{
     Array, Deg, EuclideanSpace, Euler, InnerSpace, Matrix4, Quaternion, Rotation, Rotation3,
     Vector3, Vector4, Zero,
 };
+use egui::Ui;
 use egui_winit::EventResponse;
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
@@ -19,7 +20,7 @@ use winit::window::Window;
 use engine::prelude::*;
 use jb_gfx::particle::{ParticleSystem, ParticleSystemState};
 use jb_gfx::prelude::*;
-use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
+use jb_gfx::renderer::{MaterialInstanceHandle, ParticleSystemHandle, RenderModelHandle};
 
 use crate::collision::CollisionBox;
 use crate::components::LightComponent;
@@ -55,6 +56,7 @@ pub struct TurretGame {
     barrels: Vec<Barrel>,
     terrain_pieces: Vec<Terrain>,
     terrain_settings: TerrainSettings,
+    particle_systems: Vec<ParticleSystemHandle>,
 }
 
 struct Bullet {
@@ -295,27 +297,27 @@ impl TurretGame {
             )
             .unwrap();
 
-        let mut particle_system = ParticleSystem::new(1000);
+        let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
         particle_system.spawn_position = Vector3::new(-2.5, -2.0, 5.0);
-        particle_system.velocity = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.spawn_rate = 0.01;
-        particle_system.initial_colour = [0.8,0.8,0.8,0.8].into();
+        particle_system.velocity = Vector3::new(8.0, 0.0, 0.0);
+        particle_system.spawn_rate = 0.03;
+        particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
         particle_system.scale = 0.25;
 
-        renderer.add_particle_system(particle_system);
+        let system_one = renderer.add_particle_system(particle_system);
 
-        let mut particle_system = ParticleSystem::new(1000);
+        let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
         particle_system.spawn_position = Vector3::new(-2.5, -2.0, -5.0);
-        particle_system.velocity = Vector3::new(5.0, 0.0, 0.0);
-        particle_system.spawn_rate = 0.01;
-        particle_system.initial_colour = [0.8,0.8,0.8,0.8].into();
+        particle_system.velocity = Vector3::new(8., 0.0, 0.0);
+        particle_system.spawn_rate = 0.03;
+        particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
         particle_system.scale = 0.25;
 
-        renderer.add_particle_system(particle_system);
+        let system_two = renderer.add_particle_system(particle_system);
 
         Self {
             window,
@@ -340,6 +342,7 @@ impl TurretGame {
             barrels,
             terrain_pieces,
             terrain_settings,
+            particle_systems: vec![system_one, system_two],
         }
     }
 
@@ -621,6 +624,18 @@ impl TurretGame {
                         }
                         self.player.draw_debug(ui);
                     });
+                egui::Window::new("Particle Debug")
+                    .vscroll(false)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        for &system in self.particle_systems.iter() {
+                            ui.label("System");
+                            self.renderer
+                                .get_particle_system(system)
+                                .unwrap()
+                                .draw_debug(ui)
+                        }
+                    });
                 egui::Window::new("Timings")
                     .vscroll(false)
                     .resizable(false)
@@ -632,5 +647,23 @@ impl TurretGame {
             });
             self.egui.paint(&mut self.renderer);
         }
+    }
+}
+
+impl DebugPanel for ParticleSystem {
+    fn draw_debug(&mut self, ui: &mut Ui) {
+        ui.add(egui::Slider::new(&mut self.spawn_rate, 0.01..=10.00).step_by(0.1));
+        ui.add(egui::Slider::new(&mut self.scale, 0.01..=1.00).step_by(0.01));
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut self.velocity.x).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.velocity.y).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.velocity.z).speed(0.1));
+        });
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut self.spawn_position.x).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.spawn_position.y).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.spawn_position.z).speed(0.1));
+        });
+        ui.color_edit_button_rgba_unmultiplied(self.initial_colour.as_mut());
     }
 }
