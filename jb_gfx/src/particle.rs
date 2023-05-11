@@ -13,6 +13,7 @@ pub struct ParticleSystem {
     pub initial_colour: Vector4<f32>,
     pub texture: Option<ImageHandle>,
     pub scale: f32,
+    pub rotation: f32,
 }
 
 impl ParticleSystem {
@@ -75,6 +76,7 @@ impl ParticleSystem {
         particle.colour = self.initial_colour;
         particle.texture_index = self.texture;
         particle.size = self.scale;
+        particle.rotation = self.rotation;
     }
 }
 
@@ -93,6 +95,7 @@ impl Default for ParticleSystem {
             initial_colour: Vector4::from_value(1.0),
             texture: None,
             scale: 1.0,
+            rotation: 0.0
         }
     }
 }
@@ -106,10 +109,11 @@ pub enum ParticleSystemState {
 pub struct Particle {
     pub life: f32,
     pub position: Vector3<f32>,
+    pub rotation: f32,
+    pub size: f32,
     pub velocity: Vector3<f32>,
     pub texture_index: Option<ImageHandle>,
     pub colour: Vector4<f32>,
-    pub size: f32,
 }
 
 impl Default for Particle {
@@ -117,6 +121,7 @@ impl Default for Particle {
         Self {
             life: 0.0f32,
             position: Vector3::zero(),
+            rotation: 0.0,
             velocity: Vector3::zero(),
             texture_index: None,
             colour: Vector4::from_value(1f32),

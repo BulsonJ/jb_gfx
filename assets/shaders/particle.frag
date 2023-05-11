@@ -11,10 +11,9 @@ layout (location = 0) out vec4 outFragColor;
 layout (location = 1) out vec4 outBrightColor;
 
 struct Particle{
-	vec3 position;
-	int textureIndex;
+	mat4 model;
 	vec4 colour;
-	float size;
+	int textureIndex;
 	float padding;
 	float padding_two;
 	float padding_three;

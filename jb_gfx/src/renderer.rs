@@ -1283,20 +1283,38 @@ impl Renderer {
                 let mut particle_data: Vec<ParticleDrawData> = system
                     .particles()
                     .iter()
-                    .map(|particle| ParticleDrawData {
-                        position: particle.position.into(),
-                        texture_index: {
-                            if let Some(tex) = particle.texture_index {
-                                self.device.get_descriptor_index(&tex).unwrap() as i32
-                            } else {
-                                0
-                            }
-                        },
-                        colour: particle.colour.into(),
-                        size: particle.size,
-                        padding: 0.0,
-                        padding_two: 0.0,
-                        padding_one: 0.0,
+                    .map(|particle| {
+
+                        let mut model = Matrix4::from_translation(particle.position);
+                        model[0][0] = self.camera_uniform.view[0][0];
+                        model[0][1] = self.camera_uniform.view[1][0];
+                        model[0][2] = self.camera_uniform.view[2][0];
+                        model[1][0] = self.camera_uniform.view[0][1];
+                        model[1][1] = self.camera_uniform.view[1][1];
+                        model[1][2] = self.camera_uniform.view[2][1];
+                        model[2][0] = self.camera_uniform.view[0][2];
+                        model[2][1] = self.camera_uniform.view[1][2];
+                        model[2][2] = self.camera_uniform.view[2][2];
+
+                        let rotation = Quaternion::from_angle_z(Deg(particle.rotation));
+                        let rotation = Matrix4::from(rotation);
+                        let scale = Matrix4::from_nonuniform_scale(particle.size, particle.size, particle.size);
+                        model = model * rotation * scale;
+
+                        ParticleDrawData {
+                            model: model.into(),
+                            colour: particle.colour.into(),
+                            texture_index: {
+                                if let Some(tex) = particle.texture_index {
+                                    self.device.get_descriptor_index(&tex).unwrap() as i32
+                                } else {
+                                    0
+                                }
+                            },
+                            padding: 0.0,
+                            padding_two: 0.0,
+                            padding_one: 0.0,
+                        }
                     })
                     .collect();
 
@@ -1949,7 +1967,6 @@ impl Renderer {
             }
         });
 
-
         let ui_pass_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
@@ -1974,10 +1991,7 @@ impl Renderer {
         {
             self.timestamps.shadow_pass = time;
         }
-        if let Some(time) = self
-            .device
-            .get_timestamp_result(shadow_pass_end, gbuffer)
-        {
+        if let Some(time) = self.device.get_timestamp_result(shadow_pass_end, gbuffer) {
             self.timestamps.deferred_fill_pass = time;
         }
         if let Some(time) = self
