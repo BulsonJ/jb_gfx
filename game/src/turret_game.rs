@@ -300,8 +300,11 @@ impl TurretGame {
         let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
         particle_system.spawn_position = Vector3::new(-2.5, -2.0, 5.0);
-        particle_system.velocity = VectorParameter::Static([8.0, 0.0, 0.0].into());
-        particle_system.spawn_rate = 0.03;
+        particle_system.velocity = VectorParameter::Random {
+            min: [8.0, -0.1, -0.1].into(),
+            max: [8.0, 0.1, 0.1].into(),
+        };
+        particle_system.spawn_rate = 60.0;
         particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
         particle_system.scale = 0.25;
@@ -315,7 +318,7 @@ impl TurretGame {
             min: [8.0, -0.1, -0.1].into(),
             max: [8.0, 0.1, 0.1].into(),
         };
-        particle_system.spawn_rate = 0.03;
+        particle_system.spawn_rate = 60.0;
         particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
         particle_system.scale = 0.25;
@@ -656,12 +659,24 @@ impl TurretGame {
 impl DebugPanel for ParticleSystem {
     fn draw_debug(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            ui.label("Spawn Rate:");
-            ui.add(egui::Slider::new(&mut self.spawn_rate, 0.01..=10.00).step_by(0.1));
+            ui.label("Pos:");
+            ui.horizontal(|ui| {
+                ui.add(egui::DragValue::new(&mut self.spawn_position.x).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.spawn_position.y).speed(0.1));
+                ui.add(egui::DragValue::new(&mut self.spawn_position.z).speed(0.1));
+            });
         });
         ui.horizontal(|ui| {
             ui.label("Spawn Rate:");
-            ui.add(egui::Slider::new(&mut self.scale, 0.01..=1.00).step_by(0.01));
+            ui.add(
+                egui::DragValue::new(&mut self.spawn_rate)
+                    .speed(0.1)
+                    .clamp_range(0.1..=100.0),
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.label("Scale:");
+            ui.add(egui::Slider::new(&mut self.scale, 0.01..=2.00).step_by(0.01));
         });
         ui.horizontal(|ui| {
             ui.label("Velocity:");
@@ -690,10 +705,8 @@ impl DebugPanel for ParticleSystem {
             }
         });
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut self.spawn_position.x).speed(0.1));
-            ui.add(egui::DragValue::new(&mut self.spawn_position.y).speed(0.1));
-            ui.add(egui::DragValue::new(&mut self.spawn_position.z).speed(0.1));
+            ui.label("Colour:");
+            ui.color_edit_button_rgba_unmultiplied(self.initial_colour.as_mut());
         });
-        ui.color_edit_button_rgba_unmultiplied(self.initial_colour.as_mut());
     }
 }

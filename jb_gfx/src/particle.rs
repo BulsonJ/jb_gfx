@@ -36,10 +36,10 @@ impl ParticleSystem {
         {
             scope!("Particle:Spawn");
             self.time_since_last_spawn += delta_time;
-            if self.time_since_last_spawn >= self.spawn_rate {
+            while self.time_since_last_spawn >= (1.0 / self.spawn_rate) {
                 let unused_particle_index = self.first_unused_particle();
                 self.spawn_particle(unused_particle_index);
-                self.time_since_last_spawn -= self.spawn_rate;
+                self.time_since_last_spawn -= (1.0 / self.spawn_rate);
             }
         }
 
