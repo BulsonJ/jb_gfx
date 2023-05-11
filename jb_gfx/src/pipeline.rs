@@ -137,6 +137,7 @@ impl PipelineManager {
         // Set ones that reloaded successfully
         for (i, (_, pipeline)) in self.pipelines.iter_mut().enumerate() {
             if let Ok(new_pipeline) = new_pipelines.get(i).unwrap() {
+                self.old_pipelines.push(pipeline.pso);
                 pipeline.pso = *new_pipeline;
             } else {
                 error!(
@@ -202,8 +203,12 @@ pub struct PipelineBuildInfo {
 pub struct PipelineColorAttachment {
     pub format: vk::Format,
     pub blend: bool,
+    pub blend_op_color: vk::BlendOp,
+    pub blend_op_alpha: vk::BlendOp,
     pub src_blend_factor_color: vk::BlendFactor,
     pub dst_blend_factor_color: vk::BlendFactor,
+    pub src_blend_factor_alpha: vk::BlendFactor,
+    pub dst_blend_factor_alpha: vk::BlendFactor,
 }
 
 impl Default for PipelineColorAttachment {
@@ -211,8 +216,12 @@ impl Default for PipelineColorAttachment {
         Self {
             format: vk::Format::default(),
             blend: false,
+            blend_op_color: vk::BlendOp::ADD,
+            blend_op_alpha: vk::BlendOp::ADD,
             src_blend_factor_color: vk::BlendFactor::ONE,
             dst_blend_factor_color: vk::BlendFactor::ONE,
+            src_blend_factor_alpha: vk::BlendFactor::ONE,
+            dst_blend_factor_alpha: vk::BlendFactor::ONE,
         }
     }
 }
@@ -232,10 +241,12 @@ pub fn build_pipeline(device: &ash::Device, build_info: PipelineBuildInfo) -> vk
         let color_blend_attachment_state = vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(attachment.blend)
             .color_write_mask(vk::ColorComponentFlags::RGBA)
+            .color_blend_op(attachment.blend_op_color)
             .src_color_blend_factor(attachment.src_blend_factor_color)
-            //.src_alpha_blend_factor(attachment.blend_factor_alpha);
-            .dst_color_blend_factor(attachment.dst_blend_factor_color);
-        //.dst_alpha_blend_factor(attachment.blend_factor_alpha);
+            .src_alpha_blend_factor(attachment.src_blend_factor_alpha)
+            .alpha_blend_op(attachment.blend_op_alpha)
+            .dst_color_blend_factor(attachment.dst_blend_factor_color)
+            .dst_alpha_blend_factor(attachment.dst_blend_factor_alpha);
         attachments.push(*color_blend_attachment_state);
     }
 

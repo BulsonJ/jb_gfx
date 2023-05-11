@@ -15,22 +15,38 @@ pub struct Player {
 }
 
 impl Player {
+    pub fn new(window_size: (f32, f32)) -> Self {
+        Self {
+            camera: Camera {
+                position: (0.0, 0.0, 0.0).into(),
+                rotation: (0.0, 90.0, 0.0).into(),
+                aspect: window_size.0 / window_size.1,
+                fovy: 90.0,
+                znear: 0.1,
+                zfar: 4000.0,
+            },
+            rate_of_fire: 8f32,
+            time_since_fired: 100f32,
+            tracer_bullet_rate: 3i32,
+            bullets_since_last_tracer: 0i32,
+        }
+    }
     pub fn update_camera(&mut self, input: &Input, delta_time: f32) {
-        let speed = 1.0f32;
+        let speed = 50.0f32;
         let movement = speed * delta_time;
-        let pitch_speed = 1.0f32;
+        let pitch_speed = 50.0f32;
         let pitch_movement = pitch_speed * delta_time;
         if input.is_held(VirtualKeyCode::A) {
-            self.camera.direction -= Vector3::new(0.0, 0.0, movement);
+            self.camera.rotation.y -= movement;
         }
         if input.is_held(VirtualKeyCode::D) {
-            self.camera.direction += Vector3::new(0.0, 0.0, movement);
+            self.camera.rotation.y += movement;
         }
         if input.is_held(VirtualKeyCode::W) {
-            self.camera.direction += Vector3::new(0.0, pitch_movement, 0.0);
+            self.camera.rotation.x -= pitch_movement;
         }
         if input.is_held(VirtualKeyCode::S) {
-            self.camera.direction -= Vector3::new(0.0, pitch_movement, 0.0);
+            self.camera.rotation.x += pitch_movement;
         }
     }
 }

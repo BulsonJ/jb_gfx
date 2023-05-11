@@ -49,6 +49,7 @@ pub fn run_game() {
                         game.time_passed = frame_timer.total_time_elapsed();
 
                         game.update();
+                        game.renderer.tick_particle_systems(game.delta_time);
                     }
 
                     game.draw_ui();

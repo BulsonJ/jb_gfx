@@ -124,3 +124,15 @@ pub struct WorldDebugUIDrawData {
     pub colour: [f32; 3],
     pub size: f32,
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ParticleDrawData {
+    pub position: [f32; 3],
+    pub texture_index: i32,
+    pub colour: [f32; 4],
+    pub size: f32,
+    pub padding: f32,
+    pub padding_one: f32,
+    pub padding_two: f32,
+}

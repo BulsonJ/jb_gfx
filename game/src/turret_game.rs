@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use cgmath::{
-    Array, Deg, EuclideanSpace, InnerSpace, Matrix4, Quaternion, Rotation, Rotation3, Vector3,
-    Vector4, Zero,
+    Array, Deg, EuclideanSpace, Euler, InnerSpace, Matrix4, Quaternion, Rotation, Rotation3,
+    Vector3, Vector4, Zero,
 };
+use egui::Ui;
 use egui_winit::EventResponse;
 use kira::manager::backend::cpal::CpalBackend;
 use kira::manager::{AudioManager, AudioManagerSettings};
@@ -17,8 +18,9 @@ use winit::event_loop::EventLoop;
 use winit::window::Window;
 
 use engine::prelude::*;
+use jb_gfx::particle::{ParticleSystem, ParticleSystemState};
 use jb_gfx::prelude::*;
-use jb_gfx::renderer::{MaterialInstanceHandle, RenderModelHandle};
+use jb_gfx::renderer::{MaterialInstanceHandle, ParticleSystemHandle, RenderModelHandle};
 
 use crate::collision::CollisionBox;
 use crate::components::LightComponent;
@@ -54,6 +56,7 @@ pub struct TurretGame {
     barrels: Vec<Barrel>,
     terrain_pieces: Vec<Terrain>,
     terrain_settings: TerrainSettings,
+    particle_systems: Vec<ParticleSystemHandle>,
 }
 
 struct Bullet {
@@ -281,20 +284,40 @@ impl TurretGame {
         let egui = EguiContext::new(event_loop);
         let draw_ui = true;
 
-        let player = Player {
-            camera: Camera {
-                position: (0.0, 0.0, 0.0).into(),
-                direction: (1.0, 0.0, 0.0).into(),
-                aspect: window.inner_size().width as f32 / window.inner_size().height as f32,
-                fovy: 90.0,
-                znear: 0.1,
-                zfar: 4000.0,
-            },
-            rate_of_fire: 8f32,
-            time_since_fired: 100f32,
-            tracer_bullet_rate: 3i32,
-            bullets_since_last_tracer: 0i32,
-        };
+        let player = Player::new((
+            window.inner_size().width as f32,
+            window.inner_size().height as f32,
+        ));
+
+        let smoke_texture = asset_manager
+            .load_texture(
+                &mut renderer,
+                "assets/textures/smoke.png",
+                &ImageFormatType::Default,
+            )
+            .unwrap();
+
+        let mut particle_system = ParticleSystem::new(500);
+        particle_system.set_state(ParticleSystemState::Running);
+        particle_system.spawn_position = Vector3::new(-2.5, -2.0, 5.0);
+        particle_system.velocity = Vector3::new(8.0, 0.0, 0.0);
+        particle_system.spawn_rate = 0.03;
+        particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
+        particle_system.texture = Some(smoke_texture);
+        particle_system.scale = 0.25;
+
+        let system_one = renderer.add_particle_system(particle_system);
+
+        let mut particle_system = ParticleSystem::new(500);
+        particle_system.set_state(ParticleSystemState::Running);
+        particle_system.spawn_position = Vector3::new(-2.5, -2.0, -5.0);
+        particle_system.velocity = Vector3::new(8., 0.0, 0.0);
+        particle_system.spawn_rate = 0.03;
+        particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
+        particle_system.texture = Some(smoke_texture);
+        particle_system.scale = 0.25;
+
+        let system_two = renderer.add_particle_system(particle_system);
 
         Self {
             window,
@@ -319,12 +342,16 @@ impl TurretGame {
             barrels,
             terrain_pieces,
             terrain_settings,
+            particle_systems: vec![system_one, system_two],
         }
     }
 
     pub fn update(&mut self) {
         if self.input.is_just_pressed(VirtualKeyCode::F1) {
             self.draw_debug_ui = !self.draw_debug_ui
+        }
+        if self.input.is_just_pressed(VirtualKeyCode::F2) {
+            self.renderer.reload_shaders().unwrap();
         }
         self.handle_player_input();
 
@@ -428,11 +455,16 @@ impl TurretGame {
             let spread = 0.05f32;
             let y_direction = thread_rng().gen_range(-spread..spread);
             let z_direction = thread_rng().gen_range(-spread..spread);
-            let offset = Vector3::new(0.0f32, y_direction, z_direction);
+            //let offset = Vector3::new(0.0f32, y_direction, z_direction);
+            let euler = Euler {
+                x: Deg(self.player.camera.rotation.x),
+                y: Deg(-self.player.camera.rotation.y - 90.0),
+                z: Deg(self.player.camera.rotation.z),
+            };
 
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -1f32, 0f32),
-                self.player.camera.direction + offset,
+                self.player.camera.rotation, // Fix rotation
                 500f32,
                 tracer,
             );
@@ -592,6 +624,18 @@ impl TurretGame {
                         }
                         self.player.draw_debug(ui);
                     });
+                egui::Window::new("Particle Debug")
+                    .vscroll(false)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        for &system in self.particle_systems.iter() {
+                            ui.label("System");
+                            self.renderer
+                                .get_particle_system(system)
+                                .unwrap()
+                                .draw_debug(ui)
+                        }
+                    });
                 egui::Window::new("Timings")
                     .vscroll(false)
                     .resizable(false)
@@ -603,5 +647,23 @@ impl TurretGame {
             });
             self.egui.paint(&mut self.renderer);
         }
+    }
+}
+
+impl DebugPanel for ParticleSystem {
+    fn draw_debug(&mut self, ui: &mut Ui) {
+        ui.add(egui::Slider::new(&mut self.spawn_rate, 0.01..=10.00).step_by(0.1));
+        ui.add(egui::Slider::new(&mut self.scale, 0.01..=1.00).step_by(0.01));
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut self.velocity.x).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.velocity.y).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.velocity.z).speed(0.1));
+        });
+        ui.horizontal(|ui| {
+            ui.add(egui::DragValue::new(&mut self.spawn_position.x).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.spawn_position.y).speed(0.1));
+            ui.add(egui::DragValue::new(&mut self.spawn_position.z).speed(0.1));
+        });
+        ui.color_edit_button_rgba_unmultiplied(self.initial_colour.as_mut());
     }
 }

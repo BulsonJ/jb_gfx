@@ -5,6 +5,7 @@ use ash::vk::{AccessFlags2, ImageAspectFlags, ImageLayout, PipelineStageFlags2};
 use crate::resource::ImageHandle;
 use crate::{AttachmentHandle, GraphicsDevice};
 
+#[derive(Clone)]
 pub struct ImageBarrier {
     pub image: AttachmentHandle,
     pub src_stage_mask: PipelineStageFlags2,
