@@ -1,9 +1,7 @@
 use crate::ImageHandle;
 use cgmath::{Array, Vector3, Vector4, Zero};
-use log::info;
 use profiling::scope;
 use rand::{thread_rng, Rng};
-use std::ops::Range;
 
 pub struct ParticleSystem {
     particles: Vec<Particle>,
@@ -16,6 +14,7 @@ pub struct ParticleSystem {
     pub texture: Option<ImageHandle>,
     pub scale: f32,
     pub rotation: f32,
+    pub life: f32,
 }
 
 impl ParticleSystem {
@@ -49,6 +48,7 @@ impl ParticleSystem {
                 particle.life -= delta_time;
                 if particle.life >= 0.0 {
                     particle.position += particle.velocity * delta_time;
+                    particle.colour.w -= delta_time * 0.5;
                 }
             }
         }
@@ -74,7 +74,7 @@ impl ParticleSystem {
         let mut particle = &mut self.particles[particle_index];
         particle.position = self.spawn_position;
         particle.velocity = self.velocity.into();
-        particle.life = 5.0;
+        particle.life = self.life;
         particle.colour = self.initial_colour;
         particle.texture_index = self.texture;
         particle.size = self.scale;
@@ -98,6 +98,7 @@ impl Default for ParticleSystem {
             texture: None,
             scale: 1.0,
             rotation: 0.0,
+            life: 5.0,
         }
     }
 }
