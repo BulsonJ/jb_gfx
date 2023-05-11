@@ -18,7 +18,7 @@ use winit::event_loop::EventLoop;
 use winit::window::Window;
 
 use engine::prelude::*;
-use jb_gfx::particle::{ParticleSystem, ParticleSystemState};
+use jb_gfx::particle::{ParticleSystem, ParticleSystemState, VectorParameter};
 use jb_gfx::prelude::*;
 use jb_gfx::renderer::{MaterialInstanceHandle, ParticleSystemHandle, RenderModelHandle};
 
@@ -300,7 +300,7 @@ impl TurretGame {
         let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
         particle_system.spawn_position = Vector3::new(-2.5, -2.0, 5.0);
-        particle_system.velocity = Vector3::new(8.0, 0.0, 0.0);
+        particle_system.velocity = VectorParameter::Static([8.0, 0.0, 0.0].into());
         particle_system.spawn_rate = 0.03;
         particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
@@ -311,7 +311,10 @@ impl TurretGame {
         let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
         particle_system.spawn_position = Vector3::new(-2.5, -2.0, -5.0);
-        particle_system.velocity = Vector3::new(8., 0.0, 0.0);
+        particle_system.velocity = VectorParameter::Random {
+            min: [8.0, -0.1, -0.1].into(),
+            max: [8.0, 0.1, 0.1].into(),
+        };
         particle_system.spawn_rate = 0.03;
         particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
@@ -652,12 +655,39 @@ impl TurretGame {
 
 impl DebugPanel for ParticleSystem {
     fn draw_debug(&mut self, ui: &mut Ui) {
-        ui.add(egui::Slider::new(&mut self.spawn_rate, 0.01..=10.00).step_by(0.1));
-        ui.add(egui::Slider::new(&mut self.scale, 0.01..=1.00).step_by(0.01));
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut self.velocity.x).speed(0.1));
-            ui.add(egui::DragValue::new(&mut self.velocity.y).speed(0.1));
-            ui.add(egui::DragValue::new(&mut self.velocity.z).speed(0.1));
+            ui.label("Spawn Rate:");
+            ui.add(egui::Slider::new(&mut self.spawn_rate, 0.01..=10.00).step_by(0.1));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Spawn Rate:");
+            ui.add(egui::Slider::new(&mut self.scale, 0.01..=1.00).step_by(0.01));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Velocity:");
+            match &mut self.velocity {
+                VectorParameter::Static(velocity) => {
+                    ui.add(egui::DragValue::new(&mut velocity.x).speed(0.1));
+                    ui.add(egui::DragValue::new(&mut velocity.y).speed(0.1));
+                    ui.add(egui::DragValue::new(&mut velocity.z).speed(0.1));
+                }
+                VectorParameter::Random { min, max } => {
+                    ui.vertical(|ui| {
+                        ui.label("Min:");
+                        ui.horizontal(|ui| {
+                            ui.add(egui::DragValue::new(&mut min.x).speed(0.1));
+                            ui.add(egui::DragValue::new(&mut min.y).speed(0.1));
+                            ui.add(egui::DragValue::new(&mut min.z).speed(0.1));
+                        });
+                        ui.label("Max:");
+                        ui.horizontal(|ui| {
+                            ui.add(egui::DragValue::new(&mut max.x).speed(0.1));
+                            ui.add(egui::DragValue::new(&mut max.y).speed(0.1));
+                            ui.add(egui::DragValue::new(&mut max.z).speed(0.1));
+                        });
+                    });
+                }
+            }
         });
         ui.horizontal(|ui| {
             ui.add(egui::DragValue::new(&mut self.spawn_position.x).speed(0.1));

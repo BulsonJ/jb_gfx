@@ -1284,7 +1284,6 @@ impl Renderer {
                     .particles()
                     .iter()
                     .map(|particle| {
-
                         let mut model = Matrix4::from_translation(particle.position);
                         model[0][0] = self.camera_uniform.view[0][0];
                         model[0][1] = self.camera_uniform.view[1][0];
@@ -1298,7 +1297,11 @@ impl Renderer {
 
                         let rotation = Quaternion::from_angle_z(Deg(particle.rotation));
                         let rotation = Matrix4::from(rotation);
-                        let scale = Matrix4::from_nonuniform_scale(particle.size, particle.size, particle.size);
+                        let scale = Matrix4::from_nonuniform_scale(
+                            particle.size,
+                            particle.size,
+                            particle.size,
+                        );
                         model = model * rotation * scale;
 
                         ParticleDrawData {

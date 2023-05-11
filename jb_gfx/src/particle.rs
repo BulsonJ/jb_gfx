@@ -2,6 +2,8 @@ use crate::ImageHandle;
 use cgmath::{Array, Vector3, Vector4, Zero};
 use log::info;
 use profiling::scope;
+use rand::{thread_rng, Rng};
+use std::ops::Range;
 
 pub struct ParticleSystem {
     particles: Vec<Particle>,
@@ -9,7 +11,7 @@ pub struct ParticleSystem {
     time_since_last_spawn: f32,
     pub spawn_rate: f32,
     pub spawn_position: Vector3<f32>,
-    pub velocity: Vector3<f32>,
+    pub velocity: VectorParameter,
     pub initial_colour: Vector4<f32>,
     pub texture: Option<ImageHandle>,
     pub scale: f32,
@@ -71,7 +73,7 @@ impl ParticleSystem {
     fn spawn_particle(&mut self, particle_index: usize) {
         let mut particle = &mut self.particles[particle_index];
         particle.position = self.spawn_position;
-        particle.velocity = self.velocity;
+        particle.velocity = self.velocity.into();
         particle.life = 5.0;
         particle.colour = self.initial_colour;
         particle.texture_index = self.texture;
@@ -90,12 +92,12 @@ impl Default for ParticleSystem {
             time_since_last_spawn: 0.0,
             spawn_rate: 1.0,
             spawn_position: Vector3::zero(),
-            velocity: Vector3::new(0.0, 1.0, 0.0),
+            velocity: VectorParameter::default(),
             state: ParticleSystemState::Stopped,
             initial_colour: Vector4::from_value(1.0),
             texture: None,
             scale: 1.0,
-            rotation: 0.0
+            rotation: 0.0,
         }
     }
 }
@@ -126,6 +128,46 @@ impl Default for Particle {
             texture_index: None,
             colour: Vector4::from_value(1f32),
             size: 0.25,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum VectorParameter {
+    Static(Vector3<f32>),
+    Random {
+        min: Vector3<f32>,
+        max: Vector3<f32>,
+    },
+}
+
+impl Default for VectorParameter {
+    fn default() -> Self {
+        Self::Static(Vector3::zero())
+    }
+}
+
+impl From<VectorParameter> for Vector3<f32> {
+    fn from(value: VectorParameter) -> Self {
+        match value {
+            VectorParameter::Static(value) => value,
+            VectorParameter::Random { min, max } => {
+                let mut rng = thread_rng();
+
+                let mut get_value = |min: f32, max: f32| -> f32 {
+                    let range = min..max;
+                    if range.is_empty() {
+                        min
+                    } else {
+                        rng.gen_range(min..max)
+                    }
+                };
+
+                let x = get_value(min.x, max.x);
+                let y = get_value(min.y, max.y);
+                let z = get_value(min.z, max.z);
+                Vector3::new(x, y, z)
+            }
         }
     }
 }
