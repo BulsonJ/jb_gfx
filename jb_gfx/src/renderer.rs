@@ -1426,6 +1426,11 @@ impl Renderer {
         self.list
             .setup_attachments(self.device.get_present_image_view());
 
+        // Shadow pass
+        let shadow_pass_start = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
+        );
         self.list.run_pass(self.shadow, |list, cmd| {
             let pipeline = self.pipeline_manager.get_pipeline(self.shadow_pso);
             unsafe {
@@ -1456,6 +1461,11 @@ impl Renderer {
             )
             .unwrap();
         });
+        let shadow_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
+
         self.list.run_pass(self.gbuffer, |list, cmd| {
             let pipeline = self.pipeline_manager.get_pipeline(self.deferred_fill.pso);
 
@@ -1520,6 +1530,10 @@ impl Renderer {
                 .unwrap();
             }
         });
+        let gbuffer = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         self.list.run_pass(self.deferred_lighting, |list, cmd| {
             let emissive = list.get_physical_resource("emissive");
@@ -1599,6 +1613,10 @@ impl Renderer {
                 );
             };
         });
+        let deferred_lighting_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         self.list.run_pass(self.forward, |list, cmd| {
             // Draw particles
@@ -1637,6 +1655,10 @@ impl Renderer {
                 };
             }
         });
+        let forward_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
 
         let mut horizontal = true;
 
@@ -1752,6 +1774,11 @@ impl Renderer {
             });
             horizontal = !horizontal;
         }
+        // Bloom pass
+        let bloom_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
         self.list.run_pass(self.combine, |list, cmd| {
             let forward = list.get_physical_resource("forward");
             let bloom_result = list.get_physical_resource("bloom_vertical");
@@ -1808,6 +1835,10 @@ impl Renderer {
                 );
             };
         });
+        let combine_pass_end = self.device.write_timestamp(
+            self.device.graphics_command_buffer(),
+            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+        );
         self.list.run_pass(self.ui, |list, cmd| {
             if self.draw_debug_ui {
                 let pipeline = self.pipeline_manager.get_pipeline(self.world_debug_pso);
@@ -1918,41 +1949,7 @@ impl Renderer {
             }
         });
 
-        // Shadow pass
-        let shadow_pass_start = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
-        );
-        let shadow_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
 
-        // Deferred pass
-        let deferred_fill_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // Deferred Lighting Pass
-        let deferred_lighting_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-        let forward_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-
-        // Bloom pass
-        let bloom_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
-        let combine_pass_end = self.device.write_timestamp(
-            self.device.graphics_command_buffer(),
-            vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
-        );
         let ui_pass_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
             vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
@@ -1979,13 +1976,13 @@ impl Renderer {
         }
         if let Some(time) = self
             .device
-            .get_timestamp_result(shadow_pass_end, deferred_fill_end)
+            .get_timestamp_result(shadow_pass_end, gbuffer)
         {
             self.timestamps.deferred_fill_pass = time;
         }
         if let Some(time) = self
             .device
-            .get_timestamp_result(deferred_fill_end, deferred_lighting_end)
+            .get_timestamp_result(gbuffer, deferred_lighting_end)
         {
             self.timestamps.deferred_lighting_pass = time;
         }
