@@ -7,9 +7,7 @@ use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, Handle, ImageLayout, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::{offset_of, Zeroable};
-use cgmath::{
-    Array, Deg, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
-};
+use cgmath::{Array, Deg, Euler, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
 use image::EncodableLayout;
 use log::{info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
@@ -319,7 +317,7 @@ impl Renderer {
                     pipeline_layout: pso_layout,
                     vertex_shader: "assets/shaders/quad.vert".to_string(),
                     fragment_shader: "assets/shaders/blur.frag".to_string(),
-                    vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                    vertex_input_state: Vertex::get_empty_vertex_input_desc(),
                     color_attachment_formats: vec![PipelineColorAttachment {
                         format: render_image_format,
                         blend: false,
@@ -371,7 +369,7 @@ impl Renderer {
                 pipeline_layout: pso_layout,
                 vertex_shader: "assets/shaders/quad.vert".to_string(),
                 fragment_shader: "assets/shaders/combine.frag".to_string(),
-                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                vertex_input_state: Vertex::get_empty_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
                     format: swapchain_image_format,
                     blend: false,
@@ -692,7 +690,7 @@ impl Renderer {
                     pipeline_layout: pso_layout,
                     vertex_shader: "assets/shaders/ui/ui.vert".to_string(),
                     fragment_shader: "assets/shaders/ui/ui.frag".to_string(),
-                    vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                    vertex_input_state: Vertex::get_empty_vertex_input_desc(),
                     color_attachment_formats: vec![PipelineColorAttachment {
                         format: swapchain_image_format,
                         blend: true,
@@ -784,7 +782,7 @@ impl Renderer {
                 pipeline_layout: pso_layout,
                 vertex_shader: "assets/shaders/ui/diagetic_ui.vert".to_string(),
                 fragment_shader: "assets/shaders/ui/diagetic_ui.frag".to_string(),
-                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                vertex_input_state: Vertex::get_empty_vertex_input_desc(),
                 color_attachment_formats: vec![PipelineColorAttachment {
                     format: swapchain_image_format,
                     blend: true,
@@ -906,7 +904,7 @@ impl Renderer {
                 pipeline_layout: pso_layout,
                 vertex_shader: "assets/shaders/deferred_lighting.vert".to_string(),
                 fragment_shader: "assets/shaders/deferred_lighting.frag".to_string(),
-                vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                vertex_input_state: Vertex::get_empty_vertex_input_desc(),
                 color_attachment_formats: vec![
                     PipelineColorAttachment {
                         format: render_image_format,
@@ -1049,7 +1047,7 @@ impl Renderer {
                     pipeline_layout: pso_layout,
                     vertex_shader: "assets/shaders/particle.vert".to_string(),
                     fragment_shader: "assets/shaders/particle.frag".to_string(),
-                    vertex_input_state: Vertex::get_ui_vertex_input_desc(),
+                    vertex_input_state: Vertex::get_vertex_input_desc(),
                     color_attachment_formats: vec![
                         PipelineColorAttachment {
                             format: render_image_format,
@@ -1295,8 +1293,12 @@ impl Renderer {
                         model[2][1] = self.camera_uniform.view[1][2];
                         model[2][2] = self.camera_uniform.view[2][2];
 
-                        let rotation = Quaternion::from_angle_z(Deg(particle.rotation));
-                        let rotation = Matrix4::from(rotation);
+                        let rotation_euler = Euler {
+                            x: Deg(particle.rotation.x),
+                            y: Deg(particle.rotation.y),
+                            z: Deg(particle.rotation.z),
+                        };
+                        let rotation = Matrix4::from(Quaternion::from(rotation_euler));
                         let scale = Matrix4::from_nonuniform_scale(
                             particle.size,
                             particle.size,
@@ -1664,13 +1666,23 @@ impl Renderer {
                     );
                 };
 
+                let mesh = self.mesh_pool.get(self.cube_mesh).unwrap();
+                let index_count = {
+                    if mesh.index_count == 0 {
+                        mesh.vertex_count
+                    } else {
+                        mesh.index_count
+                    }
+                };
+
                 //// Draw commands
                 unsafe {
-                    self.device.vk_device.cmd_draw(
+                    self.device.vk_device.cmd_draw_indexed(
                         self.device.graphics_command_buffer(),
-                        6u32,
+                        index_count as u32,
                         particle_draw_data_length as u32,
-                        0u32,
+                        mesh.index_offset as u32,
+                        mesh.vertex_offset as i32,
                         0u32,
                     );
                 };
@@ -2555,7 +2567,7 @@ impl Drop for Renderer {
 }
 
 impl Vertex {
-    fn get_ui_vertex_input_desc() -> VertexInputDescription {
+    fn get_empty_vertex_input_desc() -> VertexInputDescription {
         VertexInputDescription {
             bindings: vec![],
             attributes: vec![],

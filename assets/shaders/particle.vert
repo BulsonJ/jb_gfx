@@ -3,6 +3,12 @@
 #extension GL_EXT_nonuniform_qualifier: enable
 #include "assets/shaders/library/camera.glsl"
 
+layout (location = 0) in vec3 vPosition;
+layout (location = 1) in vec2 vTexCoords;
+layout (location = 2) in vec3 vNormal;
+layout (location = 3) in vec3 vColor;
+layout (location = 4) in vec4 vTangent;
+
 layout (location = 0) out vec2 outTexCoords;
 layout (location = 1) out int outParticleInstance;
 
@@ -39,12 +45,10 @@ void main()
 		vec2(1.f,0.f)
 	);
 
-	int vertexIndex = gl_VertexIndex % 6;
-	vec2 pos = positions[vertexIndex];
-	outTexCoords = texCoords[vertexIndex];
-
 	outParticleInstance = gl_InstanceIndex;
 	Particle self = particleData.particles[gl_InstanceIndex];
 
-	gl_Position = cameraData.proj * cameraData.view * self.model * vec4(positions[vertexIndex], 0.0f, 1.0f);
+	outTexCoords = vTexCoords;
+
+	gl_Position = cameraData.proj * cameraData.view * self.model * vec4(vPosition, 1.0f);
 }
