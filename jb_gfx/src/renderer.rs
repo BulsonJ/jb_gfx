@@ -7,7 +7,9 @@ use ash::vk::{
     AccessFlags2, ClearDepthStencilValue, Handle, ImageLayout, ObjectType, PipelineStageFlags2,
 };
 use bytemuck::{offset_of, Zeroable};
-use cgmath::{Array, Deg, Euler, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{
+    Array, Deg, Euler, Matrix, Matrix4, Quaternion, Rotation3, SquareMatrix, Vector3, Vector4, Zero,
+};
 use image::EncodableLayout;
 use log::{info, trace, warn};
 use slotmap::{new_key_type, SlotMap};
@@ -66,6 +68,7 @@ pub struct Renderer {
     timestamps: TimeStamp,
 
     stored_particle_systems: SlotMap<ParticleSystemHandle, ParticleSystem>,
+    quad_mesh: MeshHandle,
 
     shadow_pso: PipelineHandle,
 
@@ -1079,6 +1082,8 @@ impl Renderer {
             (pso, pso_layout)
         };
 
+        let quad_mesh = mesh_pool.add_mesh(&MeshData::quad()).unwrap();
+
         info!("Renderer Created");
         let result = Ok(Self {
             device,
@@ -1136,6 +1141,7 @@ impl Renderer {
             particle_pipeline,
             particle_set,
             stored_particle_systems: SlotMap::default(),
+            quad_mesh,
         });
         result
     }
@@ -1261,11 +1267,21 @@ impl Renderer {
                         .keys()
                         .position(|handle| handle == model.material_instance)
                         .unwrap();
+
+                    let index_count = {
+                        if mesh.index_count == 0 {
+                            mesh.vertex_count
+                        } else {
+                            mesh.index_count
+                        }
+                    };
+
                     draw_data.push(DrawData {
                         vertex_offset: mesh.vertex_offset,
-                        vertex_count: mesh.vertex_count,
                         index_offset: mesh.index_offset,
-                        index_count: mesh.index_count,
+                        index_count,
+                        instance_count: 0,
+                        instance_offset: 0,
                         transform_index: i,
                         material_index,
                     });
@@ -1275,7 +1291,9 @@ impl Renderer {
         };
 
         // Copy particles
-        let particle_draw_data_length = {
+        let particle_draw_commands = {
+            let mut draw_commands = Vec::new();
+
             let mut all_particle_data = Vec::default();
             for (_, system) in self.stored_particle_systems.iter() {
                 let mut particle_data: Vec<ParticleDrawData> = system
@@ -1283,20 +1301,33 @@ impl Renderer {
                     .iter()
                     .map(|particle| {
                         let mut model = Matrix4::from_translation(particle.position);
-                        model[0][0] = self.camera_uniform.view[0][0];
-                        model[0][1] = self.camera_uniform.view[1][0];
-                        model[0][2] = self.camera_uniform.view[2][0];
-                        model[1][0] = self.camera_uniform.view[0][1];
-                        model[1][1] = self.camera_uniform.view[1][1];
-                        model[1][2] = self.camera_uniform.view[2][1];
-                        model[2][0] = self.camera_uniform.view[0][2];
-                        model[2][1] = self.camera_uniform.view[1][2];
-                        model[2][2] = self.camera_uniform.view[2][2];
+                        // Camera facing quad used when no mesh
+                        if system.mesh.is_none() {
+                            model[0][0] = self.camera_uniform.view[0][0];
+                            model[0][1] = self.camera_uniform.view[1][0];
+                            model[0][2] = self.camera_uniform.view[2][0];
+                            model[1][0] = self.camera_uniform.view[0][1];
+                            model[1][1] = self.camera_uniform.view[1][1];
+                            model[1][2] = self.camera_uniform.view[2][1];
+                            model[2][0] = self.camera_uniform.view[0][2];
+                            model[2][1] = self.camera_uniform.view[1][2];
+                            model[2][2] = self.camera_uniform.view[2][2];
+                        }
 
-                        let rotation_euler = Euler {
-                            x: Deg(particle.rotation.x),
-                            y: Deg(particle.rotation.y),
-                            z: Deg(particle.rotation.z),
+                        let rotation_euler = {
+                            if system.mesh.is_none() {
+                                Euler {
+                                    x: Deg(0.0),
+                                    y: Deg(0.0),
+                                    z: Deg(particle.rotation.z),
+                                }
+                            } else {
+                                Euler {
+                                    x: Deg(particle.rotation.x),
+                                    y: Deg(particle.rotation.y),
+                                    z: Deg(particle.rotation.z),
+                                }
+                            }
                         };
                         let rotation = Matrix4::from(Quaternion::from(rotation_euler));
                         let scale = Matrix4::from_nonuniform_scale(
@@ -1323,6 +1354,27 @@ impl Renderer {
                     })
                     .collect();
 
+                let mesh = system.mesh.unwrap_or(self.quad_mesh);
+                if let Some(mesh) = self.mesh_pool.get(mesh) {
+                    let index_count = {
+                        if mesh.index_count == 0 {
+                            mesh.vertex_count
+                        } else {
+                            mesh.index_count
+                        }
+                    };
+
+                    draw_commands.push(DrawData {
+                        vertex_offset: mesh.vertex_offset,
+                        index_offset: mesh.index_offset,
+                        index_count,
+                        instance_offset: all_particle_data.len(),
+                        instance_count: particle_data.len(),
+                        transform_index: 0,
+                        material_index: 0,
+                    });
+                }
+
                 all_particle_data.append(&mut particle_data);
             }
 
@@ -1334,7 +1386,7 @@ impl Renderer {
                 .mapped_slice()?
                 .copy_from_slice(&all_particle_data);
 
-            all_particle_data.len()
+            draw_commands
         };
 
         // Copy debug UI
@@ -1666,26 +1718,19 @@ impl Renderer {
                     );
                 };
 
-                let mesh = self.mesh_pool.get(self.cube_mesh).unwrap();
-                let index_count = {
-                    if mesh.index_count == 0 {
-                        mesh.vertex_count
-                    } else {
-                        mesh.index_count
-                    }
-                };
-
-                //// Draw commands
-                unsafe {
-                    self.device.vk_device.cmd_draw_indexed(
-                        self.device.graphics_command_buffer(),
-                        index_count as u32,
-                        particle_draw_data_length as u32,
-                        mesh.index_offset as u32,
-                        mesh.vertex_offset as i32,
-                        0u32,
-                    );
-                };
+                for draw in particle_draw_commands.into_iter() {
+                    //// Draw commands
+                    unsafe {
+                        self.device.vk_device.cmd_draw_indexed(
+                            self.device.graphics_command_buffer(),
+                            draw.index_count as u32,
+                            draw.instance_count as u32,
+                            draw.index_offset as u32,
+                            draw.vertex_offset as i32,
+                            draw.instance_offset as u32,
+                        );
+                    };
+                }
             }
         });
         let forward_pass_end = self.device.write_timestamp(
@@ -2069,18 +2114,10 @@ impl Renderer {
                 )
             };
 
-            let index_count = {
-                if draw.index_count == 0 {
-                    draw.vertex_count
-                } else {
-                    draw.index_count
-                }
-            };
-
             unsafe {
                 self.device.vk_device.cmd_draw_indexed(
                     self.device.graphics_command_buffer(),
-                    index_count as u32,
+                    draw.index_count as u32,
                     1u32,
                     draw.index_offset as u32,
                     draw.vertex_offset as i32,
@@ -2116,18 +2153,10 @@ impl Renderer {
                 )
             };
 
-            let index_count = {
-                if draw.index_count == 0 {
-                    draw.vertex_count
-                } else {
-                    draw.index_count
-                }
-            };
-
             unsafe {
                 device.cmd_draw_indexed(
                     *command_buffer,
-                    index_count as u32,
+                    draw.index_count as u32,
                     1u32,
                     draw.index_offset as u32,
                     draw.vertex_offset as i32,
@@ -2529,6 +2558,14 @@ impl Renderer {
         Err(anyhow!("No material exists exists"))
     }
 
+    pub fn get_material_instance(&self, handle: MaterialInstanceHandle) -> Option<&MaterialInstance> {
+        if let Some(material) = self.material_instances.get(handle) {
+            Some(material)
+        } else {
+            None
+        }
+    }
+
     pub fn add_particle_system(&mut self, system: ParticleSystem) -> ParticleSystemHandle {
         self.stored_particle_systems.insert(system)
     }
@@ -2676,9 +2713,10 @@ struct RenderModel {
 
 struct DrawData {
     vertex_offset: usize,
-    vertex_count: usize,
     index_offset: usize,
     index_count: usize,
+    instance_count: usize,
+    instance_offset: usize,
     transform_index: usize,
     material_index: usize,
 }

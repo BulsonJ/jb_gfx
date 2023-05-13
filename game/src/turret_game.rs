@@ -698,15 +698,39 @@ impl DebugPanel for ParticleSystem {
                     ui.vertical(|ui| {
                         ui.label("Min:");
                         ui.horizontal(|ui| {
-                            ui.add(egui::DragValue::new(&mut min.x).speed(0.1).clamp_range(-100.0..=max.x));
-                            ui.add(egui::DragValue::new(&mut min.y).speed(0.1).clamp_range(-100.0..=max.y));
-                            ui.add(egui::DragValue::new(&mut min.z).speed(0.1).clamp_range(-100.0..=max.z));
+                            ui.add(
+                                egui::DragValue::new(&mut min.x)
+                                    .speed(0.1)
+                                    .clamp_range(-100.0..=max.x),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut min.y)
+                                    .speed(0.1)
+                                    .clamp_range(-100.0..=max.y),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut min.z)
+                                    .speed(0.1)
+                                    .clamp_range(-100.0..=max.z),
+                            );
                         });
                         ui.label("Max:");
                         ui.horizontal(|ui| {
-                            ui.add(egui::DragValue::new(&mut max.x).speed(0.1).clamp_range(min.x..=100.0));
-                            ui.add(egui::DragValue::new(&mut max.y).speed(0.1).clamp_range(min.y..=100.0));
-                            ui.add(egui::DragValue::new(&mut max.z).speed(0.1).clamp_range(min.z..=100.0));
+                            ui.add(
+                                egui::DragValue::new(&mut max.x)
+                                    .speed(0.1)
+                                    .clamp_range(min.x..=100.0),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut max.y)
+                                    .speed(0.1)
+                                    .clamp_range(min.y..=100.0),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut max.z)
+                                    .speed(0.1)
+                                    .clamp_range(min.z..=100.0),
+                            );
                         });
                     });
                 }

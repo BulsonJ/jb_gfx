@@ -1,4 +1,4 @@
-use crate::ImageHandle;
+use crate::{ImageHandle, MeshHandle};
 use cgmath::{Array, Vector3, Vector4, Zero};
 use profiling::scope;
 use rand::{thread_rng, Rng};
@@ -15,6 +15,7 @@ pub struct ParticleSystem {
     pub scale: f32,
     pub rotation: Vector3<f32>,
     pub life: f32,
+    pub mesh: Option<MeshHandle>,
 }
 
 impl ParticleSystem {
@@ -101,6 +102,7 @@ impl Default for ParticleSystem {
             scale: 1.0,
             rotation: Vector3::zero(),
             life: 5.0,
+            mesh: None,
         }
     }
 }
