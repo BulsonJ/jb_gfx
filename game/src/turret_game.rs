@@ -307,7 +307,7 @@ impl TurretGame {
         particle_system.spawn_rate = 60.0;
         particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
-        particle_system.scale = 0.25;
+        particle_system.scale = 0.5;
 
         let system_one = renderer.add_particle_system(particle_system);
 
@@ -321,7 +321,7 @@ impl TurretGame {
         particle_system.spawn_rate = 60.0;
         particle_system.initial_colour = [0.8, 0.8, 0.8, 0.8].into();
         particle_system.texture = Some(smoke_texture);
-        particle_system.scale = 0.25;
+        particle_system.scale = 0.5;
 
         let system_two = renderer.add_particle_system(particle_system);
 
@@ -639,7 +639,7 @@ impl TurretGame {
                             self.renderer
                                 .get_particle_system(system)
                                 .unwrap()
-                                .draw_debug(ui)
+                                .draw_debug(ui);
                         }
                     });
                 egui::Window::new("Timings")
@@ -667,6 +667,11 @@ impl DebugPanel for ParticleSystem {
             });
         });
         ui.horizontal(|ui| {
+            ui.label("Spawn Rotation:");
+            //draw_selector("Rotation:", &mut self.rotation, ui);
+            self.rotation.draw_debug(ui);
+        });
+        ui.horizontal(|ui| {
             ui.label("Spawn Rate:");
             ui.add(
                 egui::DragValue::new(&mut self.spawn_rate)
@@ -688,57 +693,83 @@ impl DebugPanel for ParticleSystem {
         });
         ui.horizontal(|ui| {
             ui.label("Velocity:");
-            match &mut self.velocity {
-                VectorParameter::Static(velocity) => {
-                    ui.add(egui::DragValue::new(&mut velocity.x).speed(0.1));
-                    ui.add(egui::DragValue::new(&mut velocity.y).speed(0.1));
-                    ui.add(egui::DragValue::new(&mut velocity.z).speed(0.1));
-                }
-                VectorParameter::Random { min, max } => {
-                    ui.vertical(|ui| {
-                        ui.label("Min:");
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut min.x)
-                                    .speed(0.1)
-                                    .clamp_range(-100.0..=max.x),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut min.y)
-                                    .speed(0.1)
-                                    .clamp_range(-100.0..=max.y),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut min.z)
-                                    .speed(0.1)
-                                    .clamp_range(-100.0..=max.z),
-                            );
-                        });
-                        ui.label("Max:");
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut max.x)
-                                    .speed(0.1)
-                                    .clamp_range(min.x..=100.0),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut max.y)
-                                    .speed(0.1)
-                                    .clamp_range(min.y..=100.0),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut max.z)
-                                    .speed(0.1)
-                                    .clamp_range(min.z..=100.0),
-                            );
-                        });
-                    });
-                }
-            }
+            //draw_selector("Velocity Sel:", &mut self.velocity, ui);
+            self.velocity.draw_debug(ui);
+        });
+        ui.horizontal(|ui| {
+            ui.label("Rotation Velocity:");
+            //draw_selector("Rotation Vel Sel:", &mut self.rotation_velocity, ui);
+            self.rotation_velocity.draw_debug(ui);
         });
         ui.horizontal(|ui| {
             ui.label("Colour:");
             ui.color_edit_button_rgba_unmultiplied(self.initial_colour.as_mut());
         });
+    }
+}
+
+fn draw_selector(label:&str, vector: &mut VectorParameter, ui: &mut Ui) {
+    egui::ComboBox::from_label(label).show_ui(ui, |ui| {
+        ui.selectable_value(vector, VectorParameter::Static(Vector3::zero()), "First");
+        ui.selectable_value(
+            vector,
+            VectorParameter::Random {
+                min: Vector3::zero(),
+                max: Vector3::zero(),
+            },
+            "Second",
+        );
+    });
+}
+
+impl DebugPanel for VectorParameter {
+    fn draw_debug(&mut self, ui: &mut Ui) {
+        match self {
+            VectorParameter::Static(velocity) => {
+                ui.add(egui::DragValue::new(&mut velocity.x).speed(0.1));
+                ui.add(egui::DragValue::new(&mut velocity.y).speed(0.1));
+                ui.add(egui::DragValue::new(&mut velocity.z).speed(0.1));
+            }
+            VectorParameter::Random { min, max } => {
+                ui.vertical(|ui| {
+                    ui.label("Min:");
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut min.x)
+                                .speed(0.1)
+                                .clamp_range(-100.0..=max.x),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut min.y)
+                                .speed(0.1)
+                                .clamp_range(-100.0..=max.y),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut min.z)
+                                .speed(0.1)
+                                .clamp_range(-100.0..=max.z),
+                        );
+                    });
+                    ui.label("Max:");
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut max.x)
+                                .speed(0.1)
+                                .clamp_range(min.x..=100.0),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut max.y)
+                                .speed(0.1)
+                                .clamp_range(min.y..=100.0),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut max.z)
+                                .speed(0.1)
+                                .clamp_range(min.z..=100.0),
+                        );
+                    });
+                });
+            }
+        }
     }
 }

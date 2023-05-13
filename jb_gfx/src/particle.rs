@@ -2,6 +2,7 @@ use crate::{ImageHandle, MeshHandle};
 use cgmath::{Array, Vector3, Vector4, Zero};
 use profiling::scope;
 use rand::{thread_rng, Rng};
+use std::hash::{Hash, Hasher};
 
 pub struct ParticleSystem {
     particles: Vec<Particle>,
@@ -13,7 +14,8 @@ pub struct ParticleSystem {
     pub initial_colour: Vector4<f32>,
     pub texture: Option<ImageHandle>,
     pub scale: f32,
-    pub rotation: Vector3<f32>,
+    pub rotation: VectorParameter,
+    pub rotation_velocity: VectorParameter,
     pub life: f32,
     pub mesh: Option<MeshHandle>,
 }
@@ -49,9 +51,8 @@ impl ParticleSystem {
                 particle.life -= delta_time;
                 if particle.life >= 0.0 {
                     particle.position += particle.velocity * delta_time;
+                    particle.rotation += particle.rotation_velocity * delta_time;
                     particle.colour.w -= delta_time * 0.5;
-                    particle.rotation.x += 30.0 * delta_time;
-                    particle.rotation.y += 60.0 * delta_time;
                 }
             }
         }
@@ -81,7 +82,8 @@ impl ParticleSystem {
         particle.colour = self.initial_colour;
         particle.texture_index = self.texture;
         particle.size = self.scale;
-        particle.rotation = self.rotation;
+        particle.rotation = self.rotation.into();
+        particle.rotation_velocity = self.rotation_velocity.into();
     }
 }
 
@@ -100,7 +102,8 @@ impl Default for ParticleSystem {
             initial_colour: Vector4::from_value(1.0),
             texture: None,
             scale: 1.0,
-            rotation: Vector3::zero(),
+            rotation: VectorParameter::default(),
+            rotation_velocity: VectorParameter::default(),
             life: 5.0,
             mesh: None,
         }
@@ -119,6 +122,7 @@ pub struct Particle {
     pub rotation: Vector3<f32>,
     pub size: f32,
     pub velocity: Vector3<f32>,
+    pub rotation_velocity: Vector3<f32>,
     pub texture_index: Option<ImageHandle>,
     pub colour: Vector4<f32>,
 }
@@ -130,6 +134,7 @@ impl Default for Particle {
             position: Vector3::zero(),
             rotation: Vector3::zero(),
             velocity: Vector3::zero(),
+            rotation_velocity: Vector3::zero(),
             texture_index: None,
             colour: Vector4::from_value(1f32),
             size: 0.25,
@@ -137,7 +142,7 @@ impl Default for Particle {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum VectorParameter {
     Static(Vector3<f32>),
     Random {

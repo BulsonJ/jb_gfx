@@ -2558,7 +2558,10 @@ impl Renderer {
         Err(anyhow!("No material exists exists"))
     }
 
-    pub fn get_material_instance(&self, handle: MaterialInstanceHandle) -> Option<&MaterialInstance> {
+    pub fn get_material_instance(
+        &self,
+        handle: MaterialInstanceHandle,
+    ) -> Option<&MaterialInstance> {
         if let Some(material) = self.material_instances.get(handle) {
             Some(material)
         } else {
