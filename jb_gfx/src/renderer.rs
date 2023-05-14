@@ -390,7 +390,7 @@ impl Renderer {
             (pso, pso_layout)
         };
 
-        let sun = DirectionalLight::new((0.0, -1.0, -0.1).into(), (1.0, 1.0, 1.0).into(), 200f32);
+        let sun = DirectionalLight::new((0.5, -0.5, -0.5).into(), (1.0, 1.0, 1.0).into(), 200f32);
         let camera_uniform = {
             // Create default camera so that scene is at least rendered initially
             let camera = DefaultCamera {
@@ -2241,7 +2241,7 @@ impl Renderer {
         // Debug name image
         {
             let image_name = file_location.rsplit_once('/').unwrap().1;
-            let name = "Image:".to_string() + image_name;
+            let name = "Image: ".to_string() + image_name;
             let image_handle = self
                 .device
                 .resource_manager

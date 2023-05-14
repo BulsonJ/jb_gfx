@@ -99,10 +99,10 @@ impl PipelineManager {
         let pipeline = build_pipeline(&device.vk_device, info);
 
         {
-            let object_name_string =
-                String::from(build_info.vertex_shader.rsplit_once('/').unwrap().1)
-                    + " "
-                    + build_info.fragment_shader.rsplit_once('/').unwrap().1;
+            let object_name_string = String::from("Shader:")
+                + build_info.vertex_shader.rsplit_once('/').unwrap().1
+                + " "
+                + build_info.fragment_shader.rsplit_once('/').unwrap().1;
             device.set_vulkan_debug_name(
                 pipeline.as_raw(),
                 ObjectType::PIPELINE,
