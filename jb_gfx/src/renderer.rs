@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;
 
@@ -1225,25 +1226,7 @@ impl Renderer {
                 .mapped_slice()?
                 .copy_from_slice(&uniforms);
 
-            // Copy objects model matrix
-
-            let mut transform_matrices = Vec::new();
-            for model in self.render_models.values() {
-                let transform = TransformSSBO {
-                    model: model.transform.into(),
-                    normal: model.transform.invert().unwrap().transpose().into(),
-                };
-                transform_matrices.push(transform);
-            }
-
-            self.device
-                .resource_manager
-                .get_buffer(self.transform_buffer[resource_index])
-                .unwrap()
-                .view_custom(0, transform_matrices.len())?
-                .mapped_slice()?
-                .copy_from_slice(&transform_matrices);
-
+            // Copy materials
             let mut materials = Vec::new();
             for material_instance in self.material_instances.values() {
                 let material_params = self.get_material_ssbo_from_instance(&material_instance);
@@ -1267,46 +1250,84 @@ impl Renderer {
                 .copy_from_slice(&materials);
         }
 
-        let mut instance_data = Vec::new();
+        let mut sorted_draws: HashMap<MeshHandle, Vec<RenderModelHandle>> = HashMap::default();
+        for model_handle in self.render_models.keys() {
+            let model = self.render_models.get(model_handle).unwrap();
 
-        // Fill draw commands
-        let draw_data = {
-            let mut draw_data = Vec::new();
-            for (i, model) in self.render_models.keys().enumerate() {
-                let model = self.render_models.get(model).unwrap();
-                if let Some(mesh) = self.mesh_pool.get(model.mesh_handle) {
-                    let material_index = self
-                        .material_instances
-                        .keys()
-                        .position(|handle| handle == model.material_instance)
-                        .unwrap();
-
-                    let index_count = {
-                        if mesh.index_count == 0 {
-                            mesh.vertex_count
-                        } else {
-                            mesh.index_count
-                        }
-                    };
-
-                    instance_data.push(InstanceSSBO {
-                        transform_index: i as i32,
-                        material_index: material_index as i32,
-                        ..Default::default()
-                    });
-
-                    draw_data.push(DrawData {
-                        vertex_offset: mesh.vertex_offset,
-                        index_offset: mesh.index_offset,
-                        index_count,
-                        instance_count: 1,
-                        instance_offset: i,
-                    });
-                }
+            if let Some(models) = sorted_draws.get_mut(&model.mesh_handle) {
+                models.push(model_handle);
+            } else {
+                let draws = vec![model_handle];
+                sorted_draws.insert(model.mesh_handle, draws);
             }
-            draw_data
-        };
+        }
 
+        let mut transform_matrices = Vec::new();
+        let mut instance_data = Vec::new();
+        let mut draw_data = Vec::new();
+
+        for (&mesh, objects) in sorted_draws.iter() {
+            if let Some(mesh) = self.mesh_pool.get(mesh) {
+                let index_count = {
+                    if mesh.index_count == 0 {
+                        mesh.vertex_count
+                    } else {
+                        mesh.index_count
+                    }
+                };
+
+                let instance_offset = instance_data.len();
+
+                // Copy transforms for draw
+                for &model in objects.iter() {
+                    let model = self.render_models.get(model).unwrap();
+                    let transform = TransformSSBO {
+                        model: model.transform.into(),
+                        normal: model.transform.invert().unwrap().transpose().into(),
+                    };
+                    transform_matrices.push(transform);
+                }
+
+                let mut objects_instance_data: Vec<InstanceSSBO> = objects
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &object)| {
+                        let model = self.render_models.get(object).unwrap();
+
+                        let material_index = self
+                            .material_instances
+                            .keys()
+                            .position(|handle| handle == model.material_instance)
+                            .unwrap();
+
+                        InstanceSSBO {
+                            transform_index: (instance_offset + i) as i32,
+                            material_index: material_index as i32,
+                            ..Default::default()
+                        }
+                    })
+                    .collect();
+
+                draw_data.push(DrawData {
+                    vertex_offset: mesh.vertex_offset,
+                    index_offset: mesh.index_offset,
+                    index_count,
+                    instance_count: objects.len(),
+                    instance_offset,
+                });
+
+                instance_data.append(&mut objects_instance_data);
+            }
+        }
+
+        // Copy transform and instance buffer
+        self.device
+            .resource_manager
+            .get_buffer(self.transform_buffer[resource_index])
+            .unwrap()
+            .view_custom(0, transform_matrices.len())?
+            .mapped_slice()?
+            .copy_from_slice(&transform_matrices);
         self.device
             .resource_manager
             .get_buffer(self.instance_buffer[resource_index])
