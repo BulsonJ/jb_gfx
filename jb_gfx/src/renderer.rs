@@ -1250,6 +1250,7 @@ impl Renderer {
                 .copy_from_slice(&materials);
         }
 
+        // Sort draws by mesh, materials all use the same shader at the moment so not needed to sort by material
         let mut sorted_draws: HashMap<MeshHandle, Vec<RenderModelHandle>> = HashMap::default();
         for model_handle in self.render_models.keys() {
             let model = self.render_models.get(model_handle).unwrap();
@@ -1264,7 +1265,7 @@ impl Renderer {
 
         let mut transform_matrices = Vec::new();
         let mut instance_data = Vec::new();
-        let mut draw_data = Vec::new();
+        let mut draw_commands = Vec::new();
 
         for (&mesh, objects) in sorted_draws.iter() {
             if let Some(mesh) = self.mesh_pool.get(mesh) {
@@ -1279,15 +1280,19 @@ impl Renderer {
                 let instance_offset = instance_data.len();
 
                 // Copy transforms for draw
-                for &model in objects.iter() {
-                    let model = self.render_models.get(model).unwrap();
-                    let transform = TransformSSBO {
-                        model: model.transform.into(),
-                        normal: model.transform.invert().unwrap().transpose().into(),
-                    };
-                    transform_matrices.push(transform);
-                }
+                let mut transforms: Vec<TransformSSBO> = objects
+                    .iter()
+                    .map(|&model| {
+                        let model = self.render_models.get(model).unwrap();
+                        TransformSSBO {
+                            model: model.transform.into(),
+                            normal: model.transform.invert().unwrap().transpose().into(),
+                        }
+                    })
+                    .collect();
+                transform_matrices.append(&mut transforms);
 
+                // Get InstanceData for each objects
                 let mut objects_instance_data: Vec<InstanceSSBO> = objects
                     .iter()
                     .enumerate()
@@ -1308,7 +1313,8 @@ impl Renderer {
                     })
                     .collect();
 
-                draw_data.push(DrawData {
+                // Create DrawCommand
+                draw_commands.push(DrawCommand {
                     vertex_offset: mesh.vertex_offset,
                     index_offset: mesh.index_offset,
                     index_count,
@@ -1410,7 +1416,7 @@ impl Renderer {
                         }
                     };
 
-                    draw_commands.push(DrawData {
+                    draw_commands.push(DrawCommand {
                         vertex_offset: mesh.vertex_offset,
                         index_offset: mesh.index_offset,
                         index_count,
@@ -1572,7 +1578,7 @@ impl Renderer {
             };
 
             // Draw commands
-            Self::draw_objects_free(&draw_data, &self.device.vk_device, &cmd).unwrap();
+            Self::draw_objects_free(&draw_commands, &self.device.vk_device, &cmd).unwrap();
         });
         let shadow_pass_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
@@ -1603,7 +1609,7 @@ impl Renderer {
 
             // Draw commands
 
-            Self::draw_objects_free(&draw_data, &self.device.vk_device, &cmd).unwrap();
+            Self::draw_objects_free(&draw_commands, &self.device.vk_device, &cmd).unwrap();
 
             if self.skybox.is_some() {
                 let pso = self.pipeline_manager.get_pipeline(self.skybox_pso);
@@ -2127,7 +2133,7 @@ impl Renderer {
     }
 
     fn draw_objects_free(
-        draws: &[DrawData],
+        draws: &[DrawCommand],
         device: &ash::Device,
         command_buffer: &vk::CommandBuffer,
     ) -> Result<()> {
@@ -2655,7 +2661,7 @@ struct RenderModel {
     transform: Matrix4<f32>,
 }
 
-struct DrawData {
+struct DrawCommand {
     vertex_offset: usize,
     index_offset: usize,
     index_count: usize,
