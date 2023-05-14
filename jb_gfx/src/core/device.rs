@@ -1128,6 +1128,30 @@ impl GraphicsDevice {
         Ok(())
     }
 
+    pub fn cmd_begin_label(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        colour: [f32; 4],
+        label: &str,
+    ) {
+        let object_name = CString::new(label).unwrap();
+        let label = vk::DebugUtilsLabelEXT::builder()
+            .label_name(&object_name)
+            .color(colour);
+
+        unsafe {
+            self.debug_utils_loader
+                .cmd_begin_debug_utils_label(command_buffer, &label);
+        }
+    }
+
+    pub fn cmd_end_label(&self, command_buffer: vk::CommandBuffer) {
+        unsafe {
+            self.debug_utils_loader
+                .cmd_end_debug_utils_label(command_buffer);
+        }
+    }
+
     pub fn write_timestamp(
         &self,
         cmd: vk::CommandBuffer,

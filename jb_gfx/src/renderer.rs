@@ -246,6 +246,7 @@ impl Renderer {
                 .add_color_attachment("bloom_horizontal", &bloom_attachment)
                 .set_clear_colour([0.0, 0.0, 0.0, 1.0]),
         );
+        // TODO : This is here as otherwise assumes bloom_horizontal is run before. Find better solution.
         let bloom_final = list.add_pass(
             "bloom_final_pass",
             RenderPassLayout::default()
@@ -1829,7 +1830,7 @@ impl Renderer {
             let pass = {
                 if i == 0 {
                     self.bloom_initial
-                } else if i == 10 {
+                } else if i == 9 {
                     self.bloom_final
                 } else if horizontal {
                     self.bloom_horizontal

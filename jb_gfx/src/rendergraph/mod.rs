@@ -1,6 +1,7 @@
 use ash::vk;
 use ash::vk::Handle;
 use log::info;
+use rand::thread_rng;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
@@ -470,6 +471,23 @@ impl RenderList {
             }
         };
 
+        // Debug label
+        {
+            let label = &self.passes.retrieve_render_pass(render_pass).name;
+            let colour = {
+                if physical_render_pass.attachments.is_empty()
+                    && physical_render_pass.depth_attachment.is_some()
+                {
+                    [0.4, 0.4, 0.4, 1.0]
+                } else if physical_render_pass.depth_attachment.is_none() {
+                    [0.0, 0.0, 0.6, 1.0]
+                } else {
+                    [0.0, 0.6, 0.0, 1.0]
+                }
+            };
+            self.device
+                .cmd_begin_label(self.device.graphics_command_buffer(), colour, label);
+        }
         unsafe {
             self.device
                 .vk_device
@@ -483,6 +501,9 @@ impl RenderList {
                 .vk_device
                 .cmd_end_rendering(self.device.graphics_command_buffer());
         };
+
+        self.device
+            .cmd_end_label(self.device.graphics_command_buffer());
     }
 
     fn get_physical_pass(&self, handle: VirtualRenderPassHandle) -> &PhysicalRenderPass {
