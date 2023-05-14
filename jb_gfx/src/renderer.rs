@@ -17,7 +17,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::camera::DefaultCamera;
 use crate::gpu_structs::{
-    CameraUniform, LightUniform, MaterialParamSSBO, ParticleDrawData, PushConstants, TransformSSBO,
+    CameraUniform, InstanceSSBO, LightUniform, MaterialParamSSBO, ParticleDrawData, TransformSSBO,
     UIUniformData, UIVertexData, WorldDebugUIDrawData,
 };
 use crate::mesh::Index;
@@ -93,6 +93,7 @@ pub struct Renderer {
     stored_lights: SlotMap<LightHandle, Light>,
     transform_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
+    instance_buffer: [BufferHandle; FRAMES_IN_FLIGHT],
     material_instances: SlotMap<MaterialInstanceHandle, MaterialInstance>,
 
     ui_pass: UiPass,
@@ -458,6 +459,19 @@ impl Renderer {
             ]
         };
 
+        let instance_buffer = {
+            let buffer_create_info = BufferCreateInfo {
+                size: size_of::<InstanceSSBO>() * MAX_OBJECTS as usize,
+                usage: vk::BufferUsageFlags::STORAGE_BUFFER,
+                storage_type: BufferStorageType::HostLocal,
+            };
+
+            [
+                device.resource_manager.create_buffer(&buffer_create_info),
+                device.resource_manager.create_buffer(&buffer_create_info),
+            ]
+        };
+
         let (descriptor_set, descriptor_set_layout) = {
             let mut sets = [vk::DescriptorSet::null(); FRAMES_IN_FLIGHT];
             let mut layout = None;
@@ -498,6 +512,12 @@ impl Renderer {
                     desc_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                 })
+                .bind_buffer(BufferDescriptorInfo {
+                    binding: 5,
+                    buffer: instance_buffer[i],
+                    desc_type: vk::DescriptorType::STORAGE_BUFFER,
+                    stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                })
                 .build()
                 .unwrap();
 
@@ -526,17 +546,12 @@ impl Renderer {
         }
 
         let (forward_pass, shadow_pso) = {
-            let push_constant_range = *vk::PushConstantRange::builder()
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-                .size(size_of::<PushConstants>() as u32)
-                .offset(0u32);
-
             let pso_layout = pipeline_layout_cache.create_pipeline_layout(
                 &[
                     device.bindless_descriptor_set_layout(),
                     descriptor_set_layout,
                 ],
-                &[push_constant_range],
+                &[],
             )?;
 
             let pso = {
@@ -803,17 +818,12 @@ impl Renderer {
         };
 
         let deferred_fill = {
-            let push_constant_range = *vk::PushConstantRange::builder()
-                .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-                .size(size_of::<PushConstants>() as u32)
-                .offset(0u32);
-
             let pso_layout = pipeline_layout_cache.create_pipeline_layout(
                 &[
                     device.bindless_descriptor_set_layout(),
                     descriptor_set_layout,
                 ],
-                &[push_constant_range],
+                &[],
             )?;
 
             let pso = {
@@ -1142,6 +1152,7 @@ impl Renderer {
             particle_set,
             stored_particle_systems: SlotMap::default(),
             quad_mesh,
+            instance_buffer,
         });
         result
     }
@@ -1256,6 +1267,8 @@ impl Renderer {
                 .copy_from_slice(&materials);
         }
 
+        let mut instance_data = Vec::new();
+
         // Fill draw commands
         let draw_data = {
             let mut draw_data = Vec::new();
@@ -1276,19 +1289,31 @@ impl Renderer {
                         }
                     };
 
+                    instance_data.push(InstanceSSBO {
+                        transform_index: i as i32,
+                        material_index: material_index as i32,
+                        ..Default::default()
+                    });
+
                     draw_data.push(DrawData {
                         vertex_offset: mesh.vertex_offset,
                         index_offset: mesh.index_offset,
                         index_count,
-                        instance_count: 0,
-                        instance_offset: 0,
-                        transform_index: i,
-                        material_index,
+                        instance_count: 1,
+                        instance_offset: i,
                     });
                 }
             }
             draw_data
         };
+
+        self.device
+            .resource_manager
+            .get_buffer(self.instance_buffer[resource_index])
+            .unwrap()
+            .view_custom(0, instance_data.len())?
+            .mapped_slice()?
+            .copy_from_slice(&instance_data);
 
         // Copy particles
         let particle_draw_commands = {
@@ -1370,8 +1395,6 @@ impl Renderer {
                         index_count,
                         instance_offset: all_particle_data.len(),
                         instance_count: particle_data.len(),
-                        transform_index: 0,
-                        material_index: 0,
                     });
                 }
 
@@ -1528,13 +1551,7 @@ impl Renderer {
             };
 
             // Draw commands
-            Self::draw_objects_free(
-                &draw_data,
-                &self.device.vk_device,
-                &cmd,
-                &self.deferred_fill.pso_layout,
-            )
-            .unwrap();
+            Self::draw_objects_free(&draw_data, &self.device.vk_device, &cmd).unwrap();
         });
         let shadow_pass_end = self.device.write_timestamp(
             self.device.graphics_command_buffer(),
@@ -1565,13 +1582,7 @@ impl Renderer {
 
             // Draw commands
 
-            Self::draw_objects_free(
-                &draw_data,
-                &self.device.vk_device,
-                &cmd,
-                &self.deferred_fill.pso_layout,
-            )
-            .unwrap();
+            Self::draw_objects_free(&draw_data, &self.device.vk_device, &cmd).unwrap();
 
             if self.skybox.is_some() {
                 let pso = self.pipeline_manager.get_pipeline(self.skybox_pso);
@@ -2094,114 +2105,23 @@ impl Renderer {
         Ok(())
     }
 
-    fn draw_objects(&self, draws: &[DrawData]) -> Result<()> {
-        for draw in draws.iter() {
-            let push_constants = PushConstants {
-                handles: [
-                    draw.transform_index as i32,
-                    draw.material_index as i32,
-                    0,
-                    0,
-                ],
-            };
-            unsafe {
-                self.device.vk_device.cmd_push_constants(
-                    self.device.graphics_command_buffer(),
-                    self.deferred_fill.pso_layout,
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0u32,
-                    bytemuck::cast_slice(&[push_constants]),
-                )
-            };
-
-            unsafe {
-                self.device.vk_device.cmd_draw_indexed(
-                    self.device.graphics_command_buffer(),
-                    draw.index_count as u32,
-                    1u32,
-                    draw.index_offset as u32,
-                    draw.vertex_offset as i32,
-                    0u32,
-                );
-            }
-        }
-        Ok(())
-    }
-
     fn draw_objects_free(
         draws: &[DrawData],
         device: &ash::Device,
         command_buffer: &vk::CommandBuffer,
-        psolayout: &vk::PipelineLayout,
     ) -> Result<()> {
         for draw in draws.iter() {
-            let push_constants = PushConstants {
-                handles: [
-                    draw.transform_index as i32,
-                    draw.material_index as i32,
-                    0,
-                    0,
-                ],
-            };
-            unsafe {
-                device.cmd_push_constants(
-                    *command_buffer,
-                    *psolayout,
-                    vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                    0u32,
-                    bytemuck::cast_slice(&[push_constants]),
-                )
-            };
-
             unsafe {
                 device.cmd_draw_indexed(
                     *command_buffer,
                     draw.index_count as u32,
-                    1u32,
+                    draw.instance_count as u32,
                     draw.index_offset as u32,
                     draw.vertex_offset as i32,
-                    0u32,
+                    draw.instance_offset as u32,
                 );
             }
         }
-        Ok(())
-    }
-
-    fn draw_skybox(&self) -> Result<()> {
-        let push_constants = self
-            .device
-            .get_descriptor_index(&self.skybox.unwrap())
-            .unwrap() as i32;
-        unsafe {
-            self.device.vk_device.cmd_push_constants(
-                self.device.graphics_command_buffer(),
-                self.skybox_pso_layout,
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                0u32,
-                bytemuck::cast_slice(&[push_constants]),
-            )
-        };
-
-        let mesh = self.mesh_pool.get(self.cube_mesh).unwrap();
-        let index_count = {
-            if mesh.index_count == 0 {
-                mesh.vertex_count
-            } else {
-                mesh.index_count
-            }
-        };
-
-        unsafe {
-            self.device.vk_device.cmd_draw_indexed(
-                self.device.graphics_command_buffer(),
-                index_count as u32,
-                1u32,
-                mesh.index_offset as u32,
-                mesh.vertex_offset as i32,
-                0u32,
-            );
-        }
-
         Ok(())
     }
 
@@ -2720,8 +2640,6 @@ struct DrawData {
     index_count: usize,
     instance_count: usize,
     instance_offset: usize,
-    transform_index: usize,
-    material_index: usize,
 }
 
 pub struct UIVertex {

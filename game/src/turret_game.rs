@@ -708,7 +708,7 @@ impl DebugPanel for ParticleSystem {
     }
 }
 
-fn draw_selector(label:&str, vector: &mut VectorParameter, ui: &mut Ui) {
+fn draw_selector(label: &str, vector: &mut VectorParameter, ui: &mut Ui) {
     egui::ComboBox::from_label(label).show_ui(ui, |ui| {
         ui.selectable_value(vector, VectorParameter::Static(Vector3::zero()), "First");
         ui.selectable_value(

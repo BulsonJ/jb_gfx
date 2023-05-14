@@ -16,11 +16,7 @@ layout (location = 2) out vec3 outNormal;
 layout (location = 3) out vec3 outWorldPos;
 layout (location = 4) out mat3 outTBN;
 layout (location = 7) out vec4 outShadowCoord;
-
-layout( push_constant ) uniform constants
-{
-	ivec4 handles;
-} pushConstants;
+layout (location = 8) out int outInstanceIndex;
 
 const mat4 biasMat = mat4(
 0.5, 0.0, 0.0, 0.0,
@@ -30,8 +26,10 @@ const mat4 biasMat = mat4(
 
 void main()
 {
-	mat4 modelMatrix = modelData.models[pushConstants.handles.x].model;
-	mat3 normalMatrix = mat3(modelData.models[pushConstants.handles.x].normal);
+	InstanceParameters instance = instanceData.instance[gl_InstanceIndex];
+	outInstanceIndex = gl_InstanceIndex;
+	mat4 modelMatrix = modelData.models[instance.transform_handle].model;
+	mat3 normalMatrix = mat3(modelData.models[instance.transform_handle].normal);
 	vec3 worldPos = vec3(modelMatrix * vec4(vPosition, 1.0f));
 	outWorldPos = worldPos;
 	outShadowCoord = biasMat * cameraData.sunProj * cameraData.sunView * vec4(worldPos, 1.0f);

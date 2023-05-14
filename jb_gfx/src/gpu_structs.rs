@@ -5,12 +5,6 @@ use crate::{CameraTrait, DirectionalLight};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct PushConstants {
-    pub handles: [i32; 4],
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct TransformSSBO {
     pub model: [[f32; 4]; 4],
     pub normal: [[f32; 4]; 4],
@@ -22,6 +16,14 @@ pub(crate) struct MaterialParamSSBO {
     pub diffuse: [f32; 4],
     pub emissive: [f32; 4],
     pub textures: [i32; 8],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct InstanceSSBO {
+    pub transform_index: i32,
+    pub material_index: i32,
+    pub padding: [i32; 2],
 }
 
 /// The Camera Matrix that is given to the GPU.

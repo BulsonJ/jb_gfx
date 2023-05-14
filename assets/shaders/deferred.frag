@@ -12,6 +12,7 @@ layout (location = 2) in vec3 inNormal;
 layout (location = 3) in vec3 inWorldPos;
 layout (location = 4) in mat3 inTBN;
 layout (location = 7) in vec4 inShadowCoord;
+layout (location = 8) in flat int inInstanceIndex;
 
 layout (location = 0) out vec4 gPosition;
 layout (location = 1) out vec4 gNormal;
@@ -19,14 +20,10 @@ layout (location = 2) out vec4 gAlbedoSpec;
 
 layout (set = 1, binding = 4) uniform sampler2DShadow sceneShadowMap;
 
-layout( push_constant ) uniform constants
-{
-    ivec4 handles;
-} pushConstants;
-
 void main()
 {
-    MaterialParameters material = materialData.materials[pushConstants.handles.g];
+    InstanceParameters instance = instanceData.instance[inInstanceIndex];
+    MaterialParameters material = materialData.materials[instance.material_handle];
     int diffuseTexIndex = material.textures.r;
     int normalTexIndex = material.textures.g;
     int emissiveTexIndex = material.textures_two.r;
