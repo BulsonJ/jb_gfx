@@ -21,13 +21,17 @@
     "materials" : [
         {
             "doubleSided" : true,
-            "name" : "Barrel",
+            "name" : "Material",
+            "normalTexture" : {
+                "index" : 0
+            },
             "pbrMetallicRoughness" : {
                 "baseColorTexture" : {
-                    "index" : 0
+                    "index" : 1
                 },
-                "metallicFactor" : 0,
-                "roughnessFactor" : 0.5
+                "metallicRoughnessTexture" : {
+                    "index" : 2
+                }
             }
         }
     ],
@@ -51,13 +55,31 @@
         {
             "sampler" : 0,
             "source" : 0
+        },
+        {
+            "sampler" : 0,
+            "source" : 1
+        },
+        {
+            "sampler" : 0,
+            "source" : 2
         }
     ],
     "images" : [
         {
             "mimeType" : "image/png",
-            "name" : "barrel_albedo",
-            "uri" : "barrel_albedo.png"
+            "name" : "barrel_Barrel_Normal",
+            "uri" : "barrel_Barrel_Normal.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "barrel_Barrel_BaseColor",
+            "uri" : "barrel_Barrel_BaseColor.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "barrel_Barrel_Metallic-barrel_Barrel_Roughness",
+            "uri" : "barrel_Barrel_Metallic-barrel_Barrel_Roughness.png"
         }
     ],
     "accessors" : [
