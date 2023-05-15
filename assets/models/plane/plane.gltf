@@ -21,22 +21,54 @@
     "materials" : [
         {
             "doubleSided" : true,
-            "name" : "Material",
+            "emissiveFactor" : [
+                1,
+                1,
+                1
+            ],
+            "emissiveTexture" : {
+                "index" : 0
+            },
+            "name" : "Plane",
+            "normalTexture" : {
+                "index" : 1
+            },
             "pbrMetallicRoughness" : {
-                "baseColorFactor" : [
-                    0.03177379071712494,
-                    0.17335522174835205,
-                    0,
-                    1
-                ],
-                "metallicFactor" : 0,
-                "roughnessFactor" : 0.4000000059604645
+                "baseColorTexture" : {
+                    "index" : 2
+                },
+                "metallicRoughnessTexture" : {
+                    "index" : 3
+                }
+            }
+        },
+        {
+            "doubleSided" : true,
+            "emissiveFactor" : [
+                1,
+                1,
+                1
+            ],
+            "emissiveTexture" : {
+                "index" : 4
+            },
+            "name" : "Nose",
+            "normalTexture" : {
+                "index" : 5
+            },
+            "pbrMetallicRoughness" : {
+                "baseColorTexture" : {
+                    "index" : 6
+                },
+                "metallicRoughnessTexture" : {
+                    "index" : 7
+                }
             }
         }
     ],
     "meshes" : [
         {
-            "name" : "Cube",
+            "name" : "Cube.002",
             "primitives" : [
                 {
                     "attributes" : {
@@ -46,71 +78,216 @@
                     },
                     "indices" : 3,
                     "material" : 0
+                },
+                {
+                    "attributes" : {
+                        "POSITION" : 4,
+                        "NORMAL" : 5,
+                        "TEXCOORD_0" : 6
+                    },
+                    "indices" : 7,
+                    "material" : 1
                 }
             ]
+        }
+    ],
+    "textures" : [
+        {
+            "sampler" : 0,
+            "source" : 0
+        },
+        {
+            "sampler" : 0,
+            "source" : 1
+        },
+        {
+            "sampler" : 0,
+            "source" : 2
+        },
+        {
+            "sampler" : 0,
+            "source" : 3
+        },
+        {
+            "sampler" : 0,
+            "source" : 4
+        },
+        {
+            "sampler" : 0,
+            "source" : 5
+        },
+        {
+            "sampler" : 0,
+            "source" : 6
+        },
+        {
+            "sampler" : 0,
+            "source" : 7
+        }
+    ],
+    "images" : [
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Plane_Emissive",
+            "uri" : "plane_Plane_Emissive.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Plane_Normal",
+            "uri" : "plane_Plane_Normal.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Plane_BaseColor",
+            "uri" : "plane_Plane_BaseColor.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Plane_Metallic-plane_Plane_Roughness",
+            "uri" : "plane_Plane_Metallic-plane_Plane_Roughness.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Nose_Emissive",
+            "uri" : "plane_Nose_Emissive.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Nose_Normal",
+            "uri" : "plane_Nose_Normal.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Nose_BaseColor",
+            "uri" : "plane_Nose_BaseColor.png"
+        },
+        {
+            "mimeType" : "image/png",
+            "name" : "plane_Nose_Metallic-plane_Nose_Roughness",
+            "uri" : "plane_Nose_Metallic-plane_Nose_Roughness.png"
         }
     ],
     "accessors" : [
         {
             "bufferView" : 0,
             "componentType" : 5126,
-            "count" : 76,
+            "count" : 1066,
             "max" : [
-                5.422484874725342,
-                3.9708292484283447,
-                1
+                8.846099853515625,
+                2.7292609214782715,
+                4.385472297668457
             ],
             "min" : [
-                -3.614173173904419,
-                -1,
-                -1
+                -8.846099853515625,
+                -0.6135839819908142,
+                -10.286697387695312
             ],
             "type" : "VEC3"
         },
         {
             "bufferView" : 1,
             "componentType" : 5126,
-            "count" : 76,
+            "count" : 1066,
             "type" : "VEC3"
         },
         {
             "bufferView" : 2,
             "componentType" : 5126,
-            "count" : 76,
+            "count" : 1066,
             "type" : "VEC2"
         },
         {
             "bufferView" : 3,
             "componentType" : 5123,
-            "count" : 120,
+            "count" : 4038,
+            "type" : "SCALAR"
+        },
+        {
+            "bufferView" : 4,
+            "componentType" : 5126,
+            "count" : 74,
+            "max" : [
+                0.5004621148109436,
+                1.1809697151184082,
+                5.55789852142334
+            ],
+            "min" : [
+                -0.5004621148109436,
+                0.32248833775520325,
+                4.378626823425293
+            ],
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 5,
+            "componentType" : 5126,
+            "count" : 74,
+            "type" : "VEC3"
+        },
+        {
+            "bufferView" : 6,
+            "componentType" : 5126,
+            "count" : 74,
+            "type" : "VEC2"
+        },
+        {
+            "bufferView" : 7,
+            "componentType" : 5123,
+            "count" : 252,
             "type" : "SCALAR"
         }
     ],
     "bufferViews" : [
         {
             "buffer" : 0,
-            "byteLength" : 912,
+            "byteLength" : 12792,
             "byteOffset" : 0
         },
         {
             "buffer" : 0,
-            "byteLength" : 912,
-            "byteOffset" : 912
+            "byteLength" : 12792,
+            "byteOffset" : 12792
         },
         {
             "buffer" : 0,
-            "byteLength" : 608,
-            "byteOffset" : 1824
+            "byteLength" : 8528,
+            "byteOffset" : 25584
         },
         {
             "buffer" : 0,
-            "byteLength" : 240,
-            "byteOffset" : 2432
+            "byteLength" : 8076,
+            "byteOffset" : 34112
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 888,
+            "byteOffset" : 42188
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 888,
+            "byteOffset" : 43076
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 592,
+            "byteOffset" : 43964
+        },
+        {
+            "buffer" : 0,
+            "byteLength" : 504,
+            "byteOffset" : 44556
+        }
+    ],
+    "samplers" : [
+        {
+            "magFilter" : 9729,
+            "minFilter" : 9987
         }
     ],
     "buffers" : [
         {
-            "byteLength" : 2672,
+            "byteLength" : 45060,
             "uri" : "plane.bin"
         }
     ]

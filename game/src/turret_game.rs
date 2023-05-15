@@ -72,6 +72,7 @@ struct Barrel {
     renderer_handle: RenderModelHandle,
     position: Vector3<f32>,
     scale: Vector3<f32>,
+    rotation: Quaternion<f32>,
     collision_box: CollisionBox,
 }
 
@@ -110,20 +111,20 @@ impl TurretGame {
             .unwrap();
 
         // Spawn plane
+        let plane_model = {
+            let models = asset_manager
+                .load_gltf(&mut renderer, "assets/models/plane/plane.gltf")
+                .unwrap();
+            models[0].clone()
+        };
         {
-            let plane_model = {
-                let models = asset_manager
-                    .load_gltf(&mut renderer, "assets/models/plane/plane.gltf")
-                    .unwrap();
-                models[0].clone()
-            };
             let plane = spawn_model(&mut renderer, &plane_model)[0];
             renderer
                 .set_render_model_transform(
                     &[plane],
                     from_transforms(
-                        Vector3::new(0.0f32, -2.0f32, 0.0f32),
-                        Quaternion::from_angle_y(Deg(0.0)),
+                        Vector3::new(-3.0f32, -2.0f32, 0.0f32),
+                        Quaternion::from_angle_y(Deg(-90.0)),
                         Vector3::from_value(1f32),
                     ),
                 )
@@ -168,12 +169,12 @@ impl TurretGame {
                 for x in 0..barrel_width {
                     let position = offset
                         + Vector3::new(barrel_distance, spacing * y as f32, spacing * x as f32);
-                    let scale = Vector3::from_value(5f32);
 
                     let barrel = Barrel {
                         renderer_handle: spawn_model(&mut renderer, &barrel_model)[0],
                         position,
-                        scale,
+                        scale : Vector3::from_value(5.0f32),
+                        rotation: Quaternion::from_angle_y(Deg(-90.0)),
                         collision_box: CollisionBox {
                             position,
                             size: Vector3::new(2f32, 4f32, 2f32),
@@ -184,7 +185,7 @@ impl TurretGame {
                             &[barrel.renderer_handle],
                             from_transforms(
                                 barrel.position,
-                                Quaternion::from_angle_y(Deg(0.0)),
+                                barrel.rotation,
                                 barrel.scale,
                             ),
                         )
@@ -299,7 +300,7 @@ impl TurretGame {
 
         let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(-2.5, -2.0, 5.0);
+        particle_system.spawn_position = Vector3::new(-1.5, -1.5, 8.7);
         particle_system.velocity = VectorParameter::Random {
             min: [8.0, -0.1, -0.1].into(),
             max: [8.0, 0.1, 0.1].into(),
@@ -313,7 +314,7 @@ impl TurretGame {
 
         let mut particle_system = ParticleSystem::new(500);
         particle_system.set_state(ParticleSystemState::Running);
-        particle_system.spawn_position = Vector3::new(-2.5, -2.0, -5.0);
+        particle_system.spawn_position = Vector3::new(-1.5, -1.5, -8.7);
         particle_system.velocity = VectorParameter::Random {
             min: [8.0, -0.1, -0.1].into(),
             max: [8.0, 0.1, 0.1].into(),
@@ -526,7 +527,7 @@ impl TurretGame {
                     &[barrel.renderer_handle],
                     from_transforms(
                         barrel.position,
-                        Quaternion::from_angle_y(Deg(0f32)),
+                        barrel.rotation,
                         barrel.scale,
                     ),
                 )
