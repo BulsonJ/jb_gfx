@@ -125,11 +125,7 @@ impl RenderList {
                     let name = "Image: ".to_string() + resource.name();
 
                     self.device
-                        .set_vulkan_debug_name(
-                            image.image().as_raw(),
-                            vk::ObjectType::IMAGE,
-                            &name,
-                        )
+                        .set_vulkan_debug_name(image.image().as_raw(), vk::ObjectType::IMAGE, &name)
                         .unwrap();
                 }
 

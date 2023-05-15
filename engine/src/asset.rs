@@ -100,283 +100,293 @@ impl AssetManager {
             };
         }
 
-        let mut meshes = HashMap::new();
-        for mesh in gltf.meshes() {
-            let mut submeshes = Vec::new();
-            profiling::scope!("Load GLTF Asset: Mesh");
-            for primitive in mesh.primitives() {
-                profiling::scope!("Load GLTF Asset: Primitive");
+        let meshes = {
+            profiling::scope!("Get GLTF Mesh Data");
+            let mut meshes = HashMap::new();
+            for mesh in gltf.meshes() {
+                let mut submeshes = Vec::new();
+                profiling::scope!("Load GLTF Asset: Mesh");
+                for primitive in mesh.primitives() {
+                    profiling::scope!("Load GLTF Asset: Primitive");
 
-                let mut positions = Vec::new();
-                let mut tex_coords = Vec::new();
-                let mut normals = Vec::new();
-                let mut colors = Vec::new();
-                let mut tangents = Vec::new();
-                let mut possible_indices = Vec::new();
+                    let mut positions = Vec::new();
+                    let mut tex_coords = Vec::new();
+                    let mut normals = Vec::new();
+                    let mut colors = Vec::new();
+                    let mut tangents = Vec::new();
+                    let mut possible_indices = Vec::new();
 
-                let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-                if let Some(iter) = reader.read_positions() {
-                    for vertex_position in iter {
-                        positions.push(vertex_position);
+                    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+                    if let Some(iter) = reader.read_positions() {
+                        for vertex_position in iter {
+                            positions.push(vertex_position);
+                        }
                     }
-                }
-                if let Some(iter) = reader.read_tex_coords(0u32) {
-                    for tex_coord in iter.into_f32() {
-                        tex_coords.push(tex_coord);
+                    if let Some(iter) = reader.read_tex_coords(0u32) {
+                        for tex_coord in iter.into_f32() {
+                            tex_coords.push(tex_coord);
+                        }
                     }
-                }
-                if let Some(iter) = reader.read_normals() {
-                    for normal in iter {
-                        normals.push(normal);
+                    if let Some(iter) = reader.read_normals() {
+                        for normal in iter {
+                            normals.push(normal);
+                        }
                     }
-                }
-                if let Some(iter) = reader.read_colors(0u32) {
-                    for color in iter.into_rgb_f32() {
-                        colors.push(color);
+                    if let Some(iter) = reader.read_colors(0u32) {
+                        for color in iter.into_rgb_f32() {
+                            colors.push(color);
+                        }
                     }
-                }
-                if let Some(iter) = reader.read_indices() {
-                    for index in iter.into_u32() {
-                        possible_indices.push(index);
+                    if let Some(iter) = reader.read_indices() {
+                        for index in iter.into_u32() {
+                            possible_indices.push(index);
+                        }
                     }
-                }
-                if let Some(iter) = reader.read_tangents() {
-                    for tangent in iter {
-                        tangents.push(tangent);
+                    if let Some(iter) = reader.read_tangents() {
+                        for tangent in iter {
+                            tangents.push(tangent);
+                        }
                     }
-                }
 
-                let material = primitive.material();
-                let diffuse_tex = {
-                    if let Some(info) = material.pbr_metallic_roughness().base_color_texture() {
-                        match info.texture().source().source() {
-                            Source::View { mime_type: _, view } => {
-                                Some(self.load_embedded_texture(
-                                    renderer,
-                                    &buffers,
-                                    &info.texture().source(),
-                                    &view,
-                                )?)
+                    let material = primitive.material();
+                    let diffuse_tex = {
+                        if let Some(info) = material.pbr_metallic_roughness().base_color_texture() {
+                            match info.texture().source().source() {
+                                Source::View { mime_type: _, view } => {
+                                    Some(self.load_embedded_texture(
+                                        renderer,
+                                        &buffers,
+                                        &info.texture().source(),
+                                        &view,
+                                    )?)
+                                }
+                                Source::Uri { uri, .. } => {
+                                    let image_asset = String::from(source_folder) + "/" + uri;
+                                    Some(self.load_texture(
+                                        renderer,
+                                        &image_asset,
+                                        &ImageFormatType::Default,
+                                    )?)
+                                }
                             }
-                            Source::Uri { uri, .. } => {
-                                let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(
-                                    renderer,
-                                    &image_asset,
-                                    &ImageFormatType::Default,
-                                )?)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-                let normal_tex = {
-                    if let Some(info) = material.normal_texture() {
-                        match info.texture().source().source() {
-                            Source::View { mime_type: _, view } => {
-                                Some(self.load_embedded_texture(
-                                    renderer,
-                                    &buffers,
-                                    &info.texture().source(),
-                                    &view,
-                                )?)
-                            }
-                            Source::Uri { uri, .. } => {
-                                let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(
-                                    renderer,
-                                    &image_asset,
-                                    &ImageFormatType::Normal,
-                                )?)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-                let metallic_roughness_tex = {
-                    if let Some(info) = material
-                        .pbr_metallic_roughness()
-                        .metallic_roughness_texture()
-                    {
-                        match info.texture().source().source() {
-                            Source::View { mime_type: _, view } => {
-                                Some(self.load_embedded_texture(
-                                    renderer,
-                                    &buffers,
-                                    &info.texture().source(),
-                                    &view,
-                                )?)
-                            }
-                            Source::Uri { uri, .. } => {
-                                let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(
-                                    renderer,
-                                    &image_asset,
-                                    &ImageFormatType::Default,
-                                )?)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-                let occlusion_tex = {
-                    if let Some(occlusion) = material.occlusion_texture() {
-                        match occlusion.texture().source().source() {
-                            Source::View { mime_type: _, view } => {
-                                Some(self.load_embedded_texture(
-                                    renderer,
-                                    &buffers,
-                                    &occlusion.texture().source(),
-                                    &view,
-                                )?)
-                            }
-                            Source::Uri { uri, .. } => {
-                                let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(
-                                    renderer,
-                                    &image_asset,
-                                    &ImageFormatType::Default,
-                                )?)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-                let emissive_tex = {
-                    if let Some(emissive) = material.emissive_texture() {
-                        match emissive.texture().source().source() {
-                            Source::View { mime_type: _, view } => {
-                                Some(self.load_embedded_texture(
-                                    renderer,
-                                    &buffers,
-                                    &emissive.texture().source(),
-                                    &view,
-                                )?)
-                            }
-                            Source::Uri { uri, .. } => {
-                                let image_asset = String::from(source_folder) + "/" + uri;
-                                Some(self.load_texture(
-                                    renderer,
-                                    &image_asset,
-                                    &ImageFormatType::Default,
-                                )?)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-
-                let mut vertices = Vec::new();
-                for i in 0..positions.len() {
-                    let position = *positions.get(i).unwrap();
-                    let tex_coords = *tex_coords.get(i).unwrap();
-                    let normal = *normals.get(i).unwrap();
-                    let tangent = {
-                        if let Some(tang) = tangents.get(i) {
-                            *tang
                         } else {
-                            [0f32, 0f32, 0f32, 0f32]
+                            None
                         }
                     };
-                    let color = {
-                        if let Some(colour) = colors.get(i) {
-                            *colour
+                    let normal_tex = {
+                        if let Some(info) = material.normal_texture() {
+                            match info.texture().source().source() {
+                                Source::View { mime_type: _, view } => {
+                                    Some(self.load_embedded_texture(
+                                        renderer,
+                                        &buffers,
+                                        &info.texture().source(),
+                                        &view,
+                                    )?)
+                                }
+                                Source::Uri { uri, .. } => {
+                                    let image_asset = String::from(source_folder) + "/" + uri;
+                                    Some(self.load_texture(
+                                        renderer,
+                                        &image_asset,
+                                        &ImageFormatType::Normal,
+                                    )?)
+                                }
+                            }
                         } else {
-                            [1f32, 1f32, 1f32]
+                            None
                         }
                     };
-                    //let color = colors.get(i).unwrap().clone();
-
-                    let vertex = Vertex {
-                        position,
-                        tex_coords,
-                        normal,
-                        color,
-                        tangent,
+                    let metallic_roughness_tex = {
+                        if let Some(info) = material
+                            .pbr_metallic_roughness()
+                            .metallic_roughness_texture()
+                        {
+                            match info.texture().source().source() {
+                                Source::View { mime_type: _, view } => {
+                                    Some(self.load_embedded_texture(
+                                        renderer,
+                                        &buffers,
+                                        &info.texture().source(),
+                                        &view,
+                                    )?)
+                                }
+                                Source::Uri { uri, .. } => {
+                                    let image_asset = String::from(source_folder) + "/" + uri;
+                                    Some(self.load_texture(
+                                        renderer,
+                                        &image_asset,
+                                        &ImageFormatType::Default,
+                                    )?)
+                                }
+                            }
+                        } else {
+                            None
+                        }
                     };
-                    vertices.push(vertex);
-                }
+                    let occlusion_tex = {
+                        if let Some(occlusion) = material.occlusion_texture() {
+                            match occlusion.texture().source().source() {
+                                Source::View { mime_type: _, view } => {
+                                    Some(self.load_embedded_texture(
+                                        renderer,
+                                        &buffers,
+                                        &occlusion.texture().source(),
+                                        &view,
+                                    )?)
+                                }
+                                Source::Uri { uri, .. } => {
+                                    let image_asset = String::from(source_folder) + "/" + uri;
+                                    Some(self.load_texture(
+                                        renderer,
+                                        &image_asset,
+                                        &ImageFormatType::Default,
+                                    )?)
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    };
+                    let emissive_tex = {
+                        if let Some(emissive) = material.emissive_texture() {
+                            match emissive.texture().source().source() {
+                                Source::View { mime_type: _, view } => {
+                                    Some(self.load_embedded_texture(
+                                        renderer,
+                                        &buffers,
+                                        &emissive.texture().source(),
+                                        &view,
+                                    )?)
+                                }
+                                Source::Uri { uri, .. } => {
+                                    let image_asset = String::from(source_folder) + "/" + uri;
+                                    Some(self.load_texture(
+                                        renderer,
+                                        &image_asset,
+                                        &ImageFormatType::Default,
+                                    )?)
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    };
 
-                let faces = {
-                    let mut faces = Vec::new();
-                    for i in 0..possible_indices.len() / 3 {
-                        let index = i * 3;
-                        faces.push([
-                            possible_indices[index],
-                            possible_indices[index + 1],
-                            possible_indices[index + 2],
-                        ]);
+                    let mut vertices = Vec::new();
+                    for i in 0..positions.len() {
+                        let position = *positions.get(i).unwrap();
+                        let tex_coords = *tex_coords.get(i).unwrap();
+                        let normal = *normals.get(i).unwrap();
+                        let tangent = {
+                            if let Some(tang) = tangents.get(i) {
+                                *tang
+                            } else {
+                                [0f32, 0f32, 0f32, 0f32]
+                            }
+                        };
+                        let color = {
+                            if let Some(colour) = colors.get(i) {
+                                *colour
+                            } else {
+                                [1f32, 1f32, 1f32]
+                            }
+                        };
+                        //let color = colors.get(i).unwrap().clone();
+
+                        let vertex = Vertex {
+                            position,
+                            tex_coords,
+                            normal,
+                            color,
+                            tangent,
+                        };
+                        vertices.push(vertex);
                     }
-                    faces
-                };
 
-                let indices = {
-                    if possible_indices.is_empty() {
-                        None
-                    } else {
-                        Some(possible_indices)
+                    let faces = {
+                        let mut faces = Vec::new();
+                        for i in 0..possible_indices.len() / 3 {
+                            let index = i * 3;
+                            faces.push([
+                                possible_indices[index],
+                                possible_indices[index + 1],
+                                possible_indices[index + 2],
+                            ]);
+                        }
+                        faces
+                    };
+
+                    let indices = {
+                        if possible_indices.is_empty() {
+                            None
+                        } else {
+                            Some(possible_indices)
+                        }
+                    };
+
+                    let mut mesh_data = MeshData {
+                        vertices,
+                        indices,
+                        faces,
+                    };
+                    if tangents.is_empty() {
+                        let _ret = mesh_data.generate_tangents();
                     }
-                };
 
-                let mut mesh_data = MeshData {
-                    vertices,
-                    indices,
-                    faces,
-                };
-                if tangents.is_empty() {
-                    let _ret = mesh_data.generate_tangents();
+                    let mesh_handle = renderer.load_mesh(&mesh_data)?;
+                    let material_instance = MaterialInstance {
+                        diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
+                        diffuse_texture: diffuse_tex,
+                        emissive: material.emissive_factor().into(),
+                        emissive_texture: emissive_tex,
+                        normal_texture: normal_tex,
+                        metallic_roughness_texture: metallic_roughness_tex,
+                        occlusion_texture: occlusion_tex,
+                    };
+                    let material_instance = renderer.add_material_instance(material_instance);
+
+                    let model = SubMesh {
+                        mesh: mesh_handle,
+                        material_instance,
+                    };
+
+                    submeshes.push(model);
                 }
-
-                let mesh_handle = renderer.load_mesh(&mesh_data)?;
-                let material_instance = MaterialInstance {
-                    diffuse: material.pbr_metallic_roughness().base_color_factor().into(),
-                    diffuse_texture: diffuse_tex,
-                    emissive: material.emissive_factor().into(),
-                    emissive_texture: emissive_tex,
-                    normal_texture: normal_tex,
-                    metallic_roughness_texture: metallic_roughness_tex,
-                    occlusion_texture: occlusion_tex,
-                };
-                let material_instance = renderer.add_material_instance(material_instance);
-
-                let model = SubMesh {
-                    mesh: mesh_handle,
-                    material_instance,
-                };
-
-                submeshes.push(model);
+                meshes.insert(mesh.index(), Mesh { submeshes });
             }
-            meshes.insert(mesh.index(), Mesh { submeshes });
-        }
+            meshes
+        };
 
         let mut models = HashMap::new();
-        for node in gltf.nodes() {
-            if let Some(mesh) = node.mesh() {
-                let mesh_index = mesh.index();
-                if let Some(model) = meshes.get(&mesh_index) {
-                    let transform = Matrix4::from(node.transform().matrix());
+        {
+            profiling::scope!("Add Models from GLTF Nodes");
+            for node in gltf.nodes() {
+                if let Some(mesh) = node.mesh() {
+                    let mesh_index = mesh.index();
+                    if let Some(model) = meshes.get(&mesh_index) {
+                        let transform = Matrix4::from(node.transform().matrix());
 
-                    models.insert(
-                        node.index(),
-                        Model {
-                            mesh: model.clone(),
-                            transform,
-                        },
-                    );
+                        models.insert(
+                            node.index(),
+                            Model {
+                                mesh: model.clone(),
+                                transform,
+                            },
+                        );
+                    }
                 }
             }
         }
 
-        for node in gltf.nodes() {
-            if let Some(parent) = models.get(&node.index()).cloned() {
-                for child in node.children() {
-                    let model = models.get_mut(&child.index()).unwrap();
-                    model.transform = parent.transform * model.transform;
+        {
+            profiling::scope!("Transform GLTF Nodes by Parents");
+            for node in gltf.nodes() {
+                if let Some(parent) = models.get(&node.index()).cloned() {
+                    for child in node.children() {
+                        let model = models.get_mut(&child.index()).unwrap();
+                        model.transform = parent.transform * model.transform;
+                    }
                 }
             }
         }

@@ -47,7 +47,7 @@ impl Default for FrameTimer {
             frame_start_time: Instant::now(),
             frame_time: 0.0,
             delta_time: 0.0,
-            target_frame_time: 1.0 / 60.0,
+            target_frame_time: 1.0 / 120.0,
             total_time_elapsed: 0.0,
         }
     }

@@ -5,3 +5,11 @@ members = [
     "engine",
     "game"
 ]
+
+[profile.dev.package.gltf]
+opt-level = 3
+debug = false
+
+[profile.dev.package.image]
+opt-level = 3
+debug = false
