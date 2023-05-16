@@ -12,6 +12,7 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundS
 use kira::tween::{Easing, Tween};
 use kira::LoopBehavior;
 use kira::Volume::Amplitude;
+use log::info;
 use rand::{thread_rng, Rng};
 use winit::event::{VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -57,6 +58,7 @@ pub struct TurretGame {
     terrain_pieces: Vec<Terrain>,
     terrain_settings: TerrainSettings,
     particle_systems: Vec<ParticleSystemHandle>,
+    gun: Gun,
 }
 
 struct Bullet {
@@ -74,6 +76,13 @@ struct Barrel {
     scale: Vector3<f32>,
     rotation: Quaternion<f32>,
     collision_box: CollisionBox,
+}
+
+struct Gun {
+    renderer_handle: RenderModelHandle,
+    position: Vector3<f32>,
+    scale: Vector3<f32>,
+    rotation: Quaternion<f32>,
 }
 
 struct Terrain {
@@ -130,6 +139,23 @@ impl TurretGame {
                 )
                 .unwrap();
         }
+        let gun_model = {
+            let models = asset_manager
+                .load_gltf(&mut renderer, "assets/models/gun/turret.gltf")
+                .unwrap();
+            models[0].clone()
+        };
+
+        let gun = {
+            let gun
+            = spawn_model(&mut renderer, &gun_model)[0];
+            Gun {
+                renderer_handle: gun,
+                position: Vector3::new(0.0f32, -0.7f32, 0.0f32),
+                scale: Vector3::from_value(0.3f32),
+                rotation: Quaternion::from_angle_y(Deg(00.0)),
+            }
+        };
 
         let grass_texture = asset_manager
             .load_texture(
@@ -173,7 +199,7 @@ impl TurretGame {
                     let barrel = Barrel {
                         renderer_handle: spawn_model(&mut renderer, &barrel_model)[0],
                         position,
-                        scale : Vector3::from_value(5.0f32),
+                        scale: Vector3::from_value(5.0f32),
                         rotation: Quaternion::from_angle_y(Deg(-90.0)),
                         collision_box: CollisionBox {
                             position,
@@ -183,11 +209,7 @@ impl TurretGame {
                     renderer
                         .set_render_model_transform(
                             &[barrel.renderer_handle],
-                            from_transforms(
-                                barrel.position,
-                                barrel.rotation,
-                                barrel.scale,
-                            ),
+                            from_transforms(barrel.position, barrel.rotation, barrel.scale),
                         )
                         .unwrap();
 
@@ -350,6 +372,7 @@ impl TurretGame {
             terrain_pieces,
             terrain_settings,
             particle_systems: vec![system_one, system_two],
+            gun,
         }
     }
 
@@ -465,13 +488,15 @@ impl TurretGame {
             //let offset = Vector3::new(0.0f32, y_direction, z_direction);
             let euler = Euler {
                 x: Deg(self.player.camera.rotation.x),
-                y: Deg(-self.player.camera.rotation.y - 90.0),
-                z: Deg(self.player.camera.rotation.z),
+                y: Deg(self.player.camera.rotation.y),
+                z: Deg(-self.player.camera.rotation.z),
             };
+            let rotation = Quaternion::from(euler).invert() * self.gun.rotation;
+
 
             let bullet = self.spawn_bullet(
                 self.player.camera.position.to_vec() + Vector3::new(0f32, -1f32, 0f32),
-                self.player.camera.rotation, // Fix rotation
+                rotation * Vector3::new(0.0,0.0,-1.0), // Fix rotation
                 500f32,
                 tracer,
             );
@@ -525,11 +550,21 @@ impl TurretGame {
             self.renderer
                 .set_render_model_transform(
                     &[barrel.renderer_handle],
-                    from_transforms(
-                        barrel.position,
-                        barrel.rotation,
-                        barrel.scale,
-                    ),
+                    from_transforms(barrel.position, barrel.rotation, barrel.scale),
+                )
+                .unwrap()
+        }
+        {
+            let euler = Euler {
+                x: Deg(self.player.camera.rotation.x),
+                y: Deg(self.player.camera.rotation.y),
+                z: Deg(-self.player.camera.rotation.z),
+            };
+            let rotation = Quaternion::from(euler).invert() * self.gun.rotation;
+            self.renderer
+                .set_render_model_transform(
+                    &[self.gun.renderer_handle],
+                    from_transforms(self.gun.position, rotation, self.gun.scale),
                 )
                 .unwrap()
         }
